@@ -51,12 +51,18 @@ namespace CustomItems.Items
             ("Events/Shot", "Events/Panic/Спокойно! Без паники"), ("Events/Mine/Pressed", "Events/Panic/Мы погибнем мы все умрём"),
             ("Loot/High", "Events/ManyItems/Ого, сколько всего"), ("Loot/Low", "Events/Junk/Ну и хлам тут у вас"),
             ("WhoDied/Intro", "Events/PlayerDied/Кто-то умер"), ("Stopping", "Ok/Сделано"),
-            ("Shout", "Launch/Takeoff/Поняла, поняла, не кричите, взлетаем"),
+            
             ("Events/Company", "QuotaNotDone/Не забудьте про квоту"), ("Events/Teleported", "Events/Back/Вот и вы"),
             ("Events/Teleported", "Greeting/Вы вернулись"), ("Nav/Arrived/Ship", "Events/Back/Вот и вы"),
             ("Scan/VeryMany", "Events/ManyItems/Ого, сколько всего"), ("Events/Inside", "Events/Idle/Как то тихо стало"),
             ("Events/Dropped", "Insult/Как грубо"), ("Events/Dropped", "Events/Fall"), ("Events/Dropped", "Insult/Обидно, вообще то"),
             ("Events/Dropped", "Insult/Я всё запомню"), ("Events/Dropped", "Insult/Ну вот, а я к вам со всей душой"),
+            // Разговор (YandexStationTalk.cs): пока нет своих записей — подходящие из других тем
+            ("Wake/Ask", "Unknown/Это вы мне"), ("Wake/NotMe", "Ok/Понятно"), ("Wake/NotMe", "Ok/Ясно"),
+            ("Here", "Random/Если что, я здесь, слушаю и молчу"), ("Here", "Listen"),
+            ("WhereIs/NotHere", "Unknown/Об этом мне ничего неизвестно, спросите у Компании"),
+            ("WhereIs/Me/Ship", "Random/Сейчас на корабле тепло и уютно, наружу лучше не выходить"),
+            ("Food", "Events/Idle/Я хочу пиццы"), ("Advice", "Random/Берегите друг друга"), ("Advice", "Events/Landed/Не забудьте про квоту"),
         };
 
         private void ApplyReuse()
@@ -850,6 +856,7 @@ namespace CustomItems.Items
 
         private void CollectMoreReasons(StartOfRound round)
         {
+            CollectArrivals(round);
             var pos = transform.position;
             var players = round.allPlayerScripts.Where(p => p != null && p.isPlayerControlled && !p.isPlayerDead).ToList();
 
@@ -1140,6 +1147,14 @@ namespace CustomItems.Items
                     pendingOffer = true;
                     askUntil = float.MaxValue; // ждём, пока доиграет «…фонарики»
                 }
+                return true;
+            }
+            if (topic.StartsWith(EventsFolder + "Missing/"))
+            {
+                // «Сегодня без Андрея?» — ждёт ответ, на любой — «Понятно»
+                SayFrom(FindSet(topic));
+                AskAfterSpeech(AskMissing);
+                askingItem = topic.Substring((EventsFolder + "Missing/").Length); // о ком спросила
                 return true;
             }
             if (topic == EventsFolder + "Teamkill")

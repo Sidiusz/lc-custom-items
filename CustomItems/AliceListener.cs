@@ -31,6 +31,11 @@ namespace CustomItems
     ///
     /// Vosk лежит рядом с DLL мода: Vosk.dll, папка vosk/ с нативными библиотеками
     /// (Windows x64) и моделью vosk/model-ru/. Всё это кладёт туда сборка (csproj).
+    ///
+    /// Vosk быстрый, но знает мало слов. Поэтому фразу, обращённую к колонке (есть «Алиса» или
+    /// колонка ждёт ответа), ещё раз распознаёт Whisper (<see cref="AliceWhisper"/>) по её звуку
+    /// целиком, и колонка получает его текст. Не успел за <see cref="AliceWhisper.TimeoutSeconds"/>,
+    /// не загрузился или написал мусор — текст Vosk. Просыпается колонка по-прежнему сразу, по Vosk.
     /// </summary>
     public class AliceListener : MonoBehaviour, IMicrophoneSubscriber
     {
@@ -46,6 +51,9 @@ namespace CustomItems
         /// слово отдельно, так разбираются и вопросы своими словами («алиса а что там с погодой»).
         /// </summary>
         public static string[] Grammar;
+
+        /// <summary>Уточнять фразы для колонки через Whisper (если он лежит рядом с модом).</summary>
+        public static bool UseWhisper = true;
 
         private static readonly Regex TextField = new Regex("\"text\"\\s*:\\s*\"([^\"]*)\"");
         private static readonly Regex PartialField = new Regex("\"partial\"\\s*:\\s*\"([^\"]*)\"");
@@ -71,6 +79,8 @@ namespace CustomItems
         private readonly Dictionary<int, string> lastPartial = new Dictionary<int, string>();
         private readonly HashSet<int> answered = new HashSet<int>();
         private readonly HashSet<VoiceTap> taps = new HashSet<VoiceTap>(), touchedTaps = new HashSet<VoiceTap>();
+        // Фразы, которые ждут Whisper (и всё, что тот же игрок сказал после них, — по порядку)
+        private readonly List<Pending> pending = new List<Pending>();
         private volatile bool micOn;
         private volatile int micPlayer;
         private int outputRate;
@@ -86,10 +96,73 @@ namespace CustomItems
             public int Player;
             public string Text; // null — распознаватель сброшен после ответа на кусок фразы
             public bool Partial;
+            // Звук этой фразы с начала (с прошлого сброса или конца прошлой фразы): первые AudioCount
+            // отсчётов, частота Rate. Массив дальше не меняется, его можно читать с любого потока
+            public short[] Audio;
+            public int AudioCount, Rate;
+        }
+
+        private class Pending
+        {
+            public int Player;
+            public string Vosk;
+            public bool Wake;
+            public AliceWhisper.Job Job;
+            public float GiveUpAt;
         }
 
         private void Awake() =>
             YandexStationItem.ResetHearing = ResetPlayer;
+
+        // Настройки Whisper. Plugin создаёт этот объект в своём Awake, когда Chainloader ещё не знает
+        // экземпляр плагина, поэтому конфиг читаем здесь
+        private void Start()
+        {
+            var plugin = BepInEx.Bootstrap.Chainloader.PluginInfos.Values.Select(p => p.Instance).OfType<Plugin>().FirstOrDefault();
+            if (plugin == null)
+                return;
+            const string section = "Yandex Station";
+            UseWhisper = plugin.Config.Bind(section, "WhisperRecognition", true,
+                "Фразы для Алисы («Алиса, …» и ответы на её вопросы) распознаёт ещё и Whisper (папка whisper/ рядом с модом): " +
+                "понимает любую речь, а не только слова из intents.txt. Модель грузится, когда впервые включают колонку").Value;
+            AliceWhisper.UseGpu = plugin.Config.Bind(section, "WhisperGpu", true,
+                "Whisper на видеокарте (Vulkan, любой производитель), иначе на процессоре (медленнее). " +
+                "Выключите, если игра падает или тормозит после включения колонки").Value;
+            AliceWhisper.TimeoutSeconds = Mathf.Clamp(plugin.Config.Bind(section, "WhisperTimeout", 3f,
+                "Сколько секунд ждать Whisper; не успел — колонка отвечает по тексту Vosk").Value, 0.5f, 10f);
+        }
+
+        // Модель Whisper большая (~264 МБ): грузим в фоне, когда впервые включили колонку
+        private void StartWhisper()
+        {
+            AliceWhisper.Dir = Path.Combine(Path.GetDirectoryName(VoskDir) ?? "", "whisper");
+            AliceWhisper.LogInfo = Plugin.Log.LogInfo;
+            AliceWhisper.LogWarning = Plugin.Log.LogWarning;
+            if (!File.Exists(Path.Combine(AliceWhisper.Dir, AliceWhisper.ModelFile)))
+            {
+                UseWhisper = false;
+                Plugin.Log.LogWarning($"Алиса: нет {AliceWhisper.ModelFile} в {AliceWhisper.Dir}, распознаю только Vosk");
+                return;
+            }
+            var intents = "";
+            try
+            {
+                using (var stream = typeof(AliceListener).Assembly.GetManifestResourceStream("SidiuszCustomItems.intents.txt"))
+                {
+                    if (stream != null)
+                        intents = new StreamReader(stream).ReadToEnd();
+                }
+                var own = Path.Combine(BepInEx.Paths.ConfigPath, "SidiuszCustomItems.intents.txt");
+                if (File.Exists(own))
+                    intents += "\n" + File.ReadAllText(own);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Алиса: подсказка для Whisper без intents.txt: " + e.Message);
+            }
+            AliceWhisper.BuildPrompt(YandexStationItem.SpokenNames.Values.SelectMany(n => n), intents);
+            AliceWhisper.LoadAsync();
+        }
 
         /// <summary>
         /// Колонка услышала шаг разговора («Алиса», вопрос) или говорит: всё, что игрок наговорил
@@ -183,6 +256,8 @@ namespace CustomItems
             }
             if (any && worker == null)
                 StartWorker();
+            if (listen && UseWhisper && !AliceWhisper.Started && VoskDir != null && YandexStationItem.AnyOn)
+                StartWhisper();
 
             while (true)
             {
@@ -195,6 +270,7 @@ namespace CustomItems
                 }
                 Handle(heard, round);
             }
+            FlushPending(round);
         }
 
         private void Handle(Heard heard, StartOfRound round)
@@ -233,8 +309,85 @@ namespace CustomItems
                 if (answered.Contains(heard.Player))
                     return; // на эту фразу уже ответили по куску
             }
-            Plugin.Log.LogDebug($"Алиса услышала {player.playerUsername}: {heard.Text}");
-            YandexStationItem.OnSpeech(player, heard.Text);
+            Deliver(heard, player);
+        }
+
+        /// <summary>
+        /// Фраза Vosk → колонке. Обращённую к Алисе сначала уточняет Whisper (по звуку фразы), остальное сразу.
+        /// Ответ по куску фразы (IsCompleteCommand) — тоже через Whisper, по звуку, сказанному до сих пор.
+        /// </summary>
+        private void Deliver(Heard heard, GameNetcodeStuff.PlayerControllerB player)
+        {
+            var wake = heard.Text.Contains(YandexStationItem.WakeWord);
+            AliceWhisper.Job job = null;
+            // Одно короткое «Алиса» Whisper не уточнит: колонка и так проснётся
+            var onlyWake = heard.Text.Trim() == YandexStationItem.WakeWord && heard.AudioCount < heard.Rate * 1.2f;
+            if (UseWhisper && AliceWhisper.Ready && heard.Audio != null && !onlyWake
+                && (wake || YandexStationItem.IsHearing(player)))
+                job = AliceWhisper.Start(heard.Audio, heard.AudioCount, heard.Rate);
+            if (job == null && !pending.Any(p => p.Player == heard.Player))
+            {
+                Speak(player, heard.Text);
+                return;
+            }
+            pending.Add(new Pending
+            {
+                Player = heard.Player,
+                Vosk = heard.Text,
+                Wake = wake,
+                Job = job,
+                GiveUpAt = Time.realtimeSinceStartup + AliceWhisper.TimeoutSeconds,
+            });
+        }
+
+        // Готовые фразы из Whisper → колонке, по порядку для каждого игрока. Не успел — текст Vosk
+        private void FlushPending(StartOfRound round)
+        {
+            for (var i = 0; i < pending.Count; i++)
+            {
+                var p = pending[i];
+                var earlier = false;
+                for (var j = 0; j < i && !earlier; j++)
+                    earlier = pending[j].Player == p.Player;
+                if (earlier)
+                    continue;
+                var player = round != null && round.allPlayerScripts != null && p.Player >= 0 && p.Player < round.allPlayerScripts.Length
+                    ? round.allPlayerScripts[p.Player] : null;
+                if (p.Job != null && !p.Job.Done && Time.realtimeSinceStartup < p.GiveUpAt)
+                {
+                    // Пока Whisper думает, колонка не должна перестать слушать
+                    if (player != null)
+                        YandexStationItem.OnVoice(player);
+                    continue;
+                }
+                pending.RemoveAt(i--);
+                var text = p.Vosk;
+                if (p.Job != null)
+                {
+                    if (!p.Job.Done)
+                    {
+                        p.Job.Cancelled = true;
+                        Plugin.Log.LogDebug($"Алиса: Whisper не успел за {AliceWhisper.TimeoutSeconds:0.0} с, беру Vosk «{p.Vosk}»");
+                    }
+                    else if (p.Job.Text == null)
+                    {
+                        Plugin.Log.LogDebug($"Алиса: Whisper «{p.Job.Raw}» не годится ({p.Job.Why}), беру Vosk «{p.Vosk}»");
+                    }
+                    else
+                    {
+                        text = AliceWhisper.WithWake(p.Job.Text, p.Wake, YandexStationItem.WakeWord);
+                        Plugin.Log.LogDebug($"Алиса: Vosk «{p.Vosk}» → Whisper «{text}» ({p.Job.Seconds:0.00} с)");
+                    }
+                }
+                if (player != null)
+                    Speak(player, text);
+            }
+        }
+
+        private static void Speak(GameNetcodeStuff.PlayerControllerB player, string text)
+        {
+            Plugin.Log.LogDebug($"Алиса услышала {player.playerUsername}: {text}");
+            YandexStationItem.OnSpeech(player, text);
         }
 
         private void OnDestroy()
@@ -304,7 +457,35 @@ namespace CustomItems
             public VoskRecognizer Recognizer;
             public int Rate;
             public int SinceSamples;
+            // Звук текущей фразы для Whisper. Новая фраза — новый массив: старый остаётся тому, кто его взял
+            public short[] Audio;
+            public int AudioCount;
+
+            public void Append(short[] pcm)
+            {
+                var max = Rate * MaxPhraseSeconds;
+                var need = AudioCount + pcm.Length;
+                if (need > max)
+                    return; // длиннее Whisper всё равно не возьмёт, да и это уже не вопрос, а болтовня
+                if (Audio == null || need > Audio.Length)
+                {
+                    var bigger = new short[Math.Min(max, Math.Max(need, Audio == null ? Rate * 4 : Audio.Length * 2))];
+                    if (Audio != null)
+                        Array.Copy(Audio, bigger, AudioCount);
+                    Audio = bigger;
+                }
+                Array.Copy(pcm, 0, Audio, AudioCount, pcm.Length);
+                AudioCount = need;
+            }
+
+            public void NewPhrase()
+            {
+                Audio = null;
+                AudioCount = 0;
+            }
         }
+
+        private const int MaxPhraseSeconds = 25;
 
         private void Work()
         {
@@ -345,13 +526,17 @@ namespace CustomItems
                     if (reset && stream != null)
                     {
                         stream.Recognizer.Reset();
+                        stream.NewPhrase();
                         Emit(chunk.Player, null, false);
                     }
                     if (chunk.Pcm == null)
                     {
                         // Игрок замолчал: дожимаем фразу
                         if (stream != null && !reset)
-                            Emit(chunk.Player, Text(TextField, stream.Recognizer.FinalResult()), false);
+                        {
+                            Emit(chunk.Player, Text(TextField, stream.Recognizer.FinalResult()), false, stream);
+                            stream.NewPhrase();
+                        }
                         continue;
                     }
                     if (stream == null || stream.Rate != chunk.Rate)
@@ -367,15 +552,17 @@ namespace CustomItems
                         streams[chunk.Player] = stream;
                     }
 
+                    stream.Append(chunk.Pcm);
                     if (stream.Recognizer.AcceptWaveform(chunk.Pcm, chunk.Pcm.Length))
                     {
                         stream.SinceSamples = 0;
-                        Emit(chunk.Player, Text(TextField, stream.Recognizer.Result()), false);
+                        Emit(chunk.Player, Text(TextField, stream.Recognizer.Result()), false, stream);
+                        stream.NewPhrase();
                     }
                     else if ((stream.SinceSamples += chunk.Pcm.Length) >= stream.Rate * PartialEvery)
                     {
                         stream.SinceSamples = 0;
-                        Emit(chunk.Player, Text(PartialField, stream.Recognizer.PartialResult()), true);
+                        Emit(chunk.Player, Text(PartialField, stream.Recognizer.PartialResult()), true, stream);
                     }
                 }
                 catch (Exception e)
@@ -394,12 +581,19 @@ namespace CustomItems
             return match.Success ? match.Groups[1].Value : "";
         }
 
-        private void Emit(int player, string text, bool partial)
+        private void Emit(int player, string text, bool partial, Stream stream = null)
         {
             if (text != null && text.Trim().Length == 0)
                 return;
+            var heard = new Heard { Player = player, Text = text, Partial = partial };
+            if (stream != null && stream.AudioCount > 0)
+            {
+                heard.Audio = stream.Audio;
+                heard.AudioCount = stream.AudioCount;
+                heard.Rate = stream.Rate;
+            }
             lock (gate)
-                results.Enqueue(new Heard { Player = player, Text = text, Partial = partial });
+                results.Enqueue(heard);
         }
 
         private static string GrammarJson()

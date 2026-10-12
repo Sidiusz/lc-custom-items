@@ -443,12 +443,29 @@ namespace CustomItems.Items
             // Ответ на её вопрос («Вы уверены?», «Сколько?»): «Алиса» не нужна
             var answering = station.asking != null && Time.time < station.askUntil;
             // Встречный вопрос («а у вас как?»): не похоже на ответ — с «Алиса» это новый вопрос, без — говорят между собой
+            var followUp = false;
             if (answering && station.asking == AskFollow
                 && AliceIntents.MatchFollowUp(station.askingItem, wake >= 0 ? text.Substring(wake + WakeWord.Length) : text) == null)
             {
-                if (wake < 0)
+                // Без «Алиса» — говорят между собой, если только это не переспрос («почему?», «а Паша?»)
+                if (wake < 0 && !IsContextFollowUp(text))
                     return;
                 station.asking = null;
+                answering = false;
+                followUp = wake < 0;
+            }
+            if (answering && station.asking == AskWake)
+            {
+                // «Это вы мне?» — «нет» / «да» / сразу вопрос
+                var reply = (wake >= 0 ? text.Substring(wake + WakeWord.Length) : text).Replace("[unk]", " ").Trim();
+                if (reply.Length == 0)
+                    return;
+                ResetHearing?.Invoke(speaker);
+                Debug.Log($"[Алиса] {speaker.playerUsername}: ответ на «Это вы мне?»: «{reply}»");
+                if (!station.OnWakeReply(reply))
+                    return;
+                station.listenUntil = Time.time + ListenSilence; // это был вопрос: разбираем как после «Алиса»
+                station.listenStartedAt = Time.time;
                 answering = false;
             }
             if (answering)
@@ -484,6 +501,12 @@ namespace CustomItems.Items
                 station.gameAnswerUntil = 0f;
                 station.Say(station.IsJammed ? TopicError : TopicGameUnknown);
                 return;
+            }
+            else if (followUp || station.HearsFollowUp(text))
+            {
+                // Сразу после ответа: «а Паша?», «почему?», «спасибо» — без «Алиса»
+                command = text;
+                followUp = true;
             }
             else
             {
@@ -556,7 +579,7 @@ namespace CustomItems.Items
             if (topic == TopicStop || topic == TopicShush)
                 Answer(station, speaker, topic, known);
             else
-                station.Think(() => Answer(station, speaker, topic, known), wake: !listening);
+                station.Think(() => Answer(station, speaker, topic, known), wake: !listening && !followUp);
         }
 
         /// <summary>
@@ -578,7 +601,8 @@ namespace CustomItems.Items
             station.Say(SoundListen);
         }
 
-        private static void Answer(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
+        // Обычные ответы; память разговора и переспросы — Answer в YandexStationContext.cs
+        private static void AnswerCore(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
         {
             if (!station.IsOn)
                 return;
@@ -599,7 +623,7 @@ namespace CustomItems.Items
             // Тот же вопрос второй раз за минуту: «Я уже отвечала». «Где Паша» после «где Андрей» — другой вопрос:
             // у вопросов про человека сравниваем весь текст, а не только тему
             var asked = topic == TopicWhereIs ? topic + "|" + known : topic;
-            if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+            if (RepeatTopics.Contains(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null && Random.value < RepeatChance)
             {
                 station.lastAskedAt = Time.time;
@@ -609,8 +633,16 @@ namespace CustomItems.Items
             station.lastAsked = asked;
             station.lastAskedAt = Time.time;
 
-            if (station.AnswerMore(speaker, topic, known))
+            if (station.AnswerMore(speaker, topic, known) || station.AnswerTalk(speaker, topic, known))
                 return;
+            // Анекдот ещё раз — «А вот ещё…» и следующий
+            if (topic == TopicJoke && station.lastSaidTopic != null && station.lastSaidTopic.Contains(TopicJoke)
+                && station.FindSet(TopicJokeNext) != null && station.FindSet(TopicJoke) != null)
+            {
+                station.SaySequence(new List<string> { TopicJokeNext, TopicJoke });
+                station.ExpectReply(TopicJoke);
+                return;
+            }
 
             if (topic == TopicGameAsk && station.SayRend(0.3f))
                 return;
@@ -688,7 +720,13 @@ namespace CustomItems.Items
                 var refuse = LaunchCheck != null ? LaunchCheck() : new[] { TopicRefuse };
                 if (refuse != null && refuse.Length > 0)
                     station.SayFirst(refuse);
-                else
+                else if (Hurried(known) && Launch != null)
+                {
+                    // «Взлетай, взлетай, взлетай!» — без «Вы уверены?»: «Поняла, поняла, не кричите, взлетаем»
+                    var done = Launch();
+                    station.SayFirst(done.Length > 0 && done[0] == "Launch/Takeoff" ? new[] { "Launch/Hurry" }.Concat(done).ToArray() : done);
+                }
+                else if (!station.AskLaunchNotAll())
                     station.Ask(AskLaunch, null, LaunchConfirm);
             }
             else if (topic == TopicDoorsOpen || topic == TopicDoorsClose)
@@ -707,8 +745,10 @@ namespace CustomItems.Items
             }
             else
             {
-                station.Say(topic);
-                station.ExpectReply(topic);
+                // Вариант под того, кто спросил, время суток, настроение дня (YandexStationContext.Flavor)
+                var said = station.Flavor(topic, speaker);
+                station.Say(said);
+                station.ExpectReply(AliceIntents.HasFollowUps(said) ? said : topic);
             }
         }
 
@@ -791,7 +831,7 @@ namespace CustomItems.Items
             if (!IsOn)
                 return;
             var intent = string.IsNullOrEmpty(reply) ? null : AliceIntents.Match(reply, out _);
-            if (OnReplyMore(kind, item, intent) || OnReplyLost(kind, intent))
+            if (OnReplyContext(kind, item, reply, intent) || OnReplyTalk(kind, reply, intent) || OnReplyMore(kind, item, intent) || OnReplyLost(kind, intent))
                 return;
             if (kind == AskFollow)
             {
@@ -983,11 +1023,14 @@ namespace CustomItems.Items
                 why = "код " + string.Join(",", codes);
                 return TopicCode;
             }
+            // «Взлетай взлетай взлетай» — то же, что «взлетай»: повторы слов не сбивают похожесть
+            command = string.Join(" ", command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct());
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out var score, out var example);
             why = example != null
                 ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
                 : "нет примеров";
+            intent = SemanticTopic(command, intent, score, ref why);
             // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
             if ((intent == "Moon" || intent == "#navexit" || intent == "#navship") && AliceIntents.NamesMoon(command))
                 intent = TopicRoute;
@@ -1101,6 +1144,12 @@ namespace CustomItems.Items
         {
             if (set == null || set.clips.Length == 0)
                 return;
+            // Ответ начинается с обращения («Паша, слушай…»): склейкой
+            if (TakeLeadIn() is { } lead)
+            {
+                SaySequence(new List<string> { lead, set.name });
+                return;
+            }
             askedLocally = true;
             var index = NextIndex(set);
             Speak(set.name, index);
@@ -1137,6 +1186,8 @@ namespace CustomItems.Items
         private void SaySequence(List<string> topics)
         {
             var parts = new List<string>();
+            if (TakeLeadIn() is { } lead)
+                topics = new[] { lead }.Concat(topics).ToList();
             foreach (var t in topics)
             {
                 var set = FindSet(t);
@@ -1239,8 +1290,9 @@ namespace CustomItems.Items
             if (named != null)
             {
                 asked = others.Where(p => NameFolder(p.playerUsername) == named).ToList();
+                // Его нет в игре: «Сегодня без Андрея?» — только её собственная реплика, на вопрос — «его сегодня нет»
                 if (asked.Count == 0)
-                    return FindSet(EventsFolder + "Missing/" + named) != null ? EventsFolder + "Missing/" + named : folder + "Lost/One";
+                    return FindSet(folder + "NotHere") != null ? folder + "NotHere" : TopicUnknown;
                 // Погиб — «Его съела собака» или его личное PlayerDied
                 if (asked.All(p => p.isPlayerDead))
                 {
@@ -1266,8 +1318,9 @@ namespace CustomItems.Items
             else
             {
                 // «Где он?» — тот, кто дальше всех от спросившего
+                var from = speaker != null ? speaker.transform.position : transform.position;
                 var far = others.Where(p => !p.isPlayerDead)
-                    .OrderByDescending(p => Vector3.Distance(p.transform.position, speaker.transform.position)).FirstOrDefault();
+                    .OrderByDescending(p => Vector3.Distance(p.transform.position, from)).FirstOrDefault();
                 asked = far != null ? new List<GameNetcodeStuff.PlayerControllerB> { far } : new List<GameNetcodeStuff.PlayerControllerB>();
             }
 
@@ -1289,6 +1342,9 @@ namespace CustomItems.Items
                 return Form("Lost", lost);
             if (asked.Count > alive.Count)
                 return Form("Lost", asked.Count - alive.Count); // погибших не выдаёт: «потерялся»
+            // Все спрошенные на корабле: «Он на корабле» / «Все на корабле»
+            if (alive.Count > 0 && alive.All(p => p.isInHangarShipRoom) && FindSet(folder + "Ship/One") != null)
+                return Form("Ship", alive.Count);
             return folder + "AllAlive";
         }
 
@@ -1351,7 +1407,16 @@ namespace CustomItems.Items
                 .Distinct().Select(f => TopicCall + f).ToList();
             if (dead.Count == 0)
             {
-                Say(WhereIsTopic(speaker, command));
+                // «Проверяю… Я проверила. Все живы и здоровы»
+                var check = new List<string>();
+                if (FindSet("Check/Start") != null && Random.value < 0.6f)
+                {
+                    check.Add("Check/Start");
+                    if (FindSet("Check/Done") != null)
+                        check.Add("Check/Done");
+                }
+                check.Add(WhereIsTopic(speaker, "все"));
+                SaySequence(check.Where(t => FindSet(t) != null).ToList());
                 return;
             }
             // «Погибли» (или «Кто-то умер, перепроверяю») и имена
@@ -1383,7 +1448,10 @@ namespace CustomItems.Items
                 topics.Add(TopicWait);
             topics.Add(TopicLootIntro);
             if (AddNumber(topics, total))
+            {
+                AddUnit(topics, "Credits");
                 SaySequence(topics);
+            }
             else
                 Say(TopicUnknown);
         }
@@ -1667,7 +1735,6 @@ namespace CustomItems.Items
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
         // Кто ушёл в комплекс (ждём на корабле), кто уже вернулся первым за посадку, на ком висит монстр
         private readonly HashSet<ulong> wentInside = new HashSet<ulong>(), onHeadSeen = new HashSet<ulong>();
-        private bool firstBackTold;
         // Про кого уже сказали «Сегодня без …»: общее для всех колонок, раз в игре до посадки
         // и ещё раз после каждой посадки
         private static readonly HashSet<string> missingTold = new HashSet<string>();
@@ -1736,13 +1803,14 @@ namespace CustomItems.Items
                     continue;
                 var set = FindSet(topic);
                 // Кто пришёл и кого нет — говорит всегда, остальное изредка
-                var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined")
+                var sure = SureContext(topic) || topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined")
                     || topic == EventsFolder + "NewGame" || topic.StartsWith(EventsFolder + "FirstBack/")
                     || topic == EventsFolder + "DoorsClosedOutside" || topic == EventsFolder + "Fired" || topic == EventsFolder + "Teamkill"
                     || topic == EventsFolder + "Dropped" && Random.value < 0.6f; // уронили — говорит чаще остального
                 if (set == null && topic != NavLostReason || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
+                RememberEvent(topic);
                 if (topic.StartsWith(EventsFolder + "Missing/"))
                     missingTold.Add(topic.Substring((EventsFolder + "Missing/").Length));
                 eventFreeAt = Time.time + EventCooldown;
@@ -1751,9 +1819,10 @@ namespace CustomItems.Items
                 // От скуки иногда «Давайте поиграем в Rend!» и тут же «Хотя нет…»
                 if (topic == EventsFolder + "Idle" && SayRend(0.25f))
                     return;
-                if (SayEventMore(topic))
+                if (SayEventMore(topic) || SayEventContext(topic))
                     return;
                 SayFrom(set);
+                ExpectReply(set.name); // «Вы как? Держитесь?» — ждёт ответ (строки «Тема > Ответ» в intents.txt)
                 return;
             }
         }
@@ -1767,6 +1836,7 @@ namespace CustomItems.Items
             if (round == null)
                 return;
             CollectMoreReasons(round);
+            CollectContextReasons(round);
 
             // Дёрнули рычаг: корабль садится на луну — «Не забудьте зарядить фонарики!»
             if (!round.inShipPhase && wasShipPhase)
@@ -1775,7 +1845,6 @@ namespace CustomItems.Items
             if (round.shipHasLanded && !wasLanded)
             {
                 Reason("Landed");
-                firstBackTold = false;
                 wentInside.Clear();
                 // После посадки ещё раз: кого нет (одна очистка на посадку, даже если колонок несколько)
                 if (Time.time - missingClearedAt > 120f)
@@ -2141,16 +2210,13 @@ namespace CustomItems.Items
 
         private void OnBack(GameNetcodeStuff.PlayerControllerB p, StartOfRound round)
         {
-            var folder = NameFolder(p.playerUsername);
-            var others = round.allPlayerScripts.Any(o => o != null && o != p && o.isPlayerControlled && !o.isPlayerDead && !o.isInHangarShipRoom);
-            if (!firstBackTold && others && folder != null)
-                Reason("FirstBack/" + folder);
-            firstBackTold = true;
+            // «Андрей! Вот и вы», «А остальные где?» — встреча по имени (CollectArrivals), здесь только замечания
             if (p.health < 50)
                 Reason("BackHurt");
             if (p.ItemSlots == null || !p.ItemSlots.Any(i => i != null && i.itemProperties != null && i.itemProperties.isScrap))
                 Reason("BackEmpty");
-            Reason("Back");
+            else
+                BackRich(p);
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)
@@ -2177,7 +2243,7 @@ namespace CustomItems.Items
             if (listenUntil > 0f && Time.time > listenUntil)
             {
                 listenUntil = 0f;
-                if (askedLocally && IsOn)
+                if (askedLocally && IsOn && !IsJammed && !AskIfMe())
                     Say(SoundTimeout);
             }
 
@@ -2185,6 +2251,7 @@ namespace CustomItems.Items
                 PlayQueued();
             UpdateThinking();
             UpdateOffer();
+            UpdateArrivals();
             UpdateAsking();
             UpdateNavigation();
             UpdateEvents();

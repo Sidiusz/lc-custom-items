@@ -1807,7 +1807,8 @@ namespace CustomItems.Items
                     || topic == EventsFolder + "NewGame" || topic.StartsWith(EventsFolder + "FirstBack/")
                     || topic == EventsFolder + "DoorsClosedOutside" || topic == EventsFolder + "Fired" || topic == EventsFolder + "Teamkill"
                     || topic == EventsFolder + "Dropped" && Random.value < 0.6f; // уронили — говорит чаще остального
-                if (set == null && topic != NavLostReason || !sure && Random.value > EventChance)
+                var glued = set == null ? GluedEvent(topic) : null;
+                if (set == null && glued == null && topic != NavLostReason || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
                 RememberEvent(topic);
@@ -1819,6 +1820,11 @@ namespace CustomItems.Items
                 // От скуки иногда «Давайте поиграем в Rend!» и тут же «Хотя нет…»
                 if (topic == EventsFolder + "Idle" && SayRend(0.25f))
                     return;
+                if (glued != null)
+                {
+                    SaySequence(glued);
+                    return;
+                }
                 if (SayEventMore(topic) || SayEventContext(topic))
                     return;
                 SayFrom(set);

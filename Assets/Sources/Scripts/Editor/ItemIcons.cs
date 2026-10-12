@@ -100,7 +100,7 @@ public static class ItemIcons
         importer.alphaIsTransparency = true;
         importer.mipmapEnabled = false;
         importer.maxTextureSize = Size;
-        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.textureCompression = TextureImporterCompression.CompressedHQ; // BC7: в 4 раза меньше, без заметных артефактов
         importer.SaveAndReimport();
     }
 

@@ -53,6 +53,7 @@ public static class ItemAssets
         public bool SaveItemVariable;
         public string Icon;                                          // путь к спрайту, необязательно
         public string Texture;                                       // текстура на все меши (HDRP/Lit), необязательно
+        public string DropSound;                                     // звук падения, иначе берётся у шаблона
         public (string field, string path)[] Clips = new (string, string)[0];
         public Action<GameObject> Customize;                         // доп. настройка префаба
         public float BatterySeconds;                                 // > 0: работает от батареи столько секунд, ЛКМ вкл/выкл
@@ -92,6 +93,7 @@ public static class ItemAssets
             MinValue = 100, MaxValue = 220, Rarity = 20, Weight = 1.28f, TwoHanded = true,
             VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
             Texture = Art + "/Textures/Monitor27/Monitor27.png",
+            DropSound = Art + "/Audio/Monitor27/Monitor27Drop.wav", // пустой пластиковый корпус
         },
         new Spec
         {
@@ -126,6 +128,7 @@ public static class ItemAssets
             MinValue = 70, MaxValue = 160, Rarity = 30, Weight = 1.03f,
             VerticalOffset = 0.13f, // центр модели на середине игрушки высотой 26 см
             Texture = Art + "/Textures/Winston/Winston.png",
+            DropSound = Art + "/Audio/Winston/WinstonDrop.wav", // мягкая игрушка, а не писк утки
             ToolTips = new[] { "Talk : [LMB]" },
             Clips = new[] { ("voiceClip", Art + "/Audio/Winston/WinstonVoice.wav") },
         },
@@ -138,6 +141,7 @@ public static class ItemAssets
             BatterySeconds = 1800f,     // полный заряд на 30 минут работы, заряжается на зарядке корабля
             SaveItemVariable = true,    // цвет и «включена»
             SyncInteract = true,        // E: поболтать (фразу выбирает держащий)
+            DropSound = YandexSounds + "/Drop.wav", // мягкий тканевый глухой стук
             Phrases = true,
             Clips = new[]
             {
@@ -297,6 +301,8 @@ public static class ItemAssets
             groups.SetValue(item, Activator.CreateInstance(groups.FieldType));
         if (spec.Icon != null)
             Set(item, "itemIcon", AssetDatabase.LoadAssetAtPath<Sprite>(spec.Icon));
+        if (spec.DropSound != null)
+            Set(item, "dropSFX", AssetDatabase.LoadAssetAtPath<AudioClip>(spec.DropSound));
         EditorUtility.SetDirty(item);
     }
 

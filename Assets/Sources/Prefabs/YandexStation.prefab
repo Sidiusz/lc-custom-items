@@ -1409,9 +1409,6 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: 6de9fcd19d95e57488d0150995bec6fd, type: 3}
     - {fileID: 8300000, guid: 529cefc3277e74d41bd00f272191dee4, type: 3}
-  - name: Time/10
-    clips:
-    - {fileID: 8300000, guid: d9d862d70475ec347a7bfe2f8bf8d9e9, type: 3}
   - name: Time/12
     clips:
     - {fileID: 8300000, guid: 5febd99d30ab09d45b462c6b8e1a79b0, type: 3}
@@ -1451,6 +1448,9 @@ MonoBehaviour:
   - name: Time/9
     clips:
     - {fileID: 8300000, guid: e88de20d904cb324d8b78d2d350717d1, type: 3}
+  - name: Time/Almost/10
+    clips:
+    - {fileID: 8300000, guid: d9d862d70475ec347a7bfe2f8bf8d9e9, type: 3}
   - name: TimeError
     clips:
     - {fileID: 8300000, guid: 53b66b4391a55844a934b71d49b8cc86, type: 3}

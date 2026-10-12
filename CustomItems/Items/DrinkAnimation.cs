@@ -17,8 +17,17 @@ namespace CustomItems.Items
 
         private static DrinkAnimation runner;
 
+        /// <summary>Кто-то отпил (для Яндекс Колонки): номер глотка и где.</summary>
+        public static int Sips;
+        public static Vector3 LastSipAt;
+
         public static void Play(PlayerControllerB player, float seconds = 1.2f)
         {
+            if (player != null)
+            {
+                Sips++;
+                LastSipAt = player.transform.position;
+            }
             var animator = player != null ? player.playerBodyAnimator : null;
             if (animator == null || !animator.parameters.Any(p => p.nameHash == ParameterHash))
                 return;

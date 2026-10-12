@@ -6,8 +6,9 @@ namespace CustomItems.Items
 {
     /// <summary>
     /// Эффект от глотка Егермейстера: каждый глоток действует 90 секунд, глотки складываются.
-    /// У выпившего кружится голова (камера покачивается) и голоса остальных звучат
-    /// искажённо, а его собственный голос все слышат низким. Работает на каждом клиенте: глоток приходит всем через
+    /// У выпившего кружится голова (камера сильно качается, всё плывёт как от TZP), ноги
+    /// заплетаются (его водит в стороны), голоса остальных звучат искажённо, а его собственный
+    /// голос все слышат низким. Перебравших тошнит (VomitEffects). Работает на каждом клиенте: глоток приходит всем через
     /// синхронизацию использования предмета.
     /// </summary>
     internal class DrunkEffects : MonoBehaviour
@@ -19,8 +20,12 @@ namespace CustomItems.Items
         private const int MaxStacks = 4;
 
         // Покачивание камеры на один глоток, в градусах
-        private const float RollPerSip = 3.5f;
-        private const float YawPerSip = 2f;
+        private const float RollPerSip = 6f;
+        private const float YawPerSip = 4f;
+
+        // Ванильное опьянение (размытие от TZP) на один глоток, и как сильно водит в стороны, м/с
+        private const float BlurPerSip = 0.3f;
+        private const float StumblePerSip = 0.6f;
 
         // Высота голоса: 1 глоток 0.85, 2 глотка 0.75, 3 и больше 0.65
         private const float MinVoicePitch = 0.65f;
@@ -45,6 +50,22 @@ namespace CustomItems.Items
             if (!instance.sips.TryGetValue(player, out var list))
                 instance.sips[player] = list = new List<float>();
             list.Add(Time.time);
+            VomitEffects.OnSip(player);
+        }
+
+        /// <summary>Сколько глотков сейчас действует на игрока.</summary>
+        public static int ActiveSips(PlayerControllerB player)
+        {
+            if (instance == null || player == null || !instance.sips.TryGetValue(player, out var list))
+                return 0;
+            var now = Time.time;
+            var count = 0;
+            foreach (var start in list)
+            {
+                if (now - start < SipDuration)
+                    count++;
+            }
+            return count;
         }
 
         /// <summary>Сила эффекта: число действующих глотков с плавным началом и концом.</summary>
@@ -98,6 +119,26 @@ namespace CustomItems.Items
 
             UpdateVoices(local, localStrength);
             SwayCamera(local, localStrength);
+            Stagger(local, localStrength);
+        }
+
+        // Размытие от ванильного опьянения (игра сама его убывает, мы держим) и заплетающиеся ноги:
+        // пока идёшь, тебя плавно сносит вбок
+        private void Stagger(PlayerControllerB local, float strength)
+        {
+            if (local == null || strength <= 0f || local.isPlayerDead)
+                return;
+            local.drunkness = Mathf.Max(local.drunkness, Mathf.Min(1f, BlurPerSip * strength));
+
+            var controller = local.thisController;
+            if (controller == null || !controller.enabled || local.disableMoveInput || local.inSpecialInteractAnimation
+                || local.isClimbingLadder || !controller.isGrounded)
+                return;
+            var walking = local.moveInputVector.sqrMagnitude > 0.01f;
+            var drift = (Mathf.PerlinNoise(Time.time * 0.45f, 3.3f) * 2f - 1f) * StumblePerSip * Mathf.Min(strength, 3f);
+            if (!walking)
+                drift *= 0.3f;
+            controller.Move(local.transform.right * drift * Time.deltaTime);
         }
 
         // Голоса, которые слышит этот клиент. Высота = собственный низкий голос говорящего

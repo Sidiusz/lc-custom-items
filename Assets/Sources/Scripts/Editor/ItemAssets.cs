@@ -35,7 +35,7 @@ public static class ItemAssets
         public string Name;          // имя файлов ассета и префаба, папки в Art/*/<Name>
         public string ItemName;      // название в игре (и секция конфига BepInEx)
         public string Behaviour;     // класс поведения из CustomItems.dll
-        public string Template = "Rubber Ducky";
+        public string Template = "Rubber Ducky"; // ванильный предмет-шаблон
         public bool Scrap = true;
         public int MinValue, MaxValue;
         public int Rarity;
@@ -54,13 +54,6 @@ public static class ItemAssets
 
     private static readonly Spec[] Specs =
     {
-        new Spec
-        {
-            Name = "RubberDuck", ItemName = "Rubber duck", Behaviour = "CustomItems.Items.RubberDuckItem",
-            MinValue = 60, MaxValue = 150, Rarity = 30, Weight = 1.05f,
-            ToolTips = new[] { "Squeak : [LMB]" },
-            Clips = new[] { ("squeakClip", Art + "/Audio/RubberDuck/Squeak.wav") },
-        },
         new Spec
         {
             Name = "Jagermeister", ItemName = "Jagermeister", Behaviour = "CustomItems.Items.JagermeisterItem",
@@ -155,8 +148,7 @@ public static class ItemAssets
             var model = FindModel(spec.Name);
             if (model == null)
             {
-                if (spec.Name != "RubberDuck") // уточка — пример, модели у неё пока нет
-                    Debug.LogWarning($"{spec.ItemName}: нет модели в {Art}/Models/{spec.Name}/");
+                Debug.LogWarning($"{spec.ItemName}: нет модели в {Art}/Models/{spec.Name}/");
                 continue;
             }
 

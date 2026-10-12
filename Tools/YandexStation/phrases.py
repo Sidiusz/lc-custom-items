@@ -5,7 +5,8 @@
 Свои записи можно класть в те же папки (любые .wav), сгенерированные удалять.
 
     pip install torch --index-url https://download.pytorch.org/whl/cpu
-    python phrases.py [голос]        # xenia (по умолчанию), baya, kseniya
+    python phrases.py [голос] [тема]  # голос xenia (по умолчанию), baya, kseniya;
+                                      # тема: озвучить только темы с этого начала, например Events/
 
 Нужен ffmpeg (подрезка тишины, громкость, 44.1 кГц моно). Тема Error
 дополнительно рвётся и хрипит, как связь при солнечной вспышке.
@@ -23,6 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "../../Assets/Sources/Art/Audio/YandexStation/Phrases")
 MODEL_URL = "https://models.silero.ai/models/tts/ru/v4_ru.pt"
 SPEAKER = sys.argv[1] if len(sys.argv) > 1 else "xenia"
+ONLY = sys.argv[2] if len(sys.argv) > 2 else ""
 
 cache = os.path.expanduser("~/.cache/silero/v4_ru.pt")
 if not os.path.exists(cache):
@@ -37,10 +39,11 @@ with open(os.path.join(HERE, "phrases.txt"), encoding="utf-8") as f:
         line = line.strip()
         if line and not line.startswith("#"):
             topic, text = line.split("|", 1)
-            phrases.append((topic.strip(), text.strip()))
+            if topic.strip().startswith(ONLY):
+                phrases.append((topic.strip(), text.strip()))
 
 # Старые сгенерированные файлы заменяем целиком, свои записи не трогаем
-for root, _, files in os.walk(OUT):
+for root, _, files in os.walk(os.path.join(OUT, ONLY) if ONLY else OUT):
     for name in files:
         if name.startswith(("Alice", "Placeholder")) and name.endswith((".wav", ".wav.meta")):
             os.remove(os.path.join(root, name))

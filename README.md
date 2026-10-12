@@ -90,6 +90,8 @@ lc-custom-items/
 
 Погода берётся из WeatherRegistry, если он стоит (модовые погоды тоже), иначе из игры. Для модовой погоды можно сделать папку `Weather/<Название погоды>`, без неё колонка отвечает фразой из `Weather/Other`. На лунах с погодой из `JammingWeathers` (по умолчанию `Solar Flare`) колонка сбоит: на экране `Err`, на любой вопрос фраза из `Error`.
 
+События: колонка изредка говорит сама, когда что-то происходит, и её слышат монстры (слепая собака прибежит на «какая милая собачка»). Решает хост, фразы лежат в `Phrases/Events/<Тема>`: `Landed`, `Leaving`, `PlayerDied`, `Night`, `PickedUp`, `LowBattery`, `Idle` и `Enemy/<enemyName монстра>` (`MouthDog`, `Flowerman`, `Spring`, `Crawler`...; имя для нового монстра пишется в лог при первой встрече). Тема без фраз молчит. Шанс, паузы, радиус и громкость в секции `[Yandex Station Events]` конфига.
+
 Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `AllowInterrupt`, `JammingWeathers`, `UseGrammar`, `ExtraPhrases`.
 
 Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас там `Alice*.wav`, озвученные Silero TTS (женский голос xenia) из списка `Tools/YandexStation/phrases.txt`: поправьте текст и запустите `python Tools/YandexStation/phrases.py` (нужны torch и ffmpeg), он перезапишет только `Alice*.wav`, свои записи не тронет. Другой голос: `python phrases.py baya` или `kseniya`.

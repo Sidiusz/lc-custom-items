@@ -209,6 +209,10 @@ namespace CustomItems
             if (player == null)
                 return;
 
+            // Слышны слова — человек ещё говорит: колонка подождёт с выключением
+            if (heard.Text.Length > 0)
+                YandexStationItem.OnVoice(player);
+
             if (heard.Partial)
             {
                 // Ответить можно уже по куску: «алиса какая погода» дважды подряд — дальше не ждём

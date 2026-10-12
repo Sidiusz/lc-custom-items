@@ -76,7 +76,9 @@ namespace CustomItems.Items
         // ---- Настройки из конфига (Plugin) ----
         public static string WakeWord = "алиса";
         public static float HearingRadius = 8f;
-        public static float ListenSeconds = 6f;
+        public static float ListenSilence = 3f, ListenMax = 12f;
+        /// <summary>Сколько длится пробуждение (сигнал и глаза), прежде чем она начнёт «думать».</summary>
+        public static float WakeSeconds = 0.8f;
         /// <summary>Можно ли задать новый вопрос, пока колонка ещё отвечает.</summary>
         public static bool AllowInterrupt;
         /// <summary>Погоды (названия как у игры или WeatherRegistry), при которых колонка сбоит.</summary>
@@ -251,7 +253,7 @@ namespace CustomItems.Items
         private int colorIndex = -1; // -1: ещё не знаем (клиент ждёт хоста)
         private float talkUntil;
         private bool clockWhileTalking;
-        private float listenUntil;
+        private float listenUntil, listenStartedAt;
         private string lastTopic;
         private int lastIndex = -1;
         private int expression;
@@ -438,6 +440,8 @@ namespace CustomItems.Items
                 return;
             }
 
+            // Уже проснулась (ждёт вопрос после «Алиса») — сразу думает; иначе сначала просыпается
+            var listening = Time.time < station.listenUntil;
             string command;
             if (wake >= 0)
             {
@@ -512,7 +516,7 @@ namespace CustomItems.Items
             if (topic == TopicStop || topic == TopicShush)
                 Answer(station, speaker, topic, known);
             else
-                station.Think(() => Answer(station, speaker, topic, known));
+                station.Think(() => Answer(station, speaker, topic, known), wake: !listening);
         }
 
         private static void Answer(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
@@ -654,7 +658,7 @@ namespace CustomItems.Items
 
         // Чего она ждёт ответа (только на хосте, где слушают)
         private string asking, askingItem;
-        private float askUntil;
+        private float askUntil, askStartedAt;
 
         private void SayFirst(params string[] topics) =>
             Say(topics.FirstOrDefault(t => FindSet(t) != null) ?? TopicUnknown);
@@ -670,7 +674,8 @@ namespace CustomItems.Items
                 Say(SoundListen); // нет записи вопроса — хотя бы сигнал «слушаю»
                 listenUntil = 0f;
             }
-            askUntil = Mathf.Max(Time.time, talkUntil) + ListenSeconds;
+            askStartedAt = Mathf.Max(Time.time, talkUntil);
+            askUntil = askStartedAt + ListenSilence;
         }
 
         // Ответили на вопрос (или промолчали: reply == null)
@@ -713,26 +718,62 @@ namespace CustomItems.Items
                 OnReply(null);
         }
 
+        /// <summary>
+        /// Игрок что-то говорит (распознавание слышит слова): пока он говорит, колонка ждёт,
+        /// выключается после <see cref="ListenSilence"/> секунд тишины, но не позже <see cref="ListenMax"/>.
+        /// </summary>
+        public static void OnVoice(GameNetcodeStuff.PlayerControllerB speaker)
+        {
+            if (speaker == null || speaker.isPlayerDead)
+                return;
+            var station = NearestTo(speaker.transform.position, HearingRadius);
+            if (station == null)
+                return;
+            if (station.listenUntil > 0f && Time.time < station.listenUntil)
+                station.listenUntil = Mathf.Min(station.listenStartedAt + ListenMax, Mathf.Max(station.listenUntil, Time.time + ListenSilence));
+            if (station.asking != null && Time.time < station.askUntil)
+                station.askUntil = Mathf.Min(station.askStartedAt + ListenMax, Mathf.Max(station.askUntil, Time.time + ListenSilence));
+        }
+
         // ---- «Думает» перед ответом ----
 
         /// <summary>Пауза перед ответом, секунды (случайная между Min и Max).</summary>
         public static float ThinkMin = 0.7f, ThinkMax = 1.5f;
         private const string TopicThink = "#think";
-        private float thinkUntil;
+        private float thinkUntil, thinkStartAt;
+        private bool thinkStarted;
         private Action pendingAnswer;
 
-        // Решает тот, кто услышал; остальным уходит «#think» с длительностью в мс, чтобы у всех бегали глаза
-        private void Think(Action answer)
+        // Решает тот, кто услышал; остальным уходит «#think» с длительностью в мс, чтобы у всех бегали глаза.
+        // wake — сначала проснуться (сигнал, глаза), потом думать: даже на «Алиса, …» одним духом
+        private void Think(Action answer, bool wake)
         {
-            var ms = Mathf.RoundToInt(Random.Range(ThinkMin, Mathf.Max(ThinkMin, ThinkMax)) * 1000f);
             pendingAnswer = answer;
-            Speak(TopicThink, ms);
-            SendSpeak(TopicThink, ms);
+            thinkStarted = false;
+            thinkStartAt = Time.time;
+            if (wake)
+            {
+                Say(SoundListen);
+                thinkStartAt += Mathf.Max(WakeSeconds, listenClip != null ? listenClip.length : 0f);
+            }
+            UpdateThinking();
         }
 
         private void UpdateThinking()
         {
-            if (pendingAnswer == null || Time.time < thinkUntil)
+            if (pendingAnswer == null)
+                return;
+            if (!thinkStarted)
+            {
+                if (Time.time < thinkStartAt)
+                    return;
+                thinkStarted = true;
+                var ms = Mathf.RoundToInt(Random.Range(ThinkMin, Mathf.Max(ThinkMin, ThinkMax)) * 1000f);
+                Speak(TopicThink, ms);
+                SendSpeak(TopicThink, ms);
+                return;
+            }
+            if (Time.time < thinkUntil)
                 return;
             var answer = pendingAnswer;
             pendingAnswer = null;
@@ -1223,7 +1264,8 @@ namespace CustomItems.Items
                     talkUntil = 0f;
                     return;
                 case SoundListen:
-                    listenUntil = Time.time + ListenSeconds;
+                    listenUntil = Time.time + ListenSilence;
+                    listenStartedAt = Time.time;
                     PlaySound(listenClip);
                     return;
                 case SoundTimeout:

@@ -87,6 +87,19 @@ namespace CustomItems
                     "Сколько секунд спит игрок из SleepyPlayers").Value;
             }
 
+            Register<Monitor27Item>(bundle, new CustomItemDef
+            {
+                Name = "Computer monitor",
+                ModelAsset = "Monitor27",
+                TemplateItem = "Cash register", // двуручная анимация переноски
+                MinValue = 100,
+                MaxValue = 220,
+                DefaultRarity = 20,
+                Weight = 1.28f,
+                TwoHanded = true,
+                VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
+            });
+
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
 

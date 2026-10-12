@@ -82,6 +82,7 @@ namespace CustomItems.Items
                 sipsLeft--;
 
             StopDrinking();
+            DrinkAnimation.CountSip(playerHeldBy);
             drinking = StartCoroutine(Drink(playerHeldBy));
 
             if (IsServer)

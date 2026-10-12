@@ -4,7 +4,7 @@ namespace CustomItems.Items
 {
     /// <summary>
     /// Плюшевый Уинстон: по ЛКМ говорит «Уинстон». Звук слышат все игроки
-    /// (SyncUse = true в описании), через рацию и монстры.
+    /// (Sync Use Function в ассете Item), через рацию и монстры.
     /// </summary>
     public class WinstonItem : CustomGrabbable
     {

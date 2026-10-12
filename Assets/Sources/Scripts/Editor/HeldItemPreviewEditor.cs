@@ -10,10 +10,34 @@ public class HeldItemPreviewEditor : Editor
         var preview = (HeldItemPreview)target;
 
         EditorGUILayout.Space();
-        if (GUILayout.Button("Скопировать для CustomItemDef"))
+        using (new EditorGUI.DisabledScope(preview.itemAsset == null))
         {
-            EditorGUIUtility.systemCopyBuffer = preview.ToSnippet();
-            Debug.Log("Скопировано в буфер:\n" + preview.ToSnippet());
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Взять из Item"))
+            {
+                var item = new SerializedObject(preview.itemAsset);
+                Undo.RecordObject(preview, "Load held item offsets");
+                preview.positionOffset = item.FindProperty("positionOffset")?.vector3Value ?? preview.positionOffset;
+                preview.rotationOffset = item.FindProperty("rotationOffset")?.vector3Value ?? preview.rotationOffset;
+            }
+            if (GUILayout.Button("Записать в Item"))
+            {
+                var item = new SerializedObject(preview.itemAsset);
+                var pos = item.FindProperty("positionOffset");
+                var rot = item.FindProperty("rotationOffset");
+                if (pos == null || rot == null)
+                {
+                    Debug.LogError("В Item Asset нужен ассет Item игры (Assets/Sources/Data/Items)");
+                }
+                else
+                {
+                    pos.vector3Value = preview.positionOffset;
+                    rot.vector3Value = preview.rotationOffset;
+                    item.ApplyModifiedProperties();
+                    Debug.Log("Оффсеты записаны в " + preview.itemAsset.name + ", пересоберите бандл");
+                }
+            }
+            EditorGUILayout.EndHorizontal();
         }
 
         if (GUILayout.Button("Сбросить оффсеты"))

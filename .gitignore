@@ -122,3 +122,7 @@ InitTestScene*.unity*
 # Рипнутые ассеты игры (персонаж для превью и т.п.) — только локально, в репозиторий не кладём
 /Assets/_Ripped/
 /Assets/_Ripped.meta
+
+# DLL игры и собранный мод для Unity (Lethal Company → Setup), в репозиторий не кладём
+/Assets/Plugins/
+/Assets/Plugins.meta

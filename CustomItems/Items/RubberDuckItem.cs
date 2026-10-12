@@ -4,7 +4,7 @@ namespace CustomItems.Items
 {
     /// <summary>
     /// Пример предмета: резиновая уточка. ЛКМ пищит и привлекает монстров шумом.
-    /// Использование синхронизирует сама игра (SyncUse = true в описании), поэтому
+    /// Использование синхронизирует сама игра (Sync Use Function в ассете Item), поэтому
     /// своих RPC и NetcodePatcher здесь не нужно.
     /// </summary>
     public class RubberDuckItem : CustomGrabbable

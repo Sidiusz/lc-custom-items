@@ -1,9 +1,11 @@
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
 using CustomItems.Items;
 using LethalLib.Modules;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace CustomItems
@@ -33,133 +35,91 @@ namespace CustomItems
                 return;
             }
 
-            // ---- Предметы. Новый предмет = описание + класс поведения + одна строка Register ----
-
-            var duck = Register<RubberDuckItem>(bundle, new CustomItemDef
+            var registry = bundle.LoadAllAssets<ItemRegistry>().FirstOrDefault();
+            if (registry == null)
             {
-                Name = "Rubber duck",
-                ModelAsset = "RubberDuck",
-                MinValue = 60,
-                MaxValue = 150,
-                DefaultRarity = 30,
-                Weight = 1.05f,
-                ToolTips = new[] { "Squeak : [LMB]" },
-            });
-            if (duck != null)
-                duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
-
-            var jager = Register<JagermeisterItem>(bundle, new CustomItemDef
-            {
-                Name = "Jagermeister",
-                ModelAsset = "Jagermeister",
-                TemplateItem = "Perfume bottle",
-                MinValue = 40,
-                MaxValue = 100,
-                DefaultRarity = 30,
-                Weight = 1.03f,
-                VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
-                ToolTips = new[] { "Drink : [LMB]" },
-            });
-            if (jager != null)
-                jager.itemProperties.saveItemVariable = true; // сохранять оставшиеся глотки
-
-            var adrenaline = Register<AdrenalineItem>(bundle, new CustomItemDef
-            {
-                Name = "Adrenaline Game Fuel",
-                ModelAsset = "AdrenalineCan",
-                IconAsset = "AdrenalineCanIcon",
-                TemplateItem = "Red soda",
-                MinValue = 80,
-                MaxValue = 160,
-                DefaultRarity = 30,
-                Weight = 1.01f,
-                VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
-                ToolTips = new[] { "Drink : [LMB]" },
-            });
-            if (adrenaline != null)
-            {
-                adrenaline.itemProperties.saveItemVariable = true; // пустая банка остаётся пустой после сохранения
-                AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
-                    "Ники через запятую: этих игроков энергетик не бодрит, а вырубает").Value.Split(',');
-                AdrenalineItem.BoostDuration = Config.Bind("Adrenaline Game Fuel", "BoostSeconds", 30f,
-                    "Сколько секунд стамина восстанавливается быстрее").Value;
-                AdrenalineItem.SleepDuration = Config.Bind("Adrenaline Game Fuel", "SleepSeconds", 10f,
-                    "Сколько секунд спит игрок из SleepyPlayers").Value;
+                Log.LogError("В бандле нет ItemRegistry: соберите бандл заново (README, раздел 2)");
+                return;
             }
 
-            Register<Monitor27Item>(bundle, new CustomItemDef
-            {
-                Name = "Computer monitor",
-                ModelAsset = "Monitor27",
-                TemplateItem = "Cash register", // двуручная анимация переноски
-                MinValue = 100,
-                MaxValue = 220,
-                DefaultRarity = 20,
-                Weight = 1.28f,
-                TwoHanded = true,
-                VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
-            });
+            foreach (var entry in registry.items)
+                Register(entry);
 
-            var toyGun = Register<ToyGunItem>(bundle, new CustomItemDef
-            {
-                Name = "Toy gun",
-                ModelAsset = "ToyGun",
-                TemplateItem = "Zap gun",
-                IsScrap = false,
-                DefaultRarity = 0,
-                DefaultInShop = true,
-                DefaultPrice = 30,
-                Weight = 1.03f,
-                ToolTips = new[] { "Shoot : [LMB]" },
-                // На полу лежит на боку. Положение в руке подгоняется в игре (README, раздел 5)
-                RestingRotation = new Vector3(0f, 0f, 90f),
-            });
-            if (toyGun != null)
-            {
-                toyGun.shotClip = bundle.LoadAsset<AudioClip>("ToyGunShot");
-                ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
-                    "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
-            }
-
-            var winston = Register<WinstonItem>(bundle, new CustomItemDef
-            {
-                Name = "Winston plush",
-                ModelAsset = "Winston",
-                MinValue = 70,
-                MaxValue = 160,
-                DefaultRarity = 30,
-                Weight = 1.03f,
-                VerticalOffset = 0.13f, // центр модели на середине игрушки высотой 26 см
-                ToolTips = new[] { "Talk : [LMB]" },
-            });
-            if (winston != null)
-                winston.voiceClip = bundle.LoadAsset<AudioClip>("WinstonVoice");
+            // Настройки поведения, которые не живут в ассетах: их удобно менять без пересборки
+            AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
+                "Ники через запятую: этих игроков энергетик не бодрит, а вырубает").Value.Split(',');
+            AdrenalineItem.BoostDuration = Config.Bind("Adrenaline Game Fuel", "BoostSeconds", 30f,
+                "Сколько секунд стамина восстанавливается быстрее").Value;
+            AdrenalineItem.SleepDuration = Config.Bind("Adrenaline Game Fuel", "SleepSeconds", 10f,
+                "Сколько секунд спит игрок из SleepyPlayers").Value;
+            ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
+                "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
 
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
 
-        private T Register<T>(AssetBundle bundle, CustomItemDef def) where T : CustomGrabbable
+        private void Register(ItemRegistry.Entry entry)
         {
-            var behaviour = ItemFactory.Create<T>(bundle, def);
-            if (behaviour == null)
-                return null;
+            var item = entry.item;
+            var prefab = item != null ? item.spawnPrefab : null;
+            if (prefab == null || prefab.GetComponent<GrabbableObject>() == null)
+            {
+                Log.LogError($"Пропускаю '{(item != null ? item.name : "пустую строку")}' в ItemRegistry: " +
+                             "у Item нет Spawn Prefab или на префабе нет скрипта предмета");
+                return;
+            }
 
-            var item = behaviour.itemProperties;
-            var section = def.Name;
+            PreparePrefab(prefab);
+            LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(prefab);
 
-            var rarity = Config.Bind(section, "Rarity", def.DefaultRarity,
+            // Значения из Unity служат умолчаниями, конфиг BepInEx их переопределяет
+            var section = item.itemName;
+            var rarity = Config.Bind(section, "Rarity", entry.rarity,
                 "Шанс появления как скрап (вес относительно других предметов, 0 = не спавнится)").Value;
-            var inShop = Config.Bind(section, "InShop", def.DefaultInShop, "Продавать в магазине терминала").Value;
-            var price = Config.Bind(section, "Price", def.DefaultPrice, "Цена в магазине").Value;
+            var inShop = Config.Bind(section, "InShop", entry.inShop, "Продавать в магазине терминала").Value;
+            var price = Config.Bind(section, "Price", entry.price, "Цена в магазине").Value;
 
-            if (def.IsScrap && rarity > 0)
+            var asScrap = item.isScrap && rarity > 0;
+            if (asScrap)
                 LethalLib.Modules.Items.RegisterScrap(item, rarity, Levels.LevelTypes.All);
             if (inShop)
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
-            if (!(def.IsScrap && rarity > 0) && !inShop)
+            if (!asScrap && !inShop)
                 LethalLib.Modules.Items.RegisterItem(item);
+        }
 
-            return behaviour;
+        // Тег и слои игры есть не в каждом Unity-проекте, поэтому ставим их здесь по именам.
+        // Хеш NetworkObject в редакторе без пакета Netcode не считается, задаём свой
+        // постоянный: у всех игроков он одинаковый, пока не переименован префаб.
+        private static void PreparePrefab(GameObject prefab)
+        {
+            prefab.tag = "PhysicsProp";
+            var props = LayerMask.NameToLayer("Props");
+            var scanNode = LayerMask.NameToLayer("ScanNode");
+            foreach (var t in prefab.GetComponentsInChildren<Transform>(true))
+            {
+                var isScanNode = t.GetComponent<ScanNodeProperties>() != null;
+                t.gameObject.layer = isScanNode ? scanNode : props;
+            }
+
+            var networkObject = prefab.GetComponent<NetworkObject>();
+            if (networkObject != null)
+                GlobalObjectIdHash?.SetValue(networkObject, StableHash(PluginGuid + "/" + prefab.name));
+        }
+
+        private static readonly FieldInfo GlobalObjectIdHash =
+            typeof(NetworkObject).GetField("GlobalObjectIdHash", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+        private static uint StableHash(string text)
+        {
+            // FNV-1a: не зависит от рантайма, в отличие от string.GetHashCode
+            var hash = 2166136261u;
+            foreach (var c in text)
+            {
+                hash ^= c;
+                hash *= 16777619u;
+            }
+            return hash;
         }
     }
 }

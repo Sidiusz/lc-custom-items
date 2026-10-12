@@ -26,8 +26,8 @@ lc-custom-items/
 │   │   │   ├── ItemRegistry.asset    какие предметы в моде: редкость, магазин, цена
 │   │   │   └── Items/<Предмет>.asset ассеты Item: название, стоимость, вес, хват, оффсеты...
 │   │   ├── Scenes/               тестовая сцена
+│   │   ├── GameStubs/            заглушки Item, GrabbableObject, ScanNodeProperties из игры (без asmdef!)
 │   │   └── Scripts/              Unity-скрипты (HeldItemPreview)
-│   │       ├── GameStubs/        заглушки Item, GrabbableObject, ScanNodeProperties из игры
 │   │       └── Editor/           меню Lethal Company: DLL, создание ассетов, сборка бандла
 │   ├── Plugins/                  DLL игры и мода для редактора (создаётся сама, в .gitignore)
 │   └── Settings/                 настройки HDRP (путь задан в ProjectSettings, не переносить)
@@ -46,7 +46,7 @@ lc-custom-items/
 └── thunderstore/manifest.json    для публикации на Thunderstore
 ```
 
-Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `CustomItems.Items.dll` копируется в `Assets/Plugins/CustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/Scripts/GameStubs/`: только поля, без логики. Они компилируются в `Assembly-CSharp` проекта, поэтому в бандле записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
+Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `CustomItems.Items.dll` копируется в `Assets/Plugins/CustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/GameStubs/`: только поля, без логики. Папка лежит вне `Scripts/` (там asmdef) и без своего asmdef, поэтому заглушки компилируются в `Assembly-CSharp` проекта, поэтому в бандле записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
 
 ## 1. Что нужно установить
 

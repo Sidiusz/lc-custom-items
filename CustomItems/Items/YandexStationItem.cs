@@ -655,6 +655,11 @@ namespace CustomItems.Items
         /// </summary>
         public static string WeatherName()
         {
+            // IsJammed спрашивает каждый кадр у каждой колонки: считаем раз за кадр
+            if (weatherFrame == Time.frameCount)
+                return weatherCached;
+            weatherFrame = Time.frameCount;
+            weatherCached = null;
             var level = StartOfRound.Instance != null ? StartOfRound.Instance.currentLevel : null;
             if (level == null)
                 return null;
@@ -664,8 +669,11 @@ namespace CustomItems.Items
                 var weather = level.currentWeather;
                 name = Enum.IsDefined(typeof(LevelWeatherType), weather) ? weather.ToString() : null;
             }
-            return name == "None" ? "Clear" : name;
+            return weatherCached = name == "None" ? "Clear" : name;
         }
+
+        private static int weatherFrame = -1;
+        private static string weatherCached;
 
         private static string WeatherRegistryName(SelectableLevel level)
         {

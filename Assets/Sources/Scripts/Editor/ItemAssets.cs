@@ -98,6 +98,7 @@ public static class ItemAssets
             Name = "Winston", ItemName = "Winston plush", Behaviour = "CustomItems.Items.WinstonItem",
             MinValue = 70, MaxValue = 160, Rarity = 30, Weight = 1.03f,
             VerticalOffset = 0.13f, // центр модели на середине игрушки высотой 26 см
+            Texture = Art + "/Textures/Winston/Winston.png",
             ToolTips = new[] { "Talk : [LMB]" },
             Clips = new[] { ("voiceClip", Art + "/Audio/Winston/WinstonVoice.wav") },
         },

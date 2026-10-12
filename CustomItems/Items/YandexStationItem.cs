@@ -93,7 +93,13 @@ namespace CustomItems.Items
             TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear",
             TopicWhoAreYou = "WhoAreYou", TopicShush = "Shush", TopicSorry = "Sorry", TopicInsult = "Insult",
             TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel",
-            TopicFavoriteColor = "FavoriteColor";
+            TopicFavoriteColor = "FavoriteColor", TopicRoute = "#route";
+
+        /// <summary>
+        /// Ставит маршрут корабля по тексту (плагин, AliceRoute) и возвращает темы ответа по порядку:
+        /// говорится первая, у которой есть записи.
+        /// </summary>
+        public static Func<string, string[]> RouteHandler;
 
         /// <summary>Рядом дунули в рожок или горн (вызывает патч плагина) — Events/Horn.</summary>
         public static void OnHorn(Vector3 position)
@@ -440,6 +446,11 @@ namespace CustomItems.Items
             }
             else if (topic == TopicWhoAreYou)
                 station.Say(station.FindSet(TopicWhoAreYou) != null ? TopicWhoAreYou : "ItsMe");
+            else if (topic == TopicRoute)
+            {
+                var answers = RouteHandler != null ? RouteHandler(known) : new[] { "Refuse" };
+                station.Say(answers.FirstOrDefault(a => station.FindSet(a) != null) ?? TopicUnknown);
+            }
             else if (topic == TopicWhereIs)
                 station.Say(station.WhereIsTopic(speaker, known));
             else if (topic == TopicInsult)
@@ -513,6 +524,8 @@ namespace CustomItems.Items
             var intent = AliceIntents.Match(command, out var score);
             if (intent == null || score < 0.85f)
                 return false;
+            if (intent == TopicRoute)
+                return false; // луну дослушиваем до конца
             return intent == TopicStop || intent == "#shush" || AliceIntents.Tokens(command).Length >= 2;
         }
 
@@ -552,6 +565,9 @@ namespace CustomItems.Items
         {
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out _);
+            // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
+            if ((intent == "Moon" || intent == "Navigation") && AliceIntents.NamesMoon(command))
+                intent = TopicRoute;
             switch (intent)
             {
                 case null:

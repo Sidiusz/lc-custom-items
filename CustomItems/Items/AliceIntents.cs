@@ -31,6 +31,13 @@ namespace CustomItems.Items
         // Форма или основа имени → папка друга
         private static readonly Dictionary<string, string> NameForms = new Dictionary<string, string>();
         private static readonly Dictionary<string, string> NameStems = new Dictionary<string, string>();
+        private static readonly Dictionary<string, string> MoonStems = new Dictionary<string, string>();
+
+        /// <summary>Луна (как в терминале: Titan), если слово — её русское имя из строк «@Луна: …».</summary>
+        public static string MoonIn(string token) => MoonStems.TryGetValue(Stem(token), out var moon) ? moon : null;
+
+        /// <summary>Есть ли в тексте русское имя луны.</summary>
+        public static bool NamesMoon(string text) => Tokens(text).Any(t => MoonIn(t) != null);
 
         /// <summary>Все слова примеров и формы имён: из них собирается грамматика распознавания.</summary>
         public static IEnumerable<string> Vocabulary => Words.Concat(NameForms.Keys);
@@ -62,6 +69,16 @@ namespace CustomItems.Items
                 if (colon <= 0)
                     continue;
                 var topic = line.Substring(0, colon).Trim();
+                if (topic.StartsWith("@"))
+                {
+                    // Луна: «@Titan: титан, титана» — как её называют вслух
+                    foreach (var alias in line.Substring(colon + 1).Split(',').SelectMany(a => Tokens(a, keepYo: true)))
+                    {
+                        Words.Add(alias);
+                        MoonStems[Stem(alias)] = topic.Substring(1).Trim();
+                    }
+                    continue;
+                }
                 foreach (var phrase in line.Substring(colon + 1).Split(','))
                 {
                     var tokens = Tokens(phrase);

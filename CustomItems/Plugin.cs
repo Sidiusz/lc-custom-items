@@ -166,6 +166,7 @@ namespace CustomItems
             var extra = Config.Bind(section, "ExtraPhrases", "",
                 "Свои фразы для распознавания через запятую (для своих тем в Phrases), строчными").Value;
             LoadIntents();
+            AliceRoute.Install();
             if (grammar)
             {
                 AliceListener.Grammar = AliceIntents.Phrases.Concat(AliceIntents.Vocabulary)

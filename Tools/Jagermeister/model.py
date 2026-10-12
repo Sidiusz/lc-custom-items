@@ -1,4 +1,4 @@
-"""Низкополигональная бутылка Егермейстера -> Assets/Jagermeister/Jagermeister.fbx
+"""Низкополигональная бутылка Егермейстера -> Assets/Sources/Art/Models/Jagermeister/Jagermeister.fbx
 
 Запуск (Blender 3.6+ / 4.x):
   blender --background --python model.py
@@ -14,7 +14,8 @@ import bmesh
 import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "Assets", "Jagermeister"))
+OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "Assets", "Sources", "Art", "Models", "Jagermeister"))
+TEX_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "Assets", "Sources", "Art", "Textures", "Jagermeister"))
 NAME = "Jagermeister"
 SEGMENTS = 24  # точек по обхвату; кратно 4, чтобы углы попадали в вершины
 
@@ -117,7 +118,7 @@ def build():
     bsdf = mat.node_tree.nodes["Principled BSDF"]
     bsdf.inputs["Roughness"].default_value = 0.35
     tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
-    tex.image = bpy.data.images.load(os.path.join(OUT_DIR, NAME + ".png"))
+    tex.image = bpy.data.images.load(os.path.join(TEX_DIR, NAME + ".png"))
     mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
     mesh.materials.append(mat)
     return obj

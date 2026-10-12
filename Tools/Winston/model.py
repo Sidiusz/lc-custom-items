@@ -1,7 +1,7 @@
 # Готовит модель плюшевого Уинстона для предмета Winston из Tools/Winston/Winton.blend:
 # убирает скелет и лишние объекты, уменьшает до размера игрушки, запекает цвет
 # вместе с AO (вторая UV) в одну текстуру и пишет FBX со встроенной текстурой
-# в Assets/Items/Winston/.
+# в Assets/Sources/Art/Models/Winston/.
 #
 # Запуск из корня репозитория (Blender или pip-пакет bpy):
 #   blender -b --factory-startup -P Tools/Winston/model.py
@@ -19,7 +19,7 @@ from mathutils import Matrix, Vector
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Winton.blend")
-OUT_DIR = os.path.join(REPO, "Assets", "Items", "Winston")
+OUT_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Models", "Winston")
 NAME = "Winston"
 TEX = 1024
 HEIGHT = 0.26  # высота игрушки; в исходнике сувенир 0.5 м

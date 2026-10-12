@@ -5,10 +5,10 @@
     pip install bpy pillow numpy
     python Tools/Adrenaline/model.py
 
-Пишет в Assets/Adrenaline/:
-    AdrenalineCan.png       текстура 512x512 (этикетка + металл)
-    AdrenalineCan.fbx       модель, ~170 треугольников, центр в середине банки
-    AdrenalineCanIcon.png   иконка для инвентаря 256x256
+Пишет в Assets/Sources/Art/:
+    Textures/Adrenaline/AdrenalineCan.png       текстура 512x512 (этикетка + металл)
+    Models/Adrenaline/AdrenalineCan.fbx         модель, ~170 треугольников, центр в середине банки
+    Textures/Adrenaline/AdrenalineCanIcon.png   иконка для инвентаря 256x256
 """
 import math
 import os
@@ -18,10 +18,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT = os.path.join(ROOT, "Assets", "Adrenaline")
-TEX = os.path.join(OUT, "AdrenalineCan.png")
-FBX = os.path.join(OUT, "AdrenalineCan.fbx")
-ICON = os.path.join(OUT, "AdrenalineCanIcon.png")
+MODEL_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Models", "Adrenaline")
+TEX_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Textures", "Adrenaline")
+TEX = os.path.join(TEX_DIR, "AdrenalineCan.png")
+FBX = os.path.join(MODEL_DIR, "AdrenalineCan.fbx")
+ICON = os.path.join(TEX_DIR, "AdrenalineCanIcon.png")
 
 SIZE = 512
 LABEL_V0 = 0.25  # этикетка занимает v 0.25..1, ниже служебная полоса металла
@@ -362,7 +363,8 @@ def render_icon(obj):
 
 
 if __name__ == "__main__":
-    os.makedirs(OUT, exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(TEX_DIR, exist_ok=True)
     make_texture()
     print(f"Текстура: {TEX}")
     can = make_model()

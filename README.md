@@ -9,9 +9,19 @@
 
 ```
 lc-custom-items/
-├── Assets/                       Unity: модели, звуки, иконки предметов
-│   ├── Editor/BuildBundles.cs    меню Lethal Company → Build AssetBundles
-│   └── ItemTools/                превью предмета в руке (HeldItemPreview)
+├── Assets/
+│   ├── Sources/                  всё наше в Unity
+│   │   ├── Art/
+│   │   │   ├── Models/<Предмет>/     fbx/obj (Tools/ пишет сюда)
+│   │   │   ├── Textures/<Предмет>/   текстуры и иконки инвентаря
+│   │   │   ├── Materials/<Предмет>/  материалы HDRP/Lit
+│   │   │   └── Audio/<Предмет>/      звуки
+│   │   ├── Prefabs/              префабы предметов (<Предмет>.prefab)
+│   │   ├── Data/                 ScriptableObject'ы и прочие данные
+│   │   ├── Scenes/               тестовая сцена
+│   │   └── Scripts/              Unity-скрипты (HeldItemPreview)
+│   │       └── Editor/           BuildBundles (меню Lethal Company → Build AssetBundles), ToyGunSetup, инспекторы
+│   └── Settings/                 настройки HDRP (путь задан в ProjectSettings, не переносить)
 ├── Packages/, ProjectSettings/   Unity
 ├── Bundles/                      собранный AssetBundle `customitems` (коммитится)
 ├── CustomItems/                  C#-проект мода (вне Assets/, Unity его не видит)
@@ -21,9 +31,12 @@ lc-custom-items/
 │       ├── CustomItemDef.cs      описание предмета (цена, вес, редкость, оффсеты...)
 │       ├── ItemFactory.cs        собирает из голой модели сетевой предмет
 │       ├── CustomGrabbable.cs    база: анимации/звуки из ванили, шейдеры HDRP
-│       └── RubberDuckItem.cs     пример поведения
+│       └── <Предмет>Item.cs      поведение предметов
+├── Tools/<Предмет>/              генераторы моделей и текстур (Blender/Python)
 └── thunderstore/manifest.json    для публикации на Thunderstore
 ```
+
+Код мода лежит вне `Assets/` специально: он ссылается на BepInEx, LethalLib и библиотеки игры, которых нет в Unity-проекте, и Unity пытался бы его скомпилировать с ошибками. Ассеты код ищет в бандле по имени, так что пути внутри `Assets/Sources` можно менять без правок кода.
 
 ## 1. Что нужно установить
 
@@ -36,8 +49,8 @@ lc-custom-items/
 Всё, что обычно настраивают в Unity (ассет Item, NetworkObject, коллайдер, Rigidbody, скан-нода, скрипт), мод создаёт сам в коде. В Unity нужен только бандл с ассетами.
 
 1. Откройте корень репозитория в Unity Hub (Add → Add project from disk).
-2. Импортируйте модель (fbx/obj/blend), сделайте из неё префаб `RubberDuck`. Масштаб: 1 единица = 1 метр, уточка ~0.2–0.3. Центр модели примерно в её середине. Материалы на шейдере HDRP/Lit, как в игре.
-3. Импортируйте звук писка и назовите его `Squeak`.
+2. Положите модель (fbx/obj/blend) в `Assets/Sources/Art/Models/RubberDuck/`, текстуры в `Art/Textures/RubberDuck/`, и сделайте префаб `Assets/Sources/Prefabs/RubberDuck.prefab`. Масштаб: 1 единица = 1 метр, уточка ~0.2–0.3. Центр модели примерно в её середине. Материалы на шейдере HDRP/Lit, как в игре.
+3. Положите звук писка в `Art/Audio/RubberDuck/` и назовите его `Squeak`.
 4. По желанию: картинку-иконку (Texture Type = Sprite) для инвентаря. Без неё берётся иконка ванильного предмета.
 5. Выделите префаб и звук, внизу инспектора в поле AssetBundle впишите `customitems`.
 6. Меню **Lethal Company → Build AssetBundles**. Бандл окажется в `Bundles/customitems`, откуда его заберёт сборка мода.
@@ -48,7 +61,7 @@ lc-custom-items/
 
 ## 2.1. Как предмет держится в руке: превью в Unity
 
-В игре предмет каждый кадр ставится в точку руки персонажа и сдвигается на `PositionOffset` / `RotationOffset` из `CustomItemDef`. Компонент `HeldItemPreview` (`Assets/ItemTools/`) делает в редакторе то же самое, так что оффсеты можно подобрать на глаз.
+В игре предмет каждый кадр ставится в точку руки персонажа и сдвигается на `PositionOffset` / `RotationOffset` из `CustomItemDef`. Компонент `HeldItemPreview` (`Assets/Sources/Scripts/`) делает в редакторе то же самое, так что оффсеты можно подобрать на глаз.
 
 1. Рипните игру AssetRipper'ом (Export → Unity project) и откройте экспорт отдельным проектом **или** скопируйте модель игрока с нужными мешами, анимациями и аватаром в `Assets/_Ripped/`. Эта папка в `.gitignore`: ассеты игры в репозиторий не кладём.
 2. Поставьте в сцену префаб игрока. В иерархии найдите поиском `ItemHolder`: `LocalItemHolder` — рука в виде от первого лица (руки без тела), `ServerItemHolder` — рука на полной модели, как вас видят друзья. Проверьте оба.
@@ -91,7 +104,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 5. Как добавить новый предмет
 
-1. В Unity: префаб с моделью (+ звуки), тот же бандл `customitems`, пересобрать.
+1. В Unity: файлы в `Assets/Sources/Art/{Models,Textures,Materials,Audio}/<Предмет>/`, префаб в `Assets/Sources/Prefabs/`, тот же бандл `customitems`, пересобрать. Генератор модели, если есть, в `Tools/<Предмет>/`.
 2. Класс поведения `MyItem : CustomGrabbable`. Переопределяйте `ItemActivate` (ЛКМ), `Update`, `EquipItem`, `PocketItem`, `DiscardItem` и т.п. Если делать ничего не нужно, пустой класс.
 3. В `Plugin.Awake` одна запись:
 

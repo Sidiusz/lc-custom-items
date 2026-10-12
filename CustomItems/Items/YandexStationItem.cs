@@ -82,7 +82,7 @@ namespace CustomItems.Items
         /// <summary>Погоды (названия как у игры или WeatherRegistry), при которых колонка сбоит.</summary>
         public static string[] JammingWeathers = { "Solar Flare" };
         public static string OnOffTip = "Turn on/off : [LMB]";
-        public static string ColorTip = "Color : [E]";
+        public static string TalkTip = "Talk : [E]";
 
         /// <summary>Все колонки в мире: по ним плагин решает, слушать ли голос.</summary>
         public static readonly List<YandexStationItem> All = new List<YandexStationItem>();
@@ -180,7 +180,7 @@ namespace CustomItems.Items
 
         private void OnDisable() => All.Remove(this);
 
-        // Цвет и «включена» в одном числе: сохраняются вместе с кораблём
+        // Цвет (случайный при покупке) и «включена» в одном числе: сохраняются вместе с кораблём
         public override int GetItemDataToSave()
         {
             EnsureColor();
@@ -197,7 +197,7 @@ namespace CustomItems.Items
 
         public override void SetControlTipsForItem()
         {
-            HUDManager.Instance.ChangeControlTipMultiple(new[] { OnOffTip, ColorTip }, holdingItem: true, itemProperties);
+            HUDManager.Instance.ChangeControlTipMultiple(new[] { OnOffTip, TalkTip }, holdingItem: true, itemProperties);
         }
 
         // ЛКМ. Item.automaticallySetUsingPower: игра сама переключает isBeingUsed и не даёт
@@ -230,15 +230,13 @@ namespace CustomItems.Items
             SwitchOn(false);
         }
 
-        // E: следующий цвет (Sync Interact LR, у всех одинаково)
+        // E: поболтать — случайная фраза. Выбирает держащий, остальным уходит по сети.
         public override void ItemInteractLeftRight(bool right)
         {
             base.ItemInteractLeftRight(right);
-            if (!right)
+            if (!right || !IsOwner || !IsOn || IsTalking)
                 return;
-            EnsureColor();
-            colorIndex = (colorIndex + 1) % bodyColors.Length;
-            ApplyColor();
+            Say(IsJammed ? TopicError : TopicRandom);
         }
 
         private void EnsureColor()

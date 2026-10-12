@@ -53,7 +53,7 @@ MonoBehaviour:
   isDefensiveWeapon: 0
   toolTips:
   - 'Turn on/off : [LMB]'
-  - 'Color : [E]'
+  - 'Talk : [E]'
   verticalOffset: 0.045
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1

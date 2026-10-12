@@ -108,6 +108,8 @@ lc-custom-items/
 
 «Какой твой любимый цвет» — случайная фраза из `FavoriteColor` и всех `Color/*` (на «какого ты цвета» по-прежнему цвет корпуса). `Events/Horn` — рядом дунули в клоунский рожок или воздушный горн. `Events/Suit` звучит и при переодевании, и на «как я выгляжу», «как тебе мой костюм».
 
+«Куда полетим?», «куда летим?» — случайная фраза из `Moon` («Давайте полетим на Титан!»); на орбите колонка иногда предлагает луну и сама, вместо `Events/Idle`. Тем, которых нет (например, `Events/Enemy/<монстр>` без записей), колонка просто молчит, а погода без своей папки берётся из `Weather/Other`.
+
 Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `AllowInterrupt`, `JammingWeathers`, `UseGrammar`, `ExtraPhrases`.
 
 Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас там `Alice*.wav`, озвученные Silero TTS (женский голос xenia) из списка `Tools/YandexStation/phrases.txt`: поправьте текст и запустите `python Tools/YandexStation/phrases.py` (нужны torch и ffmpeg), он перезапишет только `Alice*.wav`, свои записи не тронет. Другой голос: `python phrases.py baya` или `kseniya`.

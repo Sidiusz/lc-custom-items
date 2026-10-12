@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -125,10 +126,10 @@ namespace CustomItems
                 "из Phrases/Names/<Папка> (незнакомому — из Names/Unknown), а при смерти игрока может сказать Events/PlayerDied/<Папка>. " +
                 "Ники сравниваются без регистра и значков, ник может быть длиннее (Sidiusz* подходит к Sidiusz)").Value);
             var spoken = Config.Bind(section, "SpokenNames",
-                "Daniil=дан,сидиус; Andrey=андр,синон; Arseniy=арсен,сен,шакаб; Pavel=паш,павел,павл",
-                "Как друзей зовут вслух: «Папка=начало,начало» через точку с запятой, строчными. Начала слов: «паш» — " +
-                "Паша, Пашей, Пашка. Для «Алиса, где Андрей?», «чё с Пашей?», «Сеня умер?». Новые формы имён " +
-                "добавляйте ещё и в ExtraPhrases, иначе распознавание их не услышит").Value;
+                "Daniil=даниил,данил,даня,сидиус; Andrey=андрей,андрюха,андрюша,синон; Arseniy=арсений,сеня,арсен,шакабуй; " +
+                "Pavel=павел,паша,пашка,пашок,павлецки",
+                "Как друзей зовут вслух: «Папка=имя,имя» через точку с запятой, строчными. Падежи (Пашей, Пашу, Пашка) " +
+                "колонка добавляет сама. Это {name} в intents.txt: «Алиса, где Андрей?», «чё с Пашей?», «Сеня умер?»").Value;
             YandexStationItem.SetSpokenNames(spoken);
             YandexStationItem.ShushSeconds = Config.Bind(section, "ShushSeconds", 60f,
                 "Столько секунд после «замолчи» колонка не говорит сама (события)").Value;
@@ -164,9 +165,10 @@ namespace CustomItems
                 "Так маленькая русская модель почти не ошибается. Выключите, чтобы распознавалось всё подряд").Value;
             var extra = Config.Bind(section, "ExtraPhrases", "",
                 "Свои фразы для распознавания через запятую (для своих тем в Phrases), строчными").Value;
+            LoadIntents();
             if (grammar)
             {
-                AliceListener.Grammar = AliceListener.DefaultGrammar
+                AliceListener.Grammar = AliceIntents.Phrases.Concat(AliceIntents.Vocabulary)
                     .Concat(new[] { YandexStationItem.WakeWord })
                     .Concat(extra.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0))
                     .Distinct().ToArray();
@@ -181,6 +183,36 @@ namespace CustomItems
             var go = new GameObject("SidiuszCustomItems.AliceListener") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(go);
             go.AddComponent<AliceListener>();
+        }
+
+        // Вопросы Алисы: встроенный intents.txt и свой файл в папке конфига (дополняет встроенный)
+        private void LoadIntents()
+        {
+            using (var stream = typeof(Plugin).Assembly.GetManifestResourceStream("SidiuszCustomItems.intents.txt"))
+            {
+                if (stream != null)
+                    using (var reader = new StreamReader(stream))
+                        AliceIntents.Load(reader.ReadToEnd());
+            }
+            var own = Path.Combine(Paths.ConfigPath, "SidiuszCustomItems.intents.txt");
+            try
+            {
+                if (!File.Exists(own))
+                {
+                    File.WriteAllText(own,
+                        "# Свои вопросы Алисы, дополняют встроенные. Строка: «Тема: пример, пример, пример».\n" +
+                        "# Тема — папка фраз в Phrases (Joke, Events/Suit…) или особая: #whereis, #time, #battery, #count, #enemies.\n" +
+                        "# {name} — любой друг из SpokenNames в любом падеже. Примеры:\n" +
+                        "# Joke: насмеши меня, давай прикол\n" +
+                        "# #whereis: как там {name}, {name} где\n");
+                }
+                AliceIntents.Load(File.ReadAllText(own));
+            }
+            catch (Exception e)
+            {
+                Log.LogWarning("Алиса: не прочитала " + own + ": " + e.Message);
+            }
+            Log.LogInfo($"Алиса: примеров вопросов {AliceIntents.Count}");
         }
 
         private void SetupToyGun()

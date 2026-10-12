@@ -1,0 +1,389 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace CustomItems.Items
+{
+    /// <summary>
+    /// Понимание вопросов Алисы без списков в коде. Темы и примеры вопросов лежат в тексте
+    /// (intents.txt в моде и свой файл в конфиге): «Тема: фраза, фраза, …». Вопрос сравнивается
+    /// с каждым примером по основам слов (русский стеммер Snowball) с нечётким совпадением,
+    /// редкие слова весят больше частых (IDF). Побеждает тема лучшего примера, если он похож
+    /// достаточно. {name} в примере — любой друг из таблицы имён в любой форме.
+    /// </summary>
+    public static class AliceIntents
+    {
+        /// <summary>Ниже этой похожести вопрос не понят.</summary>
+        public static float Threshold = 0.6f;
+
+        public const string NameSlot = "{name}";
+
+        private class Example
+        {
+            public string Topic, Text;
+            public string[] Stems;
+        }
+
+        private static readonly List<Example> Examples = new List<Example>();
+        private static readonly Dictionary<string, float> Idf = new Dictionary<string, float>();
+        private static readonly HashSet<string> Words = new HashSet<string>();
+        // Форма или основа имени → папка друга
+        private static readonly Dictionary<string, string> NameForms = new Dictionary<string, string>();
+        private static readonly Dictionary<string, string> NameStems = new Dictionary<string, string>();
+
+        /// <summary>Все слова примеров и формы имён: из них собирается грамматика распознавания.</summary>
+        public static IEnumerable<string> Vocabulary => Words.Concat(NameForms.Keys);
+
+        public static int Count => Examples.Count;
+
+        /// <summary>Примеры целиком (без {name}) — тоже в грамматику, чтобы связные фразы узнавались лучше.</summary>
+        public static IEnumerable<string> Phrases => Examples.Where(e => !e.Text.Contains(NameSlot)).Select(e => e.Text).Distinct();
+
+        public static void Clear()
+        {
+            Examples.Clear();
+            Words.Clear();
+            Idf.Clear();
+        }
+
+        /// <summary>
+        /// Добавляет темы из текста: строки «Тема: пример, пример». # — комментарий.
+        /// Тема — папка фраз (Joke, Events/Suit) или особая (#time, #whereis…).
+        /// </summary>
+        public static void Load(string text)
+        {
+            foreach (var raw in (text ?? "").Split('\n'))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#") && !line.Contains(":") || line.StartsWith("# "))
+                    continue;
+                var colon = line.IndexOf(':');
+                if (colon <= 0)
+                    continue;
+                var topic = line.Substring(0, colon).Trim();
+                foreach (var phrase in line.Substring(colon + 1).Split(','))
+                {
+                    var tokens = Tokens(phrase);
+                    if (tokens.Length == 0)
+                        continue;
+                    // В грамматику — как написано, с «ё»: в словаре распознавания «ещё», а не «еще»
+                    foreach (var t in Tokens(phrase, keepYo: true))
+                    {
+                        if (t != NameSlot)
+                            Words.Add(t);
+                    }
+                    Examples.Add(new Example
+                    {
+                        Topic = topic,
+                        Text = string.Join(" ", tokens),
+                        Stems = tokens.Select(t => t == NameSlot ? t : Stem(t)).ToArray(),
+                    });
+                }
+            }
+            RecountIdf();
+        }
+
+        private static void RecountIdf()
+        {
+            Idf.Clear();
+            var df = new Dictionary<string, int>();
+            foreach (var e in Examples)
+            {
+                foreach (var s in e.Stems.Distinct())
+                    df[s] = df.TryGetValue(s, out var n) ? n + 1 : 1;
+            }
+            foreach (var pair in df)
+                Idf[pair.Key] = (float)Math.Log(1.0 + (double)Examples.Count / pair.Value);
+            Idf[NameSlot] = 3f;
+        }
+
+        /// <summary>
+        /// Друзья, как их зовут вслух: папка → имена («Pavel» → паша, павел, пашок). Падежи
+        /// (Пашей, Пашу, Пашка) добавляются сами.
+        /// </summary>
+        public static void SetNames(Dictionary<string, string[]> names)
+        {
+            NameForms.Clear();
+            NameStems.Clear();
+            foreach (var pair in names)
+            {
+                foreach (var name in pair.Value)
+                {
+                    foreach (var form in Forms(Normalize(name)))
+                    {
+                        NameForms[form] = pair.Key;
+                        var stem = Stem(form);
+                        if (stem.Length >= 3)
+                            NameStems[stem] = pair.Key;
+                    }
+                }
+            }
+        }
+
+        /// <summary>Папка друга, названного в тексте, или null.</summary>
+        public static string NameIn(string text)
+        {
+            foreach (var t in Tokens(text))
+            {
+                var folder = NameOf(t);
+                if (folder != null)
+                    return folder;
+            }
+            return null;
+        }
+
+        private static string NameOf(string token)
+        {
+            if (NameForms.TryGetValue(token, out var folder))
+                return folder;
+            return NameStems.TryGetValue(Stem(token), out folder) ? folder : null;
+        }
+
+        /// <summary>Лучшая тема для вопроса и её похожесть (0–1). null — ничего похожего.</summary>
+        public static string Match(string command, out float score)
+        {
+            score = 0f;
+            var tokens = Tokens(command).Select(t => NameOf(t) != null ? NameSlot : t).ToArray();
+            if (tokens.Length == 0)
+                return null;
+            var stems = tokens.Select(t => t == NameSlot ? t : Stem(t)).ToArray();
+
+            Example best = null;
+            foreach (var e in Examples)
+            {
+                var s = Score(e.Stems, stems);
+                if (s > score + 1e-4f)
+                {
+                    score = s;
+                    best = e;
+                }
+            }
+            return best != null && score >= Threshold ? best.Topic : null;
+        }
+
+        // Насколько вопрос покрывает пример (с весами слов) и насколько сам вопрос из него состоит
+        private static float Score(string[] example, string[] command)
+        {
+            float total = 0f, got = 0f;
+            var used = new bool[command.Length];
+            foreach (var e in example)
+            {
+                var w = Idf.TryGetValue(e, out var v) ? v : 1f;
+                total += w;
+                float bestSim = 0f;
+                var bestAt = -1;
+                for (var i = 0; i < command.Length; i++)
+                {
+                    var sim = Similarity(e, command[i]);
+                    if (sim > bestSim)
+                    {
+                        bestSim = sim;
+                        bestAt = i;
+                    }
+                }
+                got += w * bestSim;
+                if (bestAt >= 0 && bestSim >= 0.7f)
+                    used[bestAt] = true;
+            }
+            if (total <= 0f)
+                return 0f;
+            var recall = got / total;
+            var precision = (float)used.Count(u => u) / command.Length;
+            return 0.75f * recall + 0.25f * precision;
+        }
+
+        private static float Similarity(string a, string b)
+        {
+            if (a == b)
+                return 1f;
+            if (a == NameSlot || b == NameSlot)
+                return 0f;
+            var min = Math.Min(a.Length, b.Length);
+            if (min >= 4 && (a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal)))
+                return 0.85f;
+            if (min >= 4 && Levenshtein(a, b) <= 1)
+                return 0.75f;
+            if (min >= 6 && Levenshtein(a, b) <= 2)
+                return 0.7f;
+            return 0f;
+        }
+
+        public static string Normalize(string text) => (text ?? "").ToLowerInvariant().Replace('ё', 'е');
+
+        public static string[] Tokens(string text, bool keepYo = false)
+        {
+            var sb = new StringBuilder();
+            foreach (var c in keepYo ? (text ?? "").ToLowerInvariant() : Normalize(text))
+                sb.Append(char.IsLetterOrDigit(c) || c == '{' || c == '}' || c == '-' ? c : ' ');
+            return sb.ToString().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(t => t != "unk").ToArray();
+        }
+
+        // ---- Падежи имён ----
+
+        /// <summary>Имя и его падежи: паша → паши, паше, пашу, пашей, пашой; пашок → пашка, пашку…</summary>
+        public static IEnumerable<string> Forms(string name)
+        {
+            var forms = new List<string> { name };
+            void Add(string stem, params string[] ends) => forms.AddRange(ends.Select(e => stem + e));
+            if (name.Length < 3)
+                return forms;
+            var last = name[name.Length - 1];
+            var body = name.Substring(0, name.Length - 1);
+            if (name.EndsWith("ий"))
+                Add(name.Substring(0, name.Length - 2), "ия", "ию", "ием", "ии");
+            else if (last == 'й')
+                Add(body, "я", "ю", "ем", "е");
+            else if (last == 'а')
+                Add(body, "ы", "и", "е", "у", "ой", "ей");
+            else if (last == 'я')
+                Add(body, "и", "е", "ю", "ей", "ей");
+            else if (last == 'ь')
+                Add(body, "я", "ю", "ем", "е");
+            else if (name.EndsWith("ок") || name.EndsWith("ек") || name.EndsWith("ел"))
+                // Беглая гласная: пашок → пашка, павел → павла
+                Add(name.Substring(0, name.Length - 2) + name[name.Length - 1], "а", "у", "ом", "е");
+            else if (!IsVowel(last))
+                Add(name, "а", "у", "ом", "е", "ы");
+            return forms.Distinct();
+        }
+
+        // ---- Стеммер Snowball для русского ----
+
+        private static bool IsVowel(char c) => "аеиоуыэюя".IndexOf(c) >= 0;
+
+        private static readonly string[] PerfectiveGerund1 = { "вшись", "вши", "в" };
+        private static readonly string[] PerfectiveGerund2 = { "ившись", "ывшись", "ивши", "ывши", "ив", "ыв" };
+        private static readonly string[] Adjective =
+        {
+            "ими", "ыми", "его", "ого", "ему", "ому", "ее", "ие", "ые", "ое", "ей", "ий", "ый", "ой", "ем", "им", "ым",
+            "ом", "их", "ых", "ую", "юю", "ая", "яя", "ою", "ею",
+        };
+        private static readonly string[] Participle1 = { "ем", "нн", "вш", "ющ", "щ" };
+        private static readonly string[] Participle2 = { "ивш", "ывш", "ующ" };
+        private static readonly string[] Reflexive = { "ся", "сь" };
+        private static readonly string[] Verb1 = { "ете", "йте", "ешь", "нно", "ла", "на", "ли", "ем", "ло", "но", "ет", "ют", "ны", "ть", "й", "л", "н" };
+        private static readonly string[] Verb2 =
+        {
+            "ейте", "уйте", "ила", "ыла", "ена", "ите", "или", "ыли", "ило", "ыло", "ено", "ует", "уют", "ены", "ить",
+            "ыть", "ишь", "ей", "уй", "ил", "ыл", "им", "ым", "ен", "ят", "ит", "ыт", "ую", "ю",
+        };
+        private static readonly string[] Noun =
+        {
+            "иями", "ями", "ами", "ией", "иям", "ием", "иях", "ев", "ов", "ие", "ье", "еи", "ии", "ей", "ой", "ий", "ям",
+            "ем", "ам", "ом", "ах", "ях", "ию", "ью", "ия", "ья", "а", "е", "и", "й", "о", "у", "ы", "ь", "ю", "я",
+        };
+        private static readonly string[] Superlative = { "ейше", "ейш" };
+        private static readonly string[] Derivational = { "ость", "ост" };
+
+        private static readonly Dictionary<string, string> StemCache = new Dictionary<string, string>();
+
+        public static string Stem(string word)
+        {
+            word = Normalize(word);
+            lock (StemCache)
+            {
+                if (StemCache.TryGetValue(word, out var cached))
+                    return cached;
+            }
+            var stem = StemUncached(word);
+            lock (StemCache)
+                StemCache[word] = stem;
+            return stem;
+        }
+
+        private static string StemUncached(string word)
+        {
+            if (word.Length < 3 || !word.All(c => c >= 'а' && c <= 'я'))
+                return word;
+            // RV — после первой гласной; R2 — по правилам Snowball
+            var rv = 0;
+            while (rv < word.Length && !IsVowel(word[rv]))
+                rv++;
+            rv++;
+            if (rv > word.Length)
+                return word;
+            var r1 = Region(word, 0);
+            var r2 = Region(word, r1);
+
+            var w = word;
+            if (!Cut(ref w, rv, PerfectiveGerund2, false) && !Cut(ref w, rv, PerfectiveGerund1, true))
+            {
+                Cut(ref w, rv, Reflexive, false);
+                if (!CutAdjectival(ref w, rv) && !Cut(ref w, rv, Verb2, false) && !Cut(ref w, rv, Verb1, true))
+                    Cut(ref w, rv, Noun, false);
+            }
+            Cut(ref w, rv, new[] { "и" }, false);
+            Cut(ref w, Math.Max(rv, r2), Derivational, false);
+            if (w.EndsWith("нн") && w.Length - 1 >= rv)
+                w = w.Substring(0, w.Length - 1);
+            else if (Cut(ref w, rv, Superlative, false))
+            {
+                if (w.EndsWith("нн") && w.Length - 1 >= rv)
+                    w = w.Substring(0, w.Length - 1);
+            }
+            else if (w.EndsWith("ь") && w.Length - 1 >= rv)
+                w = w.Substring(0, w.Length - 1);
+            return w.Length > 0 ? w : word;
+        }
+
+        private static int Region(string word, int from)
+        {
+            for (var i = from + 1; i < word.Length; i++)
+            {
+                if (!IsVowel(word[i]) && IsVowel(word[i - 1]))
+                    return i + 1;
+            }
+            return word.Length;
+        }
+
+        private static bool CutAdjectival(ref string w, int rv)
+        {
+            if (!Cut(ref w, rv, Adjective, false))
+                return false;
+            if (!Cut(ref w, rv, Participle2, false))
+                Cut(ref w, rv, Participle1, true);
+            return true;
+        }
+
+        // Срезает самое длинное окончание в пределах RV; afterAYa — только после «а»/«я» (её не трогаем)
+        private static bool Cut(ref string w, int rv, string[] endings, bool afterAYa)
+        {
+            string best = null;
+            foreach (var e in endings)
+            {
+                if (!w.EndsWith(e, StringComparison.Ordinal) || w.Length - e.Length < rv)
+                    continue;
+                if (afterAYa)
+                {
+                    var i = w.Length - e.Length - 1;
+                    if (i < rv || w[i] != 'а' && w[i] != 'я')
+                        continue;
+                }
+                if (best == null || e.Length > best.Length)
+                    best = e;
+            }
+            if (best == null)
+                return false;
+            w = w.Substring(0, w.Length - best.Length);
+            return true;
+        }
+
+        public static int Levenshtein(string a, string b)
+        {
+            var prev = new int[b.Length + 1];
+            var cur = new int[b.Length + 1];
+            for (var j = 0; j <= b.Length; j++)
+                prev[j] = j;
+            for (var i = 1; i <= a.Length; i++)
+            {
+                cur[0] = i;
+                for (var j = 1; j <= b.Length; j++)
+                    cur[j] = Math.Min(Math.Min(cur[j - 1], prev[j]) + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+                (prev, cur) = (cur, prev);
+            }
+            return prev[b.Length];
+        }
+    }
+}

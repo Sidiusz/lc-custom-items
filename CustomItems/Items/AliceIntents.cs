@@ -15,9 +15,11 @@ namespace CustomItems.Items
     public static class AliceIntents
     {
         /// <summary>Ниже этой похожести вопрос не понят.</summary>
-        public static float Threshold = 0.6f;
+        public static float Threshold = 0.7f;
 
         public const string NameSlot = "{name}";
+        /// <summary>Любая луна из строк «@Луна: …»: «поставь {moon}» = «поставь Ашуру».</summary>
+        public const string MoonSlot = "{moon}";
 
         private class Example
         {
@@ -45,7 +47,7 @@ namespace CustomItems.Items
         public static int Count => Examples.Count;
 
         /// <summary>Примеры целиком (без {name}) — тоже в грамматику, чтобы связные фразы узнавались лучше.</summary>
-        public static IEnumerable<string> Phrases => Examples.Where(e => !e.Text.Contains(NameSlot)).Select(e => e.Text).Distinct();
+        public static IEnumerable<string> Phrases => Examples.Where(e => !e.Text.Contains("{")).Select(e => e.Text).Distinct();
 
         public static void Clear()
         {
@@ -87,19 +89,22 @@ namespace CustomItems.Items
                     // В грамматику — как написано, с «ё»: в словаре распознавания «ещё», а не «еще»
                     foreach (var t in Tokens(phrase, keepYo: true))
                     {
-                        if (t != NameSlot)
+                        if (!IsSlot(t))
                             Words.Add(t);
                     }
                     Examples.Add(new Example
                     {
                         Topic = topic,
                         Text = string.Join(" ", tokens),
-                        Stems = tokens.Select(t => t == NameSlot ? t : Stem(t)).ToArray(),
+                        Stems = tokens.Select(t => IsSlot(t) ? t : Stem(t)).ToArray(),
                     });
                 }
             }
             RecountIdf();
         }
+
+        // Вес слова, которого нет ни в одном примере: как у самого редкого
+        private static float MaxIdf = 1f;
 
         private static void RecountIdf()
         {
@@ -113,6 +118,8 @@ namespace CustomItems.Items
             foreach (var pair in df)
                 Idf[pair.Key] = (float)Math.Log(1.0 + (double)Examples.Count / pair.Value);
             Idf[NameSlot] = 3f;
+            Idf[MoonSlot] = 3f;
+            MaxIdf = Idf.Values.DefaultIfEmpty(1f).Max();
         }
 
         /// <summary>
@@ -161,10 +168,11 @@ namespace CustomItems.Items
         public static string Match(string command, out float score)
         {
             score = 0f;
-            var tokens = Tokens(command).Select(t => NameOf(t) != null ? NameSlot : t).ToArray();
+            // «Алиса» в середине вопроса — обращение, а не смысл
+            var tokens = Tokens(command).Where(t => !t.StartsWith("алис")).Select(t => NameOf(t) != null ? NameSlot : MoonIn(t) != null ? MoonSlot : t).ToArray();
             if (tokens.Length == 0)
                 return null;
-            var stems = tokens.Select(t => t == NameSlot ? t : Stem(t)).ToArray();
+            var stems = tokens.Select(t => IsSlot(t) ? t : Stem(t)).ToArray();
 
             Example best = null;
             foreach (var e in Examples)
@@ -179,7 +187,11 @@ namespace CustomItems.Items
             return best != null && score >= Threshold ? best.Topic : null;
         }
 
-        // Насколько вопрос покрывает пример (с весами слов) и насколько сам вопрос из него состоит
+        private static bool IsSlot(string token) => token == NameSlot || token == MoonSlot;
+
+        // Насколько вопрос покрывает пример (с весами слов) и насколько сам вопрос из него состоит.
+        // Лишнее редкое слово в вопросе («поставь» рядом с именем) сильно снижает похожесть:
+        // лучше «не поняла», чем ответ не на тот вопрос.
         private static float Score(string[] example, string[] command)
         {
             float total = 0f, got = 0f;
@@ -206,15 +218,23 @@ namespace CustomItems.Items
             if (total <= 0f)
                 return 0f;
             var recall = got / total;
-            var precision = (float)used.Count(u => u) / command.Length;
-            return 0.75f * recall + 0.25f * precision;
+            float all = 0f, matched = 0f;
+            for (var i = 0; i < command.Length; i++)
+            {
+                var w = Idf.TryGetValue(command[i], out var v) ? v : MaxIdf;
+                all += w;
+                if (used[i])
+                    matched += w;
+            }
+            var precision = all > 0f ? matched / all : 0f;
+            return recall * (0.4f + 0.6f * precision);
         }
 
         private static float Similarity(string a, string b)
         {
             if (a == b)
                 return 1f;
-            if (a == NameSlot || b == NameSlot)
+            if (IsSlot(a) || IsSlot(b))
                 return 0f;
             var min = Math.Min(a.Length, b.Length);
             if (min >= 4 && (a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal)))

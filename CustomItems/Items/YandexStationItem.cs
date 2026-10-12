@@ -474,6 +474,20 @@ namespace CustomItems.Items
                 return;
             }
 
+            // «Стоп» и «замолчи» сразу, на остальное сначала думает (глаза бегают), потом отвечает
+            if (topic == TopicStop || topic == TopicShush)
+                Answer(station, speaker, topic, known);
+            else
+                station.Think(() => Answer(station, speaker, topic, known));
+        }
+
+        private static void Answer(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
+        {
+            if (!station.IsOn)
+                return;
+            // После ответа на вопрос колонка какое-то время сама не болтает (не перебьёт «Сегодня без…»)
+            station.eventFreeAt = Mathf.Max(station.eventFreeAt, Time.time + 20f);
+
             if (topic != TopicStop && topic != TopicShush && topic != TopicError && topic != TopicTimeError
                 && Random.value < WhimChance)
             {
@@ -557,6 +571,39 @@ namespace CustomItems.Items
                 return;
             else
                 station.Say(topic);
+        }
+
+        // ---- «Думает» перед ответом ----
+
+        /// <summary>Пауза перед ответом, секунды (случайная между Min и Max).</summary>
+        public static float ThinkMin = 0.7f, ThinkMax = 1.5f;
+        private const string TopicThink = "#think";
+        private float thinkUntil;
+        private Action pendingAnswer;
+
+        // Решает тот, кто услышал; остальным уходит «#think» с длительностью в мс, чтобы у всех бегали глаза
+        private void Think(Action answer)
+        {
+            var ms = Mathf.RoundToInt(Random.Range(ThinkMin, Mathf.Max(ThinkMin, ThinkMax)) * 1000f);
+            pendingAnswer = answer;
+            Speak(TopicThink, ms);
+            SendSpeak(TopicThink, ms);
+        }
+
+        private void UpdateThinking()
+        {
+            if (pendingAnswer == null || Time.time < thinkUntil)
+                return;
+            var answer = pendingAnswer;
+            pendingAnswer = null;
+            answer();
+        }
+
+        // Пока думает: по кругу бежит один сегмент в двух средних цифрах
+        private long ThinkMask()
+        {
+            var seg = "abcdef"[(int)(Time.time * 12f) % 6].ToString();
+            return Digit(1, Mask(seg)) | Digit(2, Mask(seg));
         }
 
         private string lastAsked;
@@ -1002,6 +1049,12 @@ namespace CustomItems.Items
         {
             if (audioSource == null || !IsOn)
                 return;
+            if (topic == TopicThink)
+            {
+                listenUntil = 0f;
+                thinkUntil = Time.time + index / 1000f;
+                return;
+            }
             switch (topic)
             {
                 case TopicStop:
@@ -1189,7 +1242,8 @@ namespace CustomItems.Items
                 return;
             }
             if (reasons.Count == 0 || !IsOn || IsTalking || isPocketed || IsJammed || Time.time < quietUntil
-                || Time.time < eventFreeAt || Time.time < anyEventFreeAt || listenUntil > 0f)
+                || Time.time < eventFreeAt || Time.time < anyEventFreeAt || listenUntil > 0f
+                || Time.time < thinkUntil || pendingAnswer != null)
                 return;
 
             foreach (var topic in reasons)
@@ -1582,6 +1636,7 @@ namespace CustomItems.Items
             }
 
             PlayQueued();
+            UpdateThinking();
             UpdateEvents();
             var talking = IsTalking;
             UpdateLevel(talking);
@@ -1593,6 +1648,8 @@ namespace CustomItems.Items
                 mask = GlitchMask();
             else if (Time.time < volumeShownUntil)
                 mask = VolumeMask();
+            else if (Time.time < thinkUntil)
+                mask = ThinkMask();
             else if (talking && !clockWhileTalking)
                 mask = FaceMask();
             else if (Time.time < listenUntil)

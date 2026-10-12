@@ -1739,9 +1739,7 @@ namespace CustomItems.Items
             {
                 if (nextIdle > 0f && PlayerNear(this, 8f))
                 {
-                    // На орбите иногда «Давайте полетим на Титан!»
-                    if (round.inShipPhase && Random.value < 0.4f)
-                        reasons.Add("Moon");
+                    // «Давайте полетим на …» (Moon) — только ответ на «куда летим», сама не предлагает
                     Reason("Idle");
                 }
                 nextIdle = Time.time + IdleSeconds * Random.Range(0.7f, 1.3f);

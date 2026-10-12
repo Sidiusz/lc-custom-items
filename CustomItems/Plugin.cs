@@ -113,6 +113,12 @@ namespace CustomItems
                 "Слово, на которое колонка откликается (как его пишет распознавание, строчными)").Value.Trim().ToLowerInvariant();
             YandexStationItem.HearingRadius = Config.Bind(section, "HearingRadius", 8f,
                 "С какого расстояния (м) к колонке можно обращаться голосом").Value;
+            YandexStationItem.ListenSeconds = Config.Bind(section, "ListenSeconds", 6f,
+                "Сколько секунд после одного «Алиса» колонка ждёт вопрос, потом выключается сигналом").Value;
+            YandexStationItem.ThinkMin = Config.Bind(section, "ThinkMin", 0.7f,
+                "Пауза «думает» перед ответом, от (секунды)").Value;
+            YandexStationItem.ThinkMax = Config.Bind(section, "ThinkMax", 1.5f,
+                "Пауза «думает» перед ответом, до (секунды)").Value;
             YandexStationItem.AllowInterrupt = Config.Bind(section, "AllowInterrupt", false,
                 "Можно задать новый вопрос, пока колонка ещё отвечает. По умолчанию она дослушивает себя и только потом слушает других").Value;
             YandexStationItem.JammingWeathers = Config.Bind(section, "JammingWeathers", "Solar Flare",

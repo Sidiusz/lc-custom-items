@@ -467,6 +467,9 @@ public static class ItemAssets
 
         string[] Missing()
         {
+            // GetAllRuntimeMonoScripts видит только загруженные MonoScript'ы, а сразу после запуска (-executeMethod) они ещё не загружены
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets" }))
+                AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GUIDToAssetPath(guid));
             var known = new HashSet<Type>(MonoImporter.GetAllRuntimeMonoScripts()
                 .Where(m => m != null).Select(m => m.GetClass()).Where(c => c != null));
             return needed.Where(t => !known.Contains(t)).Select(t => t.Name).ToArray();
@@ -475,6 +478,9 @@ public static class ItemAssets
         var missing = Missing();
         if (missing.Length > 0 && Application.isBatchMode)
         {
+            // MonoScript без класса (GetClass() == null) оживает после переимпорта своего .cs
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets/Sources/GameStubs" }))
+                AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             missing = Missing();
         }

@@ -442,8 +442,14 @@ namespace CustomItems.Items
                       ?? (topic.StartsWith("Weather/") ? FindSet("Weather/Other") : null)
                       ?? FindSet(topic == TopicError ? TopicError : TopicUnknown)
                       ?? FindSet(TopicRandom);
+            SayFrom(set);
+        }
+
+        private void SayFrom(PhraseSet set)
+        {
             if (set == null || set.clips.Length == 0)
                 return;
+            askedLocally = true;
             var index = Random.Range(0, set.clips.Length);
             if (set.clips.Length > 1 && set.name == lastTopic && index == lastIndex)
                 index = (index + 1 + Random.Range(0, set.clips.Length - 1)) % set.clips.Length;
@@ -506,15 +512,170 @@ namespace CustomItems.Items
             // Шум слышат монстры; считаем его только у того, кто спросил, чтобы не дублировать
             if (askedLocally)
             {
-                RoundManager.Instance?.PlayAudibleNoise(transform.position, NoiseRange, NoiseLoudness, 0,
-                    isInElevator && StartOfRound.Instance.hangarDoorsClosed);
+                RoundManager.Instance?.PlayAudibleNoise(transform.position, noiseRange > 0f ? noiseRange : NoiseRange,
+                    NoiseLoudness, 0, isInElevator && StartOfRound.Instance.hangarDoorsClosed);
             }
+            noiseRange = 0f;
         }
 
         private void PlaySound(AudioClip clip)
         {
             if (audioSource != null && clip != null)
                 audioSource.PlayOneShot(clip);
+        }
+
+        // ---- События: колонка сама реагирует на то, что вокруг ----
+
+        public static bool EventsEnabled = true;
+        /// <summary>Шанс, что колонка скажет что-то на повод (монстр подошёл, посадка...).</summary>
+        public static float EventChance = 0.35f;
+        /// <summary>Пауза (с) после реплики колонки, прежде чем она снова заговорит сама.</summary>
+        public static float EventCooldown = 45f;
+        /// <summary>Одна и та же тема события не чаще, чем раз в столько секунд (на все колонки).</summary>
+        public static float EventTopicCooldown = 180f;
+        /// <summary>С какого расстояния (м) колонка замечает монстра.</summary>
+        public static float EventRadius = 15f;
+        /// <summary>Как далеко монстры слышат реплику на событие (м): громко — может приманить.</summary>
+        public static float EventNoiseRange = 25f;
+        /// <summary>Раз во сколько секунд колонка может поболтать сама, если рядом кто-то есть (0 — никогда).</summary>
+        public static float IdleSeconds = 120f;
+
+        public const string EventsFolder = "Events/";
+        private const float EventCheckSeconds = 1.5f;
+
+        // Общие на все колонки: две колонки не говорят про одно и то же разом
+        private static readonly Dictionary<string, float> topicFreeAt = new Dictionary<string, float>();
+        private static float anyEventFreeAt;
+        private static readonly HashSet<string> LoggedEnemies = new HashSet<string>();
+
+        private float noiseRange;
+        private float nextEventCheck, eventFreeAt, nextIdle;
+        private bool eventsReady, wasLanded, wasLeaving, wasHeld, wasNight, lowBatteryTold;
+        private int deadPlayers;
+        private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
+        private readonly List<string> reasons = new List<string>();
+
+        // Решает хост, остальным уходит выбранная фраза, как при ответе на вопрос
+        private void UpdateEvents()
+        {
+            if (!EventsEnabled || !IsServer || Time.time < nextEventCheck)
+                return;
+            nextEventCheck = Time.time + EventCheckSeconds;
+
+            reasons.Clear();
+            CollectReasons();
+            if (!eventsReady)
+            {
+                eventsReady = true; // первый проход только запоминает, что уже есть
+                return;
+            }
+            if (reasons.Count == 0 || !IsOn || IsTalking || isPocketed || IsJammed
+                || Time.time < eventFreeAt || Time.time < anyEventFreeAt || listenUntil > 0f)
+                return;
+
+            foreach (var topic in reasons)
+            {
+                if (topicFreeAt.TryGetValue(topic, out var free) && Time.time < free)
+                    continue;
+                var set = FindSet(EventsFolder + topic);
+                if (set == null || Random.value > EventChance)
+                    continue;
+                topicFreeAt[topic] = Time.time + EventTopicCooldown;
+                eventFreeAt = Time.time + EventCooldown;
+                anyEventFreeAt = Time.time + 3f;
+                noiseRange = EventNoiseRange;
+                SayFrom(set);
+                return;
+            }
+        }
+
+        // Поводы появляются один раз, в момент перемены (сел корабль, подошёл монстр...)
+        private void CollectReasons()
+        {
+            var round = StartOfRound.Instance;
+            if (round == null)
+                return;
+
+            if (round.shipHasLanded && !wasLanded)
+                reasons.Add("Landed");
+            wasLanded = round.shipHasLanded;
+            if (round.shipIsLeaving && !wasLeaving)
+                reasons.Add("Leaving");
+            wasLeaving = round.shipIsLeaving;
+
+            var dead = 0;
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p != null && p.isPlayerDead)
+                    dead++;
+            }
+            if (dead > deadPlayers && !round.inShipPhase)
+                reasons.Add("PlayerDied");
+            deadPlayers = dead;
+
+            var tod = TimeOfDay.Instance;
+            var night = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.75f;
+            if (night && !wasNight)
+                reasons.Add("Night");
+            wasNight = night;
+
+            if (isHeld && !wasHeld)
+                reasons.Add("PickedUp");
+            wasHeld = isHeld;
+
+            if (insertedBattery != null)
+            {
+                if (insertedBattery.charge < 0.15f && !lowBatteryTold && IsOn)
+                {
+                    reasons.Add("LowBattery");
+                    lowBatteryTold = true;
+                }
+                else if (insertedBattery.charge > 0.5f)
+                    lowBatteryTold = false;
+            }
+
+            var enemies = RoundManager.Instance != null ? RoundManager.Instance.SpawnedEnemies : null;
+            if (enemies != null)
+            {
+                var pos = transform.position;
+                foreach (var enemy in enemies)
+                {
+                    if (enemy == null || enemy.enemyType == null)
+                        continue;
+                    var id = enemy.NetworkObjectId;
+                    var dist = Vector3.Distance(enemy.transform.position, pos);
+                    if (!enemy.isEnemyDead && dist < EventRadius)
+                    {
+                        if (seenEnemies.Add(id))
+                        {
+                            reasons.Add("Enemy/" + enemy.enemyType.enemyName);
+                            if (LoggedEnemies.Add(enemy.enemyType.enemyName))
+                                Debug.Log($"[Алиса] рядом монстр, папка фраз: Phrases/{EventsFolder}Enemy/{enemy.enemyType.enemyName}");
+                        }
+                    }
+                    else if (dist > EventRadius * 1.5f || enemy.isEnemyDead)
+                        seenEnemies.Remove(id);
+                }
+            }
+
+            if (IdleSeconds > 0f && Time.time > nextIdle)
+            {
+                if (nextIdle > 0f && PlayerNear(this, 8f))
+                    reasons.Add("Idle");
+                nextIdle = Time.time + IdleSeconds * Random.Range(0.7f, 1.3f);
+            }
+        }
+
+        private static bool PlayerNear(YandexStationItem station, float radius)
+        {
+            var round = StartOfRound.Instance;
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p != null && p.isPlayerControlled && !p.isPlayerDead
+                    && Vector3.Distance(p.transform.position, station.transform.position) < radius)
+                    return true;
+            }
+            return false;
         }
 
         // ---- Экран ----
@@ -533,6 +694,7 @@ namespace CustomItems.Items
                     Say(SoundTimeout);
             }
 
+            UpdateEvents();
             var talking = IsTalking;
             UpdateLevel(talking);
             UpdateRing(talking);

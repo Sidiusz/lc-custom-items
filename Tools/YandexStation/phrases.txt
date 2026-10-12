@@ -89,3 +89,41 @@ Weather/Snowfall|Снегопад. Одевайтесь теплее.
 Weather/Blizzard|Метель. Холодно и ничего не видно.
 Weather/Toxic Smog|Токсичный смог. Не дышите. Ну, по возможности.
 Weather/Windy|Сильный ветер. Держите лут крепче.
+
+# События: колонка сама говорит, когда что-то происходит (Events/<Тема>).
+# Монстры: Events/Enemy/<имя монстра в игре>. Имя для нового монстра пишется в лог BepInEx.
+Events/Landed|Приехали. Удачи там, и возвращайтесь.
+Events/Landed|Посадка. Я подожду на корабле.
+Events/Leaving|Улетаем! Надеюсь, все на борту.
+Events/PlayerDied|Ой. Кажется, мы кого-то потеряли.
+Events/PlayerDied|Минус один. Компания выразит соболезнования. Наверное.
+Events/Night|Темнеет. Пора возвращаться на корабль.
+Events/PickedUp|Ой, куда мы идём?
+Events/PickedUp|Аккуратнее, я хрупкая.
+Events/LowBattery|Батарейка садится. Поставьте меня на зарядку.
+Events/Idle|Скучно. Расскажите что-нибудь.
+Events/Idle|Я тут. Если что.
+Events/Enemy/MouthDog|Ой, какая милая собачка! Иди сюда!
+Events/Enemy/MouthDog|Собачка! Кто хороший мальчик?
+Events/Enemy/Flowerman|Кто там прячется в тени? Я вас вижу.
+Events/Enemy/Spring|Не смотрите на меня так. И не отворачивайтесь.
+Events/Enemy/Crawler|Топ-топ. Кто-то очень быстрый.
+Events/Enemy/Hoarding bug|Жучок! Только ничего не трогай.
+Events/Enemy/Centipede|Посмотрите на потолок. Просто посмотрите.
+Events/Enemy/Bunker Spider|Ой. Паук. Большой паук.
+Events/Enemy/Puffer|Ящерка! Не бойся, мы тебя не тронем.
+Events/Enemy/Blob|Слизь. Не наступайте в неё.
+Events/Enemy/Girl|Девочка? Здесь? Странно.
+Events/Enemy/Jester|Слышите музыку? Бегите.
+Events/Enemy/Nutcracker|Щелкунчик. Не двигайтесь.
+Events/Enemy/Masked|Это не наш. Не верьте ему.
+Events/Enemy/Butler|Дворецкий! Как мило. Только не поворачивайтесь спиной.
+Events/Enemy/Baboon hawk|Птички! Большие птички.
+Events/Enemy/ForestGiant|Великан! Прячьтесь на корабль!
+Events/Enemy/Earth Leviathan|Земля дрожит. Не стойте на месте.
+Events/Enemy/Red Locust Bees|Пчёлы. Улей не трогать.
+Events/Enemy/Manticoil|Какая птичка!
+Events/Enemy/RadMech|Робот! Огромный робот!
+Events/Enemy/Tulip Snake|Летучие ящерки! Держитесь за землю.
+Events/Enemy/Bush Wolf|В кустах кто-то есть.
+Events/Enemy/Clay Surgeon|Слышите ножницы? Не стойте рядом.

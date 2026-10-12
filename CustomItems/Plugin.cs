@@ -119,6 +119,23 @@ namespace CustomItems
                 .Split(',').Select(w => w.Trim()).Where(w => w.Length > 0).ToArray();
             new Harmony(PluginGuid + ".alisa").PatchAll(typeof(AliceShop));
 
+            const string events = "Yandex Station Events";
+            YandexStationItem.EventsEnabled = Config.Bind(events, "Enabled", true,
+                "Колонка сама изредка реагирует на то, что вокруг: монстр рядом, посадка, смерть игрока, ночь, мало заряда. " +
+                "Фразы в папках Phrases/Events/<Тема>; тема без фраз молчит").Value;
+            YandexStationItem.EventChance = Config.Bind(events, "Chance", 0.35f,
+                "Шанс (0..1), что колонка что-то скажет на повод").Value;
+            YandexStationItem.EventCooldown = Config.Bind(events, "Cooldown", 45f,
+                "Сколько секунд колонка молчит после реплики на событие").Value;
+            YandexStationItem.EventTopicCooldown = Config.Bind(events, "TopicCooldown", 180f,
+                "Одна и та же тема (например, та же собака) не чаще, чем раз в столько секунд").Value;
+            YandexStationItem.EventRadius = Config.Bind(events, "EnemyRadius", 15f,
+                "С какого расстояния (м) колонка замечает монстра").Value;
+            YandexStationItem.EventNoiseRange = Config.Bind(events, "NoiseRange", 25f,
+                "Как далеко монстры слышат реплику на событие (м). Слепая собака прибежит на голос").Value;
+            YandexStationItem.IdleSeconds = Config.Bind(events, "IdleSeconds", 120f,
+                "Примерно раз во столько секунд колонка может поболтать сама (тема Idle), если рядом игрок. 0 — никогда").Value;
+
             var voice = Config.Bind(section, "VoiceCommands", true,
                 "Отвечать на голос из голосового чата («Алиса, какая погода?»). Каждый игрок распознаёт свою речь " +
                 "у себя, офлайн, и только когда его слышно в чате рядом с включённой колонкой. Выключите, если не нужно или тормозит").Value;

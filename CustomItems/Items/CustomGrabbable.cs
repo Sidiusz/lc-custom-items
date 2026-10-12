@@ -62,10 +62,11 @@ namespace CustomItems.Items
             }
 
             var p = itemProperties;
-            p.grabAnim ??= t.grabAnim;
-            p.useAnim ??= t.useAnim;
-            p.pocketAnim ??= t.pocketAnim;
-            p.throwAnim ??= t.throwAnim;
+            // В сохранённом ассете пустые строки, а не null, поэтому проверяем на пустоту
+            if (string.IsNullOrEmpty(p.grabAnim)) p.grabAnim = t.grabAnim;
+            if (string.IsNullOrEmpty(p.useAnim)) p.useAnim = t.useAnim;
+            if (string.IsNullOrEmpty(p.pocketAnim)) p.pocketAnim = t.pocketAnim;
+            if (string.IsNullOrEmpty(p.throwAnim)) p.throwAnim = t.throwAnim;
             if (p.grabAnimationTime <= 0f) p.grabAnimationTime = t.grabAnimationTime;
             if (p.grabSFX == null) p.grabSFX = t.grabSFX;
             if (p.dropSFX == null) p.dropSFX = t.dropSFX;

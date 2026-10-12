@@ -125,9 +125,10 @@ namespace CustomItems
                 "из Phrases/Names/<Папка> (незнакомому — из Names/Unknown), а при смерти игрока может сказать Events/PlayerDied/<Папка>. " +
                 "Ники сравниваются без регистра и значков, ник может быть длиннее (Sidiusz* подходит к Sidiusz)").Value);
             var spoken = Config.Bind(section, "SpokenNames",
-                "Daniil=даниил,даня,данил,сидиус; Andrey=андрей,андрюха; Arseniy=арсений,сеня; Pavel=павел,паша",
-                "Как друзей зовут вслух: «Папка=слово,слово» через точку с запятой. Для «Алиса, где Андрей?» " +
-                "(слова должны быть в словаре распознавания, строчными)").Value;
+                "Daniil=дан,сидиус; Andrey=андр,синон; Arseniy=арсен,сен,шакаб; Pavel=паш,павел,павл",
+                "Как друзей зовут вслух: «Папка=начало,начало» через точку с запятой, строчными. Начала слов: «паш» — " +
+                "Паша, Пашей, Пашка. Для «Алиса, где Андрей?», «чё с Пашей?», «Сеня умер?». Новые формы имён " +
+                "добавляйте ещё и в ExtraPhrases, иначе распознавание их не услышит").Value;
             YandexStationItem.SetSpokenNames(spoken);
             YandexStationItem.ShushSeconds = Config.Bind(section, "ShushSeconds", 60f,
                 "Столько секунд после «замолчи» колонка не говорит сама (события)").Value;
@@ -167,7 +168,6 @@ namespace CustomItems
             {
                 AliceListener.Grammar = AliceListener.DefaultGrammar
                     .Concat(new[] { YandexStationItem.WakeWord })
-                    .Concat(YandexStationItem.SpokenNames.Values.SelectMany(n => n).Select(n => "где " + n))
                     .Concat(extra.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0))
                     .Distinct().ToArray();
             }

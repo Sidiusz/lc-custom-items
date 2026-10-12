@@ -278,7 +278,9 @@ namespace CustomItems.Items
                 Say("Ok");
         }
 
-        // «Открой дверь» в комплексе: ближайшая дверь рядом со спросившим
+        // «Открой дверь» в комплексе без кода — только диалог: обычные двери Алиса не открывает.
+        // Делает вид, что пытается («Постараюсь открыть» → «Я попробовала, не получилось»),
+        // или говорит, что нужен ключ, и спрашивает, есть ли он. По-настоящему открываются только двери по коду.
         private void SayFacilityDoor(PlayerControllerB speaker)
         {
             var door = FindObjectsOfType<DoorLock>().Where(d => d != null)
@@ -289,31 +291,36 @@ namespace CustomItems.Items
                 SayFirst("Door/NotFound", "Door/Cant", TopicUnknown);
                 return;
             }
-            if (door.isLocked)
+            if (!door.isLocked && Random.value < 0.5f)
             {
-                // «Дверь закрыта. Нужен ключ. У вас ключ есть?» — а ответ «нет» — «И у меня нет»
-                var topics = new List<string> { Random.value < 0.5f ? "Door/Locked" : "Door/Cant", "Door/NeedKey" }.Where(t => FindSet(t) != null).ToList();
-                var ask = FindSet("Door/AskKey") != null;
-                if (ask)
-                    topics.Add("Door/AskKey");
-                else if (FindSet("Door/NoKey") != null)
-                    topics.Add("Door/NoKey");
-                if (topics.Count == 0)
+                var tried = Existing("Door/Try");
+                if (FindSet("Door/Fail/Door") != null)
+                    tried.Add("Door/Fail/Door");
+                if (tried.Count > 0)
                 {
-                    Say(TopicRefuse);
+                    SaySequence(tried);
                     return;
                 }
-                SaySequence(topics);
-                if (ask)
-                {
-                    asking = AskKey;
-                    askStartedAt = Mathf.Max(Time.time, talkUntil);
-                    askUntil = askStartedAt + ListenSilence;
-                }
+            }
+            // «Дверь закрыта. Нужен ключ. У вас ключ есть?» — а ответ «нет» — «И у меня нет»
+            var topics = new List<string> { Random.value < 0.5f ? "Door/Locked" : "Door/Cant", "Door/NeedKey" }.Where(t => FindSet(t) != null).ToList();
+            var ask = FindSet("Door/AskKey") != null;
+            if (ask)
+                topics.Add("Door/AskKey");
+            else if (FindSet("Door/NoKey") != null)
+                topics.Add("Door/NoKey");
+            if (topics.Count == 0)
+            {
+                Say(TopicRefuse);
                 return;
             }
-            door.OpenOrCloseDoor(speaker);
-            SayFirst(door.isDoorOpened ? "Doors/Opened" : "Door/Try", "Door/Done", "Ok");
+            SaySequence(topics);
+            if (ask)
+            {
+                asking = AskKey;
+                askStartedAt = Mathf.Max(Time.time, talkUntil);
+                askUntil = askStartedAt + ListenSilence;
+            }
         }
 
         private const string AskKey = "key", AskRepeat = "repeat", AskOrder = "order";

@@ -79,12 +79,10 @@ namespace CustomItems
                 return null;
             var tokens = AliceIntents.Tokens(command);
 
-            // Русское имя из intents.txt («@Titan: титан, титана»), по основе слова
-            foreach (var t in tokens)
+            // Русское имя из intents.txt («@Titan: титан, титана»), по основе слова или по звучанию
+            var name = AliceIntents.MoonInText(command);
+            if (name != null)
             {
-                var name = AliceIntents.MoonIn(t);
-                if (name == null)
-                    continue;
                 var key = Simplify(name);
                 foreach (var m in moons)
                 {

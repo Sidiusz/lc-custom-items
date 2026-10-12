@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Скрипты предметов и ItemRegistry. Отдельная сборка без BepInEx и LethalLib:
+       её DLL кладётся в Unity (Assets/Plugins/CustomItems), и Unity должен суметь её
+       загрузить, имея только библиотеки игры. Префабы и ассеты в бандле ссылаются
+       на классы именно этой сборки. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>CustomItems.Items</AssemblyName>
+    <RootNamespace>CustomItems</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RestoreAdditionalProjectSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.bepinex.dev/v3/index.json
+    </RestoreAdditionalProjectSources>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
+    <!-- Публицизированные библиотеки игры (Assembly-CSharp и т.д.), только для компиляции -->
+    <PackageReference Include="LethalCompany.GameLibs.Steam" Version="81.0.5-ngd.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

@@ -16,8 +16,8 @@ namespace CustomItems.Items
     {
         public const int MaxSips = 3;
 
-        private const string SipsMessage = Plugin.PluginGuid + ".jagermeister.sips";
-        private const string RequestMessage = Plugin.PluginGuid + ".jagermeister.request";
+        private const string SipsMessage = ModInfo.Guid + ".jagermeister.sips";
+        private const string RequestMessage = ModInfo.Guid + ".jagermeister.request";
 
         private static CustomMessagingManager registeredOn;
         private static AudioClip gulpClip;
@@ -56,7 +56,7 @@ namespace CustomItems.Items
             if (sipsLeft == 0)
             {
                 if (playerHeldBy == GameNetworkManager.Instance.localPlayerController)
-                    HUDManager.Instance.DisplayTip(itemProperties.itemName, Lang.T("The bottle is empty.", "Бутылка пуста."));
+                    HUDManager.Instance.DisplayTip(itemProperties.itemName, "The bottle is empty.");
                 return;
             }
 

@@ -30,6 +30,18 @@
     <PackageReference Include="Evaisa.LethalLib" Version="1.2.0" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Скрипты предметов собираются отдельной сборкой CustomItems.Items (см. Items/) -->
+  <ItemGroup>
+    <Compile Remove="Items/**" />
+    <None Remove="Items/**" />
+    <ProjectReference Include="Items\CustomItems.Items.csproj" />
+  </ItemGroup>
+
+  <!-- Перевод для русификатора LethalRussian -->
+  <ItemGroup>
+    <None Include="translations\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- AssetBundle из Unity кладётся в Bundles/ в корне репозитория -->
   <ItemGroup>
     <None Include="..\Bundles\customitems" Condition="Exists('..\Bundles\customitems')" CopyToOutputDirectory="PreserveNewest" Link="customitems" />
@@ -37,7 +49,8 @@
 
   <Target Name="CopyToPluginDir" AfterTargets="Build" Condition="'$(PluginDir)' != ''">
     <MakeDir Directories="$(PluginDir)\$(AssemblyName)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)CustomItems.Items.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="@(None->WithMetadataValue('Extension', '.txt'))" DestinationFolder="$(PluginDir)\$(AssemblyName)\translations" />
     <Copy SourceFiles="..\Bundles\customitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\customitems')" />
   </Target>
 

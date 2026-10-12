@@ -126,3 +126,5 @@ InitTestScene*.unity*
 # DLL игры и собранный мод для Unity (Lethal Company → Setup), в репозиторий не кладём
 /Assets/Plugins/
 /Assets/Plugins.meta
+/CustomItems/**/bin/
+/CustomItems/**/obj/

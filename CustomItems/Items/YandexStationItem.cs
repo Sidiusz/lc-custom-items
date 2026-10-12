@@ -78,7 +78,7 @@ namespace CustomItems.Items
         public static float HearingRadius = 8f;
         public static float ListenSilence = 3f, ListenMax = 12f;
         /// <summary>Сколько секунд после её вопроса («Вы уверены?») ждёт ответ без «Алиса».</summary>
-        public static float AnswerSeconds = 6f;
+        public static float AnswerSeconds = 8f;
         /// <summary>Сколько длится пробуждение (сигнал и глаза), прежде чем она начнёт «думать».</summary>
         public static float WakeSeconds = 0.8f;
         /// <summary>Можно ли задать новый вопрос, пока колонка ещё отвечает.</summary>

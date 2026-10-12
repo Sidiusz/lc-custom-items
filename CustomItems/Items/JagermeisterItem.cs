@@ -11,6 +11,9 @@ namespace CustomItems.Items
     ///
     /// Сам глоток синхронизирует игра (SyncUse), а число оставшихся глотков хранит
     /// хост и раздаёт через именованные сообщения Netcode, поэтому NetcodePatcher не нужен.
+    ///
+    /// Сквозь стекло видна жидкость из трёх слоёв (Liquid1..Liquid3 в модели), их
+    /// столько, сколько осталось глотков.
     /// </summary>
     public class JagermeisterItem : CustomGrabbable
     {
@@ -23,17 +26,20 @@ namespace CustomItems.Items
         private static AudioClip gulpClip;
 
         private int sipsLeft = -1; // -1: ещё не знаем (клиент ждёт ответа хоста)
+        private GameObject[] liquidLayers;
 
         public override void Start()
         {
             base.Start();
             useCooldown = 1.5f;
             RegisterMessages();
+            FindLiquid();
 
             if (IsServer)
                 EnsureSips();
             else if (NetworkManager != null && NetworkManager.IsConnectedClient)
                 RequestSips();
+            UpdateLiquid();
         }
 
         public override int GetItemDataToSave()
@@ -45,6 +51,7 @@ namespace CustomItems.Items
         public override void LoadItemSaveData(int saveData)
         {
             sipsLeft = Mathf.Clamp(saveData, 0, MaxSips);
+            UpdateLiquid();
         }
 
         public override void ItemActivate(bool used, bool buttonDown = true)
@@ -63,12 +70,40 @@ namespace CustomItems.Items
             // Пока хост не ответил, клиент всё равно даёт выпить: хост пришлёт точное число.
             if (sipsLeft > 0)
                 sipsLeft--;
+            UpdateLiquid();
 
             PlayGulp();
             DrunkEffects.AddSip(playerHeldBy);
 
             if (IsServer)
                 BroadcastSips();
+        }
+
+        private void FindLiquid()
+        {
+            liquidLayers = new GameObject[MaxSips];
+            foreach (var t in GetComponentsInChildren<Transform>(true))
+            {
+                for (var i = 0; i < MaxSips; i++)
+                {
+                    if (t.name == "Liquid" + (i + 1))
+                        liquidLayers[i] = t.gameObject;
+                }
+            }
+        }
+
+        // Слои снизу вверх: при двух глотках видны Liquid1 и Liquid2. Прячем через
+        // SetActive, а не renderer.enabled: игра включает все рендереры, когда предмет
+        // достают из кармана (EnableItemMeshes), а неактивные объекты не трогает.
+        private void UpdateLiquid()
+        {
+            if (liquidLayers == null || sipsLeft < 0)
+                return;
+            for (var i = 0; i < liquidLayers.Length; i++)
+            {
+                if (liquidLayers[i] != null)
+                    liquidLayers[i].SetActive(i < sipsLeft);
+            }
         }
 
         private void EnsureSips()
@@ -142,7 +177,10 @@ namespace CustomItems.Items
             reader.ReadValueSafe(out int sips);
             var bottle = Find(objectId);
             if (bottle != null && sender == NetworkManager.ServerClientId)
+            {
                 bottle.sipsLeft = Mathf.Clamp(sips, 0, MaxSips);
+                bottle.UpdateLiquid();
+            }
         }
 
         private static JagermeisterItem Find(ulong objectId)

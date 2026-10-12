@@ -1,7 +1,10 @@
 // Кладёт в Assets/Plugins библиотеки, без которых Unity не знает типы предметов:
-//   Game/        Assembly-CSharp.dll и Unity.Netcode.Runtime.dll из папки игры (Item,
-//                GrabbableObject, ScanNodeProperties, NetworkObject) и всё, на что они
-//                ссылаются (DunGen, Facepunch, Dissonance...), кроме того, что в Unity уже есть;
+//   Game/        Unity.Netcode.Runtime.dll из папки игры (NetworkObject) и всё, на что ссылаются
+//                она и CustomItems.Items.dll, кроме того, что в Unity уже есть.
+//                Assembly-CSharp.dll игры сюда НЕ кладётся: для DLL с этим именем Unity не создаёт
+//                скрипты, и Item/ScanNodeProperties в ассетах оказываются «missing script».
+//                Вместо неё нужные типы игры объявлены заглушками в Scripts/GameStubs
+//                (компилируются в Assembly-CSharp проекта, а в игре находят настоящие классы);
 //   CustomItems/ CustomItems.Items.dll из CustomItems/bin после dotnet build (скрипты
 //                предметов и ItemRegistry; BepInEx и LethalLib ей не нужны).
 // Без полного набора зависимостей Unity выгружает DLL («Unloading broken assembly»),
@@ -30,7 +33,7 @@ public static class GameLibraries
     private const string AskedKey = "CustomItems.AskedForGameFolder";
 
     // С этих DLL начинается обход ссылок
-    private static readonly string[] GameRoots = { "Assembly-CSharp", "Unity.Netcode.Runtime" };
+    private static readonly string[] GameRoots = { "Unity.Netcode.Runtime" };
     private const string ModDll = "CustomItems.Items.dll";
     private static readonly string[] ModBuilds =
     {
@@ -38,7 +41,12 @@ public static class GameLibraries
         "CustomItems/bin/Debug/netstandard2.1/" + ModDll,
     };
     // Остались от старой схемы, где в Unity клали весь плагин: он тянет BepInEx и не грузится
-    private static readonly string[] Obsolete = { ModDir + "/CustomItems.dll" };
+    // и Assembly-CSharp игры, которую заменили заглушки
+    private static readonly string[] Obsolete =
+    {
+        ModDir + "/CustomItems.dll",
+        GameDir + "/Assembly-CSharp.dll",
+    };
 
     private static readonly string[] DefaultGameFolders =
     {
@@ -94,7 +102,7 @@ public static class GameLibraries
         {
             SessionState.SetBool(AskedKey, true);
             if (!EditorUtility.DisplayDialog("Lethal Company",
-                    "Чтобы настраивать предметы в Unity, нужны библиотеки игры (Assembly-CSharp.dll и то, на что она ссылается). " +
+                    "Чтобы настраивать предметы в Unity, нужны библиотеки игры (Unity.Netcode.Runtime.dll и то, на что она ссылается). " +
                     "Укажите папку игры (где лежит Lethal Company.exe). В репозиторий они не попадут.",
                     "Выбрать папку", "Позже"))
                 return false;
@@ -180,7 +188,8 @@ public static class GameLibraries
                 foreach (var f in Directory.GetFiles(dir, "*.dll"))
                     provided.Add(Path.GetFileNameWithoutExtension(f));
         }
-        // Своих сборок у проекта с такими именами нет, а игровые нужны обязательно
+        // Assembly-CSharp — наши заглушки (GameStubs), игровую не берём никогда
+        provided.Add("Assembly-CSharp");
         foreach (var root in GameRoots)
             provided.Remove(root);
         return provided;

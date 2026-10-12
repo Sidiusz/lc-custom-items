@@ -143,6 +143,7 @@ public static class ItemAssets
     {
         var created = new List<string>();
         var registry = LoadOrCreate(RegistryPath, T("CustomItems.ItemRegistry"), created);
+        RemoveEmptyEntries(registry);
 
         foreach (var spec in Specs)
         {
@@ -163,8 +164,9 @@ public static class ItemAssets
 
             var prefabPath = $"{PrefabsDir}/{spec.Name}.prefab";
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            // Префаб старого вида (голая модель без скрипта предмета) тоже пересобираем
-            if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null)
+            // Пересобираем и префаб старого вида (голая модель без скрипта предмета),
+            // и сохранённый с потерянными скриптами
+            if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null || HasMissingScripts(prefab))
             {
                 prefab = BuildPrefab(spec, model, item, prefabPath);
                 created.Add(prefabPath);
@@ -194,7 +196,10 @@ public static class ItemAssets
         Set(item, "minValue", spec.MinValue);
         Set(item, "maxValue", spec.MaxValue);
         if (spec.InShop)
+        {
             Set(item, "creditsWorth", spec.Price);
+            Set(item, "highestSalePercentage", 80); // как у ванильных товаров: скидка не больше 80%
+        }
         Set(item, "weight", spec.Weight);
         Set(item, "twoHanded", spec.TwoHanded);
         Set(item, "isConductiveMetal", false);
@@ -449,6 +454,23 @@ public static class ItemAssets
         AssetDatabase.CreateAsset(asset, path);
         created.Add(path);
         return asset;
+    }
+
+    private static bool HasMissingScripts(GameObject prefab) =>
+        prefab.GetComponentsInChildren<Transform>(true)
+            .Any(t => GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(t.gameObject) > 0);
+
+    // Строки, чей Item был сломан и пересоздан, указывают в никуда
+    private static void RemoveEmptyEntries(ScriptableObject registry)
+    {
+        var list = (IList)Get(registry, "items");
+        for (var i = list.Count - 1; i >= 0; i--)
+        {
+            if (Get(list[i], "item") as Object != null)
+                continue;
+            list.RemoveAt(i);
+            EditorUtility.SetDirty(registry);
+        }
     }
 
     // Ассет, сохранённый, когда Unity не смог загрузить DLL, остаётся без скрипта

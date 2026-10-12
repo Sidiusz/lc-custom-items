@@ -46,7 +46,7 @@ namespace CustomItems.Items
             if (items == null)
                 return null;
             return items.FirstOrDefault(i => i != null && i.itemName == templateItemName)
-                ?? items.FirstOrDefault(i => i != null && i.isScrap && !i.twoHanded && i.grabSFX != null);
+                ?? items.FirstOrDefault(i => i != null && i.isScrap && i.twoHanded == itemProperties.twoHanded && i.grabSFX != null);
         }
 
         private void FillFromTemplate()
@@ -71,6 +71,9 @@ namespace CustomItems.Items
             if (p.itemIcon == null) p.itemIcon = t.itemIcon;
             if (p.clinkAudios == null || p.clinkAudios.Length == 0) p.clinkAudios = t.clinkAudios;
             p.floorYOffset = t.floorYOffset;
+            // Двуручным нужна поза «держу двумя руками», её берём у двуручного шаблона
+            if (p.twoHanded && t.twoHanded)
+                p.twoHandedAnimation = t.twoHandedAnimation;
         }
 
         // Модель из обычного Unity-проекта приходит со Standard-шейдером, которого в игре

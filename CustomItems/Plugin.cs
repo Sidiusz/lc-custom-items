@@ -12,9 +12,10 @@ namespace CustomItems
 {
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
     [BepInDependency("evaisa.lethallib")]
+    [BepInDependency("lethalrussian.core", BepInDependency.DependencyFlags.SoftDependency)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string PluginGuid = "sidiusz.customitems";
+        public const string PluginGuid = ModInfo.Guid;
         public const string PluginName = "CustomItems";
         public const string PluginVersion = "0.1.0";
 
@@ -42,10 +43,6 @@ namespace CustomItems
                 return;
             }
 
-            Lang.Russian = Config.Bind("General", "Language", "ru",
-                new BepInEx.Configuration.ConfigDescription("Язык предметов: ru или en",
-                    new BepInEx.Configuration.AcceptableValueList<string>("ru", "en"))).Value == "ru";
-
             foreach (var entry in registry.items)
                 Register(entry);
 
@@ -58,6 +55,8 @@ namespace CustomItems
                 "Сколько секунд спит игрок из SleepyPlayers").Value;
             ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
                 "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
+
+            LoadRussianTranslation(Path.Combine(dir, "translations"));
 
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
@@ -84,9 +83,6 @@ namespace CustomItems
             var inShop = Config.Bind(section, "InShop", entry.inShop, "Продавать в магазине терминала").Value;
             var price = Config.Bind(section, "Price", entry.price, "Цена в магазине").Value;
 
-            if (Lang.Russian)
-                Translate(item, prefab, entry);
-
             var asScrap = item.isScrap && rarity > 0;
             if (asScrap)
                 LethalLib.Modules.Items.RegisterScrap(item, rarity, Levels.LevelTypes.All);
@@ -96,16 +92,34 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterItem(item);
         }
 
-        private static void Translate(Item item, GameObject prefab, ItemRegistry.Entry entry)
+        // Названия и подсказки в ассетах всегда английские: русификатор LethalRussian
+        // подменяет их по точному английскому тексту и сам склоняет названия
+        // («Выбросить плюшевого Уинстона»). Перевод лежит в translations/Sidiusz-CustomItems.txt.
+        // LethalRussian вызываем через рефлексию, чтобы мод работал и без него.
+        private static void LoadRussianTranslation(string translations)
         {
-            if (!string.IsNullOrEmpty(entry.nameRu))
+            var api = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Select(a => a.GetType("LethalRussian.Api", false))
+                .FirstOrDefault(t => t != null);
+            var load = api?.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .FirstOrDefault(m => m.Name == "LoadTranslations");
+            if (load == null)
+                return; // русификатора нет: остаётся английский
+
+            try
             {
-                item.itemName = entry.nameRu;
-                foreach (var scan in prefab.GetComponentsInChildren<ScanNodeProperties>(true))
-                    scan.headerText = entry.nameRu;
+                var args = load.GetParameters().Select(p =>
+                    p.ParameterType == typeof(string) ? translations :
+                    p.ParameterType == typeof(bool) ? true :
+                    p.ParameterType == typeof(System.Func<bool>) ? (object)(System.Func<bool>)(() => true) :
+                    p.HasDefaultValue ? p.DefaultValue : null).ToArray();
+                load.Invoke(null, args);
+                Log.LogInfo("Перевод для LethalRussian загружен");
             }
-            if (entry.toolTipsRu != null && entry.toolTipsRu.Length > 0)
-                item.toolTips = entry.toolTipsRu;
+            catch (System.Exception e)
+            {
+                Log.LogWarning("Не удалось передать перевод в LethalRussian: " + e);
+            }
         }
 
         // Тег и слои игры есть не в каждом Unity-проекте, поэтому ставим их здесь по именам.

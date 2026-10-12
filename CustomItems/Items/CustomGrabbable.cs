@@ -57,7 +57,7 @@ namespace CustomItems.Items
             var t = FindTemplate();
             if (t == null)
             {
-                Plugin.Log.LogWarning($"Не нашёл ванильный предмет-шаблон для '{itemProperties.itemName}'");
+                Debug.LogWarning($"[CustomItems] Не нашёл ванильный предмет-шаблон для '{itemProperties.itemName}'");
                 return;
             }
 

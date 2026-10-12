@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Тест распознавания Алисы на Linux: Vosk (как в игре) против Whisper (AliceWhisper.cs из мода).
+       Запуск — ../run.sh. Нативные библиотеки whisper.cpp для Linux берутся из того же пакета, что и для игры -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Vosk" Version="0.3.38" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" ExcludeAssets="all" GeneratePathProperty="true" />
+    <Compile Include="../../../../CustomItems/AliceWhisper.cs" Link="AliceWhisper.cs" />
+    <Compile Include="../../../../CustomItems/Items/AliceIntents.cs" Link="AliceIntents.cs" />
+    <None Include="$(PkgWhisper_net_Runtime)/build/linux-x64/*.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+</Project>

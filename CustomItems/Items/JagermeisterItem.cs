@@ -10,6 +10,7 @@ namespace CustomItems.Items
     /// Бутылка Егермейстера. В каждой бутылке 1–3 глотка (выпадает случайно и
     /// сохраняется вместе с кораблём), пополнить нельзя. Глоток (ЛКМ) на 90 секунд
     /// кружит голову и делает голос ниже, глотки складываются (см. DrunkEffects).
+    /// Перебравших тошнит, а слабых (VomitEffects.WeakPlayers) с первого глотка.
     ///
     /// Сам глоток синхронизирует игра (SyncUse), а число оставшихся глотков хранит
     /// хост и раздаёт через именованные сообщения Netcode, поэтому NetcodePatcher не нужен.
@@ -43,6 +44,7 @@ namespace CustomItems.Items
             base.Start();
             useCooldown = 3f; // звук глотка с выдохом ~2.8 с
             RegisterMessages();
+            VomitEffects.Register();
             FindLiquid();
 
             if (IsServer)
@@ -164,6 +166,10 @@ namespace CustomItems.Items
                         liquidLayers[i] = t.gameObject;
                 }
             }
+            // Брызги рвоты красим из материала жидкости: он точно есть в бандле и рисуется в HDRP
+            var liquid = liquidLayers[0] != null ? liquidLayers[0].GetComponent<Renderer>() : null;
+            if (VomitEffects.SourceMaterial == null && liquid != null)
+                VomitEffects.SourceMaterial = liquid.sharedMaterial;
         }
 
         // Слои снизу вверх: при двух глотках видны Liquid1 и Liquid2. Прячем через

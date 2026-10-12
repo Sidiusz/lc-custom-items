@@ -31,7 +31,8 @@ MonoBehaviour:
   highestSalePercentage: 80
   maxValue: 0
   minValue: 0
-  spawnPrefab: {fileID: 0}
+  spawnPrefab: {fileID: 2550577749244780287, guid: b3d3876221ec7af46bd6d167ca3213e3,
+    type: 3}
   requiresBattery: 1
   batteryUsage: 1800
   automaticallySetUsingPower: 1

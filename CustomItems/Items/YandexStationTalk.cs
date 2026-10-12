@@ -163,6 +163,7 @@ namespace CustomItems.Items
                 SayFirst("Loot/High", "Ok");
                 return;
             }
+            AddUnit(topics, "Credits"); // «…кредитов.», если записан кусок
             if (earned.Count > 1 && earned.OrderByDescending(e => e.Value).First().Key == speaker.playerClientId && FindSet("Earned/Best") != null)
                 topics.Add("Earned/Best");
             SaySequence(topics);
@@ -193,6 +194,7 @@ namespace CustomItems.Items
                 SayFirst(terminal != null && terminal.groupCredits < 50 ? "Buy/NoMoney" : "Credits", TopicUnknown);
                 return;
             }
+            AddUnit(topics, "Credits");
             SaySequence(topics);
         }
 

@@ -1154,6 +1154,7 @@ namespace CustomItems.Items
                 // «Сегодня без Андрея?» — ждёт ответ, на любой — «Понятно»
                 SayFrom(FindSet(topic));
                 AskAfterSpeech(AskMissing);
+                askingItem = topic.Substring((EventsFolder + "Missing/").Length); // о ком спросила
                 return true;
             }
             if (topic == EventsFolder + "Teamkill")

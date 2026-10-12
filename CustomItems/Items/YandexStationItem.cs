@@ -93,6 +93,13 @@ namespace CustomItems.Items
         private const string SpeakMessage = ModInfo.Guid + ".yandexstation.speak";
         private const string StateMessage = ModInfo.Guid + ".yandexstation.state";
         private const string RequestMessage = ModInfo.Guid + ".yandexstation.request";
+        private const string OrderMessage = ModInfo.Guid + ".yandexstation.order";
+
+        /// <summary>
+        /// Цвета купленных в терминале колонок («buy alisa pink»), по порядку покупки, только
+        /// у хоста: новая колонка из шаттла берёт первый. -1 — цвет не выбран (случайный).
+        /// </summary>
+        private static readonly Queue<int> OrderedColors = new Queue<int>();
         private const float NoiseRange = 12f;
         private const float NoiseLoudness = 0.5f;
 
@@ -236,8 +243,43 @@ namespace CustomItems.Items
 
         private void EnsureColor()
         {
-            if (colorIndex < 0)
-                colorIndex = Random.Range(0, bodyColors.Length);
+            if (colorIndex >= 0)
+                return;
+            var ordered = OrderedColors.Count > 0 ? OrderedColors.Dequeue() : -1;
+            colorIndex = ordered >= 0 && ordered < bodyColors.Length ? ordered : Random.Range(0, bodyColors.Length);
+        }
+
+        /// <summary>
+        /// Покупка в терминале: count колонок цвета color (-1 — любого). Вызывает купивший,
+        /// очередь цветов хранит хост, клиент отправляет заказ ему.
+        /// </summary>
+        public static void OrderColors(int color, int count)
+        {
+            RegisterMessages();
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsListening || count <= 0)
+                return;
+            if (nm.IsServer)
+            {
+                for (var i = 0; i < count; i++)
+                    OrderedColors.Enqueue(color);
+                return;
+            }
+            using var writer = new FastBufferWriter(sizeof(int) * 2, Allocator.Temp);
+            writer.WriteValueSafe(color);
+            writer.WriteValueSafe(count);
+            nm.CustomMessagingManager.SendNamedMessage(OrderMessage, NetworkManager.ServerClientId, writer, NetworkDelivery.Reliable);
+        }
+
+        private static void OnOrderMessage(ulong sender, FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out int color);
+            reader.ReadValueSafe(out int count);
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                for (var i = 0; i < Mathf.Min(count, 64); i++)
+                    OrderedColors.Enqueue(color);
+            }
         }
 
         private void ApplyColor()
@@ -745,11 +787,13 @@ namespace CustomItems.Items
 
         // ---- Сеть ----
 
-        private static void RegisterMessages()
+        public static void RegisterMessages()
         {
             var messaging = NetworkManager.Singleton?.CustomMessagingManager;
             if (messaging == null || messaging == registeredOn)
                 return;
+            OrderedColors.Clear(); // новое лобби
+            messaging.RegisterNamedMessageHandler(OrderMessage, OnOrderMessage);
             messaging.RegisterNamedMessageHandler(SpeakMessage, OnSpeakMessage);
             messaging.RegisterNamedMessageHandler(StateMessage, OnStateMessage);
             messaging.RegisterNamedMessageHandler(RequestMessage, OnRequestMessage);

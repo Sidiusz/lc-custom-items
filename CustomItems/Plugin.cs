@@ -117,6 +117,8 @@ namespace CustomItems
             YandexStationItem.JammingWeathers = Config.Bind(section, "JammingWeathers", "Solar Flare",
                 "Погоды через запятую (как их называет игра или WeatherRegistry), при которых колонка на луне сбоит и вместо ответа выдаёт ошибку").Value
                 .Split(',').Select(w => w.Trim()).Where(w => w.Length > 0).ToArray();
+            new Harmony(PluginGuid + ".alisa").PatchAll(typeof(AliceShop));
+
             var voice = Config.Bind(section, "VoiceCommands", true,
                 "Отвечать на голос из голосового чата («Алиса, какая погода?»). Каждый игрок распознаёт свою речь " +
                 "у себя, офлайн, и только когда его слышно в чате рядом с включённой колонкой. Выключите, если не нужно или тормозит").Value;

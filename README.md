@@ -82,7 +82,7 @@ lc-custom-items/
 
 ### Яндекс Колонка: голосовые команды
 
-Колонка продаётся в магазине терминала (`buy yandex`, 100 кредитов). Её носят в руках и ставят, просто выбросив (G) на пол или стол. ЛКМ включает и выключает, E меняет цвет (серая, голубая, розовая, чёрная; цвет и включённость сохраняются вместе с кораблём). Включённая колонка тратит батарею: полного заряда хватает на 30 минут, заряжается на зарядке корабля как фонарик. Цвета корпуса в `bodyColors` на префабе.
+Колонка продаётся в магазине терминала за 100 кредитов: `buy alisa` (или `buy yandex`). Цвет можно выбрать сразу: `buy alisa pink`, `buy alisa 2 blue` (pink, blue, grey, black; без цвета выпадет случайный). Её носят в руках и ставят, просто выбросив (G) на пол или стол. ЛКМ включает и выключает, E меняет цвет (серая, голубая, розовая, чёрная; цвет и включённость сохраняются вместе с кораблём). Включённая колонка тратит батарею: полного заряда хватает на 30 минут, заряжается на зарядке корабля как фонарик. Цвета корпуса в `bodyColors` на префабе.
 
 На экране время, пока колонка молчит, а когда говорит, вместо него глаза: смотрит, улыбается, щурится, подмигивает, косится в стороны, моргает. Слушая вопрос, делает большие глаза.
 
@@ -92,7 +92,7 @@ lc-custom-items/
 
 Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `AllowInterrupt`, `JammingWeathers`, `UseGrammar`, `ExtraPhrases`.
 
-Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас везде временные `Placeholder*.wav` от синтезатора (`Tools/YandexStation/phrases.sh`), их можно удалить.
+Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас там `Alice*.wav`, озвученные Silero TTS (женский голос xenia) из списка `Tools/YandexStation/phrases.txt`: поправьте текст и запустите `python Tools/YandexStation/phrases.py` (нужны torch и ffmpeg), он перезапишет только `Alice*.wav`, свои записи не тронет. Другой голос: `python phrases.py baya` или `kseniya`.
 
 Сигналы лежат в `Assets/Sources/Art/Audio/YandexStation/Sounds/`: `Listen` (начала слушать), `ListenTimeout` (не дождалась вопроса), `Error`, `TurnOn`, `TurnOff`. Это похожие синтезированные звуки (`Tools/YandexStation/sounds.sh`): настоящие звуки Алисы принадлежат Яндексу, их можно положить поверх с теми же именами для себя.
 
@@ -100,7 +100,7 @@ lc-custom-items/
 |---|---|
 | `Random` | если нужной темы нет вообще |
 | `Unknown` | вопрос не понят или для темы нет фраз |
-| `Weather/Clear`, `DustClouds`, `Rainy`, `Stormy`, `Foggy`, `Flooded`, `Eclipsed`, `<модовая погода>` | «какая погода», погода текущей луны |
+| `Weather/Clear`, `DustClouds`, `Rainy`, `Stormy`, `Foggy`, `Flooded`, `Eclipsed`, модовые `Blackout`, `Meteor Shower`, `Heatwave`, `Snowfall`, `Blizzard`, `Toxic Smog`, `Windy` и любая другая по её названию | «какая погода», погода текущей луны |
 | `Weather/Other` | погода, для которой нет папки |
 | `Error` | сбой из-за погоды из `JammingWeathers` |
 | `QuotaDone`, `QuotaNotDone` | «какая квота»: собрана ли квота |
@@ -193,4 +193,5 @@ Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInE
 ## Благодарности
 
 - Звук Егермейстера: Sound effects by BudgetPixel (CC BY 4.0).
+- Голос фраз: [Silero TTS](https://github.com/snakers4/silero-models) (модель v4_ru, CC BY-NC-SA 4.0).
 - Распознавание речи: [Vosk](https://alphacephei.com/vosk/) и модель vosk-model-small-ru-0.22 (Apache 2.0).

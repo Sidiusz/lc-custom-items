@@ -194,6 +194,8 @@ namespace CustomItems.Items
 
         /// <summary>Тот же вопрос в течение стольких секунд — колонка отвечает фразой из Repeat.</summary>
         public static float RepeatSeconds = 60f;
+        /// <summary>Шанс «Я уже отвечала» на тот же вопрос (иначе отвечает снова, например новый анекдот).</summary>
+        public static float RepeatChance = 0.5f;
 
         public const string TopicRandom = "Random", TopicUnknown = "Unknown", TopicError = "Error",
             TopicTime = "Time", TopicStop = "#stop", SoundListen = "#listen", SoundTimeout = "#timeout";
@@ -249,7 +251,6 @@ namespace CustomItems.Items
         private bool shownPocketed;
 
         private bool isOn;
-        private int goodbyes;
         private int colorIndex = -1; // -1: ещё не знаем (клиент ждёт хоста)
         private float talkUntil;
         private bool clockWhileTalking;
@@ -362,17 +363,7 @@ namespace CustomItems.Items
             {
                 audioSource.Stop();
                 queued.Clear();
-                talkUntil = 0f;
-                // Выключают — прощается. Номер по счётчику выключений, чтобы у всех одна фраза
-                var off = FindSet(TopicOff);
-                var goodbye = FindSet(TopicGoodbye);
-                var bye = off != null && goodbye != null ? (goodbyes % 2 == 0 ? off : goodbye) : off ?? goodbye;
-                if (bye != null)
-                {
-                    audioSource.clip = bye.clips[goodbyes++ / 2 % bye.clips.Length];
-                    audioSource.Play();
-                    return;
-                }
+                talkUntil = 0f; // выключают — только звук выключения, без «до свидания»
             }
             PlaySound(on ? turnOnClip : turnOffClip);
         }
@@ -539,7 +530,7 @@ namespace CustomItems.Items
 
             // Тот же вопрос второй раз за минуту: «Я уже отвечала»
             if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
-                && station.FindSet(TopicRepeat) != null)
+                && station.FindSet(TopicRepeat) != null && Random.value < RepeatChance)
             {
                 station.lastAskedAt = Time.time;
                 station.Say(TopicRepeat);
@@ -1383,8 +1374,6 @@ namespace CustomItems.Items
         private int deadPlayers, playersNear, sipsSeen = -1, shipScrap = -1, credits = -1;
         private bool wasLate, wasMusic, wasWalkie, wasWinston;
         private int squeaksSeen = -1;
-        private readonly HashSet<ulong> itemsNear = new HashSet<ulong>();
-        private bool itemsSeeded;
         private float nextScan;
         private readonly Dictionary<ulong, int> suits = new Dictionary<ulong, int>();
         private static Terminal terminal;
@@ -1410,6 +1399,7 @@ namespace CustomItems.Items
         // и ещё раз после каждой посадки
         private static readonly HashSet<string> missingTold = new HashSet<string>();
         private static float missingClearedAt = -999f;
+        private static StartOfRound greetedRound;
         private float lastJoinAt;
         private bool joinedSeeded, wasShipPhase = true, dropshipLanded, dropshipOpened, junkTold;
         private float deathsFlushAt;
@@ -1473,7 +1463,8 @@ namespace CustomItems.Items
                     continue;
                 var set = FindSet(topic);
                 // Кто пришёл и кого нет — говорит всегда, остальное изредка
-                var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined");
+                var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined")
+                    || topic == EventsFolder + "NewGame";
                 if (set == null || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
@@ -1621,6 +1612,13 @@ namespace CustomItems.Items
                     bodiesSeen.Remove(id);
             }
             joinedSeeded = true;
+
+            // Зашли в игру (загрузили сохранение или новую): один раз всем «Привет, новички!»
+            if (greetedRound != round && round.inShipPhase && PlayerNear(this, 8f))
+            {
+                greetedRound = round;
+                Reason("NewGame");
+            }
 
             // Все или часть зашли и 20 секунд никто не приходит — «Сегодня без Андрея?» про каждого, кого нет
             // (пока не скажет про каждого: повод держится, отмечается сказанным, когда прозвучал)
@@ -1783,16 +1781,6 @@ namespace CustomItems.Items
                 if (close && item is WinstonItem)
                     winston = true;
 
-                // Поднесли или бросили рядом скрап: «Что это?»
-                var id = item.NetworkObjectId;
-                var dist = Vector3.Distance(item.transform.position, pos);
-                if (item != this && item.itemProperties.isScrap && dist < 2.5f)
-                {
-                    if (itemsNear.Add(id) && itemsSeeded)
-                        Reason("WhatIsThis");
-                }
-                else if (dist > 5f)
-                    itemsNear.Remove(id);
             }
             if (shipScrap >= 0 && scrap > shipScrap && round.shipHasLanded)
             {
@@ -1829,7 +1817,6 @@ namespace CustomItems.Items
             if (winston && !wasWinston)
                 Reason("Winston");
             wasWinston = winston;
-            itemsSeeded = true;
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)

@@ -156,8 +156,10 @@ namespace CustomItems
                 "С какого расстояния (м) колонка замечает монстра").Value;
             YandexStationItem.EventNoiseRange = Config.Bind(events, "NoiseRange", 25f,
                 "Как далеко монстры слышат реплику на событие (м). Слепая собака прибежит на голос").Value;
-            YandexStationItem.IdleSeconds = Rarer(Config.Bind(events, "IdleSeconds", 240f,
-                "Примерно раз во столько секунд колонка может поболтать сама (тема Idle), если рядом игрок. 0 — никогда"), 120f);
+            YandexStationItem.IdleSeconds = Rarer(Config.Bind(events, "IdleSeconds", 0f,
+                "Примерно раз во столько секунд колонка может поболтать сама без повода (тема Idle), если рядом игрок. 0 — никогда"), 120f, 240f);
+            YandexStationItem.RepeatChance = Config.Bind(section, "RepeatChance", 0.5f,
+                "Шанс (0..1) «Я уже отвечала» на тот же вопрос второй раз за минуту; иначе отвечает снова").Value;
             YandexStationItem.WhimChance = Config.Bind(section, "WhimChance", 0.15f,
                 "Шанс (0..1), что колонка капризничает вместо ответа: «Нет связи с сервером» (Error), «Не хочу» (Refuse), " +
                 "«Вы что-то бормочете?» (Mumble) или «Не поняла» (Unknown). На солнечной вспышке ошибка всегда").Value;
@@ -229,9 +231,9 @@ namespace CustomItems
         }
 
         // События стали реже: старые значения по умолчанию в уже созданном конфиге меняем на новые
-        private static float Rarer(BepInEx.Configuration.ConfigEntry<float> entry, float oldDefault)
+        private static float Rarer(BepInEx.Configuration.ConfigEntry<float> entry, params float[] oldDefaults)
         {
-            if (Mathf.Approximately(entry.Value, oldDefault))
+            if (oldDefaults.Any(d => Mathf.Approximately(entry.Value, d)))
                 entry.Value = (float)entry.DefaultValue;
             return entry.Value;
         }

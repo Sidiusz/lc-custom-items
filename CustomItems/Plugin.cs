@@ -121,6 +121,20 @@ namespace CustomItems
                     "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
             }
 
+            var winston = Register<WinstonItem>(bundle, new CustomItemDef
+            {
+                Name = "Winston plush",
+                ModelAsset = "Winston",
+                MinValue = 70,
+                MaxValue = 160,
+                DefaultRarity = 30,
+                Weight = 1.03f,
+                VerticalOffset = 0.13f, // центр модели на середине игрушки высотой 26 см
+                ToolTips = new[] { "Talk : [LMB]" },
+            });
+            if (winston != null)
+                winston.voiceClip = bundle.LoadAsset<AudioClip>("WinstonVoice");
+
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
 

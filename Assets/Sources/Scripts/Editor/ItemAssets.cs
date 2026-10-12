@@ -53,6 +53,7 @@ public static class ItemAssets
         public string Texture;                                       // текстура на все меши (HDRP/Lit), необязательно
         public (string field, string path)[] Clips = new (string, string)[0];
         public Action<GameObject> Customize;                         // доп. настройка префаба
+        public string[] HiddenChildren = new string[0];              // объекты модели, выключенные в префабе
     }
 
     private static readonly Spec[] Specs =
@@ -78,6 +79,7 @@ public static class ItemAssets
             SaveItemVariable = true, // сохранять оставшиеся глотки
             Icon = Art + "/Textures/Adrenaline/AdrenalineCanIcon.png",
             Texture = Art + "/Textures/Adrenaline/AdrenalineCan.png",
+            HiddenChildren = new[] { "Crushed" }, // мятую пустую банку показывает AdrenalineItem
         },
         new Spec
         {
@@ -192,7 +194,7 @@ public static class ItemAssets
             // Пересобираем и префаб старого вида (голая модель без скрипта предмета),
             // и сохранённый с потерянными скриптами
             if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null || HasMissingScripts(prefab)
-                || !HasTexture(prefab, spec))
+                || !HasTexture(prefab, spec) || HasVisibleHidden(prefab, spec))
             {
                 prefab = BuildPrefab(spec, model, item, prefabPath);
                 created.Add(prefabPath);
@@ -268,6 +270,9 @@ public static class ItemAssets
                     Object.DestroyImmediate(c);
             }
             ApplyTexture(root, spec);
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (spec.HiddenChildren.Contains(t.name))
+                    t.gameObject.SetActive(false);
             spec.Customize?.Invoke(root);
 
             var bounds = ModelBounds(root);
@@ -385,6 +390,11 @@ public static class ItemAssets
         return material != null && prefab.GetComponentsInChildren<Renderer>(true)
             .All(r => r.sharedMaterials.All(m => m == material));
     }
+
+    // Префаб, собранный до того, как у предмета появились скрытые объекты (мятая банка), пересобираем
+    private static bool HasVisibleHidden(GameObject prefab, Spec spec) =>
+        prefab.GetComponentsInChildren<Transform>(true)
+            .Any(t => spec.HiddenChildren.Contains(t.name) && t.gameObject.activeSelf);
 
     // ---------------- игрушечный пистолет: материал с текстурой и точка дула
 

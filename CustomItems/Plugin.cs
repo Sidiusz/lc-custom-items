@@ -257,6 +257,7 @@ namespace CustomItems
             var go = new GameObject("SidiuszCustomItems.ToyGunReloadKey") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(go);
             go.AddComponent<ToyGunReloadKey>();
+            go.AddComponent<AliceFurniture>();
         }
 
         private void SetupItemTuner()

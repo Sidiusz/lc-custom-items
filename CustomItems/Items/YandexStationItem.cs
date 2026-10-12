@@ -988,6 +988,7 @@ namespace CustomItems.Items
             why = example != null
                 ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
                 : "нет примеров";
+            intent = SemanticTopic(command, intent, score, ref why);
             // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
             if ((intent == "Moon" || intent == "#navexit" || intent == "#navship") && AliceIntents.NamesMoon(command))
                 intent = TopicRoute;

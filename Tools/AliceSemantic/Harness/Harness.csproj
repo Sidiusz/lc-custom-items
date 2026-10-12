@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Проверка AliceSemantic на Linux: те же исходники, что в моде, без Unity (ALICE_SEMANTIC_HARNESS) -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <DefineConstants>$(DefineConstants);ALICE_SEMANTIC_HARNESS</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../../CustomItems/AliceSemantic.cs" />
+    <Compile Include="../../../CustomItems/Items/AliceIntents.cs" />
+    <!-- Только нативные библиотеки llama.cpp для Linux (run.sh берёт их из папки пакета) -->
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" ExcludeAssets="all" PrivateAssets="all" GeneratePathProperty="true" />
+  </ItemGroup>
+</Project>

@@ -72,13 +72,40 @@
     <Unzip SourceFiles="Vosk/model-ru/am/final.mdl.zip" DestinationFolder="$(VoskModelOut)/am" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyToPluginDir" AfterTargets="CopyVosk" Condition="'$(PluginDir)' != ''">
+  <!-- Понимание вопросов Алисы по смыслу (AliceSemantic.cs): alice-semantic/ рядом с DLL мода.
+       Модель rubert-mini-frida (f16 GGUF, 68 МБ) лежит в репозитории, её делает Tools/AliceSemantic/bert2gguf.py.
+       llama.cpp для Windows x64 — из пакета LLamaSharp.Backend.Cpu (только нативные DLL, сам LLamaSharp не нужен):
+       сборки под AVX2 и AVX, мод выбирает по процессору. -->
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" ExcludeAssets="all" PrivateAssets="all" GeneratePathProperty="true" />
+    <None Remove="AliceSemantic/**" />
+  </ItemGroup>
+
+  <Target Name="CopyAliceSemantic" AfterTargets="Build">
+    <PropertyGroup>
+      <AliceSemanticOut>$(TargetDir)alice-semantic</AliceSemanticOut>
+      <AliceSemanticNative>$(PkgLLamaSharp_Backend_Cpu)/LLamaSharpRuntimes/win-x64/native</AliceSemanticNative>
+    </PropertyGroup>
+    <ItemGroup>
+      <AliceSemanticDll Include="$(AliceSemanticNative)/avx2/ggml-base.dll;$(AliceSemanticNative)/avx2/ggml-cpu.dll;$(AliceSemanticNative)/avx2/ggml.dll;$(AliceSemanticNative)/avx2/llama.dll" Cpu="avx2" />
+      <AliceSemanticDll Include="$(AliceSemanticNative)/avx/ggml-base.dll;$(AliceSemanticNative)/avx/ggml-cpu.dll;$(AliceSemanticNative)/avx/ggml.dll;$(AliceSemanticNative)/avx/llama.dll" Cpu="avx" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(AliceSemanticNative)/avx2/llama.dll')" Text="Нет llama.dll в пакете LLamaSharp.Backend.Cpu ($(AliceSemanticNative))" />
+    <Copy SourceFiles="@(AliceSemanticDll)" DestinationFolder="$(AliceSemanticOut)/%(Cpu)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="AliceSemantic/rubert-mini-frida-f16.gguf" DestinationFolder="$(AliceSemanticOut)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyToPluginDir" AfterTargets="CopyVosk;CopyAliceSemantic" Condition="'$(PluginDir)' != ''">
     <MakeDir Directories="$(PluginDir)\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath);$(TargetDir)SidiuszCustomItems.Items.dll;$(TargetDir)Vosk.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
     <ItemGroup>
       <VoskFiles Include="$(TargetDir)vosk/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(VoskFiles)" DestinationFolder="$(PluginDir)\$(AssemblyName)\vosk\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <AliceSemanticFiles Include="$(TargetDir)alice-semantic/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AliceSemanticFiles)" DestinationFolder="$(PluginDir)\$(AssemblyName)\alice-semantic\%(RecursiveDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(None->WithMetadataValue('Extension', '.txt'))" DestinationFolder="$(PluginDir)\$(AssemblyName)\translations" />
     <Copy SourceFiles="..\Bundles\sidiuszcustomitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\sidiuszcustomitems')" />
   </Target>

@@ -187,6 +187,7 @@ namespace CustomItems
             var extra = Config.Bind(section, "ExtraPhrases", "",
                 "Свои фразы для распознавания через запятую (для своих тем в Phrases), строчными").Value;
             LoadIntents();
+            AliceSemantic.Install(dir, Config);
             AliceRoute.Install();
             AliceShip.Install();
             if (grammar)

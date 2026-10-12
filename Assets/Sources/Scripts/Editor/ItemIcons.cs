@@ -219,7 +219,12 @@ public static class ItemIcons
             var go = new GameObject("IconVolume");
             preview.AddSingleGO(go);
             var volume = go.AddComponent(volumeType);
-            volumeType.GetField("isGlobal").SetValue(volume, true);
+            // В SRP Core 14 isGlobal — свойство, в других версиях — поле
+            var isGlobalProp = volumeType.GetProperty("isGlobal");
+            if (isGlobalProp != null)
+                isGlobalProp.SetValue(volume, true);
+            else
+                volumeType.GetField("isGlobal").SetValue(volume, true);
             volumeType.GetField("priority").SetValue(volume, 10000f);
             volumeType.GetField("sharedProfile").SetValue(volume, profile);
             return new ExposureOverride { Profile = profile, FixedExposure = exposureType.GetField("fixedExposure").GetValue(exposure) };

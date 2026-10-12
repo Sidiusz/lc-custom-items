@@ -32,3 +32,4 @@ public class BoomboxItem : GrabbableObject { }
 public class DeadBodyInfo : MonoBehaviour { }
 public class EnemyType : ScriptableObject { }
 public class Terminal : NetworkBehaviour { }
+public class ItemDropship : NetworkBehaviour { }

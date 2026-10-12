@@ -249,3 +249,63 @@ AllClear|Вокруг чисто!
 EnemiesNear|Рядом есть враг!
 Game/Bored|Может, поиграем тогда?
 Events/Idle|Может, поиграем тогда?
+
+# Вопросы: кто ты, что умеешь, обзывают, замолчи, извинись, ничего не разобрала, дорога, «скоро?»
+WhoAreYou|Я Алиса!
+WhoAreYou|Я колонка умная.
+WhoAreYou|Приятно познакомиться!
+Skills|Я умею говорить о погоде, о времени...
+Skills|Я могу шутить, хотите шутку?
+Insult|Умнее некоторых.
+Insult|Сам такой.
+Insult|Не глупая.
+Insult|Кто обзывается...
+Insult|Вам меня не разозлить.
+Insult|А впрочем, пошёл на хрен!
+Insult|Я вас не слышу, ля-ля-ля.
+Shush|Молчу.
+Shush|Замолкаю.
+Shush|Шёпотом говорить не умею.
+Sorry|Простите.
+Sorry|Извините.
+Sorry|Не хотела.
+Mumble|Вы что-то бормочете?
+Joke|Субару — лучшая машина в мире! Шутка!
+HowAreYou|Не важно.
+Navigation|Маршрут перестроен!
+Navigation|Поверните налево, а затем направо...
+Almost|Почти.
+Game/Rend|Давайте поиграем в Rend!
+Game/Cancel|Хотя нет, не давайте.
+Game/Cancel|Хотя нет, я передумала.
+Game/Cancel|А давайте без давайте!
+
+# «Где он / где все / где Андрей»
+WhereIs/AFK|Он АФК.
+WhereIs/AFK|Он отошёл.
+WhereIs/AFK|Наверное, в туалет ушёл.
+WhereIs/Inside/One|Он ещё в комплексе.
+WhereIs/Inside/Many|Они ещё в комплексе.
+WhereIs/Lost/One|Он потерялся.
+WhereIs/Lost/Many|Они потерялись.
+WhereIs/AllAlive|Все живы и здоровы.
+
+# События
+Events/Joined|О, а вот и вы!
+Events/Joined|А, вот он пришёл!
+Events/Joined|С подключением!
+Events/Joined/Andrey|Ого, все в сборе, даже Андрей!
+Events/Missing/Andrey|Сегодня без Андрея?
+Events/Missing/Pavel|Сегодня без Паши?
+Events/Missing/Arseniy|Сегодня без Арсения?
+Events/Panic|Мы погибнем, мы все умрём!
+Events/Gore|Кругом кровь и кишки.
+Events/Junk|Ну и хлам тут у вас.
+Events/Purchase|Поздравляю с покупкой!
+Events/Purchase|О, что купили? Покажите!
+Events/Delivery|Не забудьте про доставку!
+Events/DeliveryMissed|Прилетела доставка и улетела!
+Events/DeliveryMissed|Вы опять забыли забрать?
+Events/Takeoff|Пристегните ремни, мы взлетаем!
+Events/LowHealth|Что-то вы неважно себя чувствуете!
+Events/Flashlight|Не забудьте зарядить фонарики!

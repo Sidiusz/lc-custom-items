@@ -90,7 +90,27 @@ namespace CustomItems.Items
         public const string TopicGoodbye = "Goodbye", TopicRepeat = "Repeat", TopicCount = "#count",
             TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro", TopicTimeError = "TimeError",
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown", TopicBored = "Game/Bored",
-            TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear";
+            TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear",
+            TopicWhoAreYou = "WhoAreYou", TopicShush = "Shush", TopicSorry = "Sorry", TopicInsult = "Insult",
+            TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel";
+        /// <summary>Столько секунд после «замолчи» колонка не болтает сама.</summary>
+        public static float ShushSeconds = 60f;
+
+        /// <summary>Как друзей называют вслух: папка → начала слов («Andrey=андрей,андрюха;…»), для «где Андрей?».</summary>
+        public static readonly Dictionary<string, string[]> SpokenNames = new Dictionary<string, string[]>();
+
+        public static void SetSpokenNames(string table)
+        {
+            SpokenNames.Clear();
+            foreach (var entry in (table ?? "").Split(';'))
+            {
+                var parts = entry.Split('=');
+                if (parts.Length != 2 || parts[0].Trim().Length == 0)
+                    continue;
+                SpokenNames[parts[0].Trim()] = parts[1].Split(',').Select(w => w.Trim().ToLowerInvariant().Replace('ё', 'е'))
+                    .Where(w => w.Length > 0).ToArray();
+            }
+        }
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
         public const string TopicNames = "Names/", TopicMyName = "#myname", TopicMyRole = "#myrole", TopicRoles = "Roles/", TopicBattery = "#battery",
@@ -362,10 +382,10 @@ namespace CustomItems.Items
 
             // [unk] — распознавание не разобрало слово: вопрос есть, но непонятный
             var known = command.Replace("[unk]", " ").Trim();
-            var topic = command.Length == 0 ? null : known.Length == 0 ? TopicUnknown : Topic(known);
+            var topic = command.Length == 0 ? null : known.Length == 0 ? TopicMumble : Topic(known);
 
-            // Пока отвечает, других не слушает (кроме «стоп»)
-            if (station.IsTalking && !AllowInterrupt && topic != TopicStop)
+            // Пока отвечает, других не слушает (кроме «стоп» и «замолчи»)
+            if (station.IsTalking && !AllowInterrupt && topic != TopicStop && topic != TopicShush)
                 return;
 
             if (topic == null)
@@ -375,11 +395,16 @@ namespace CustomItems.Items
             }
             if (topic == TopicUnknown)
                 topic = station.CustomTopic(known) ?? topic;
+            // Ничего не разобрала: «Вы что-то бормочете?» вперемешку с «Не поняла»
+            if (topic == TopicMumble && (station.FindSet(TopicMumble) == null || Random.value < 0.5f))
+                topic = TopicUnknown;
+            if (topic == TopicShush && (station.IsJammed || station.FindSet(TopicShush) == null))
+                topic = TopicStop;
             if (station.IsJammed && topic != TopicStop)
                 topic = topic == TopicTime && station.FindSet(TopicTimeError) != null ? TopicTimeError : TopicError;
 
             // Тот же вопрос второй раз за минуту: «Я уже отвечала»
-            if (topic != TopicStop && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+            if (topic != TopicStop && topic != TopicShush && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null)
             {
                 station.lastAskedAt = Time.time;
@@ -389,10 +414,22 @@ namespace CustomItems.Items
             station.lastAsked = topic;
             station.lastAskedAt = Time.time;
 
+            if (topic == TopicGameAsk && station.SayRend(0.3f))
+                return;
             if (topic == TopicGameAsk || topic == TopicBored)
             {
                 station.Say(station.FindSet(topic) != null ? topic : TopicGameAsk);
                 station.gameAnswerUntil = station.talkUntil + GameAnswerSeconds;
+            }
+            else if (topic == TopicWhoAreYou)
+                station.Say(station.FindSet(TopicWhoAreYou) != null ? TopicWhoAreYou : "ItsMe");
+            else if (topic == TopicWhereIs)
+                station.Say(station.WhereIsTopic(speaker, known));
+            else if (topic == TopicInsult)
+            {
+                // Обругали сразу после отказа — извиняется
+                var sorry = Time.time - station.lastRefuseAt < 20f && station.FindSet(TopicSorry) != null;
+                station.Say(sorry ? TopicSorry : TopicInsult);
             }
             else if (topic == TopicMyName || topic == TopicMyRole)
             {
@@ -416,6 +453,8 @@ namespace CustomItems.Items
                 // «Не хочу» вперемешку с «Хочу!»
                 var agree = station.FindSet(TopicAgree) != null && (station.FindSet(TopicRefuse) == null || Random.value < 0.5f);
                 station.Say(agree ? TopicAgree : TopicRefuse);
+                if (!agree)
+                    station.lastRefuseAt = Time.time;
             }
             else if (topic == TopicTime && station.SayTime())
                 return;
@@ -424,6 +463,7 @@ namespace CustomItems.Items
         }
 
         private string lastAsked;
+        private float lastRefuseAt = -100f, quietUntil;
         private float gameAnswerUntil;
         private float lastAskedAt;
 
@@ -482,8 +522,16 @@ namespace CustomItems.Items
             var tokens = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             bool Has(params string[] words) => words.Any(w => command.Contains(w) || FuzzyHas(tokens, w));
 
-            if (Has("стоп", "хватит", "замолчи", "тихо", "выключ"))
+            if (Has("замолчи", "тихо", "заткнись", "помолчи"))
+                return TopicShush;
+            if (Has("стоп", "хватит", "выключ"))
                 return TopicStop;
+            if (Has("извин", "прощени"))
+                return TopicSorry;
+            if (Has("дура", "дурак", "тупая", "тупой", "глупая", "идиот", "бесполезн"))
+                return TopicInsult;
+            if (Has("где"))
+                return TopicWhereIs;
             if (Has("погод", "дожд", "туман", "гроз"))
                 return "Weather/" + (WeatherName() ?? "Other");
             // Дедлайн раньше квоты: «сколько дней до сдачи квоты» — про дни
@@ -503,7 +551,11 @@ namespace CustomItems.Items
                 return TopicMyRole;
             if (Has("как меня зовут", "мое имя", "знаешь меня"))
                 return TopicMyName;
-            if (Has("кто тут", "кто здесь", "кто там", "кто говорит", "кто ты", "ты кто"))
+            if (Has("кто ты", "ты кто"))
+                return TopicWhoAreYou;
+            if (Has("умеешь", "что ты можешь"))
+                return "Skills";
+            if (Has("кто тут", "кто здесь", "кто там", "кто говорит"))
                 return "ItsMe";
             if (Has("кто это", "кто виноват", "кто сделал"))
                 return "ItsYou";
@@ -519,6 +571,10 @@ namespace CustomItems.Items
                 return "Love";
             if (Has("заряд", "батаре"))
                 return TopicBattery;
+            if (Has("куда", "как пройти", "дорог", "маршрут"))
+                return "Navigation";
+            if (Has("скоро", "долго"))
+                return "Almost";
             if (Has("цвет"))
                 return TopicColor;
             if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай", "хочешь", "будешь"))
@@ -726,6 +782,73 @@ namespace CustomItems.Items
         }
 
         /// <summary>«Который час»: время с экрана числами. false — чисел нет, ответит фраза из Time.</summary>
+        /// <summary>«Давайте поиграем в Rend!» и сразу «Хотя нет…» — с такой вероятностью, если записи есть.</summary>
+        private bool SayRend(float chance)
+        {
+            if (FindSet(TopicRend) == null || FindSet(TopicCancel) == null || Random.value > chance)
+                return false;
+            SaySequence(new List<string> { TopicRend, TopicCancel });
+            return true;
+        }
+
+        /// <summary>
+        /// «Где Андрей?», «где он?», «где все?»: по состоянию игроков. Стоит на месте полминуты — WhereIs/AFK,
+        /// в комплексе — WhereIs/Inside, снаружи далеко от всех — WhereIs/Lost (One/Many),
+        /// иначе WhereIs/AllAlive. Друга нет в игре — Events/Missing/&lt;Имя&gt;.
+        /// </summary>
+        private string WhereIsTopic(GameNetcodeStuff.PlayerControllerB speaker, string command)
+        {
+            var round = StartOfRound.Instance;
+            const string folder = "WhereIs/";
+            if (round == null)
+                return folder + "AllAlive";
+
+            // Названный по имени друг
+            var tokens = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string named = null;
+            foreach (var pair in SpokenNames)
+            {
+                if (pair.Value.Any(stem => tokens.Any(t => t.StartsWith(stem, StringComparison.Ordinal))))
+                    named = pair.Key;
+            }
+
+            var others = round.allPlayerScripts
+                .Where(p => p != null && p != speaker && (p.isPlayerControlled || p.isPlayerDead)).ToList();
+            List<GameNetcodeStuff.PlayerControllerB> asked;
+            if (named != null)
+            {
+                asked = others.Where(p => NameFolder(p.playerUsername) == named).ToList();
+                if (asked.Count == 0)
+                    return FindSet(EventsFolder + "Missing/" + named) != null ? EventsFolder + "Missing/" + named : folder + "Lost/One";
+            }
+            else if (tokens.Contains("все") || tokens.Contains("остальные"))
+                asked = others;
+            else
+            {
+                // «Где он?» — тот, кто дальше всех от спросившего
+                var far = others.Where(p => !p.isPlayerDead)
+                    .OrderByDescending(p => Vector3.Distance(p.transform.position, speaker.transform.position)).FirstOrDefault();
+                asked = far != null ? new List<GameNetcodeStuff.PlayerControllerB> { far } : new List<GameNetcodeStuff.PlayerControllerB>();
+            }
+
+            var alive = asked.Where(p => !p.isPlayerDead).ToList();
+            if (asked.Count == 1 && alive.Count == 1 && alive[0].timeSincePlayerMoving > 30f && FindSet(folder + "AFK") != null)
+                return folder + "AFK";
+            string Form(string state, int n) =>
+                FindSet(folder + state + (n > 1 ? "/Many" : "/One")) != null ? folder + state + (n > 1 ? "/Many" : "/One") : folder + state;
+            var inside = alive.Count(p => p.isInsideFactory);
+            if (inside > 0)
+                return Form("Inside", inside);
+            var everyone = round.allPlayerScripts.Where(p => p != null && p.isPlayerControlled && !p.isPlayerDead).ToList();
+            var lost = alive.Count(p => !p.isInHangarShipRoom
+                                        && everyone.All(o => o == p || Vector3.Distance(o.transform.position, p.transform.position) > 40f));
+            if (lost > 0)
+                return Form("Lost", lost);
+            if (asked.Count > alive.Count)
+                return Form("Lost", asked.Count - alive.Count); // погибших не выдаёт: «потерялся»
+            return folder + "AllAlive";
+        }
+
         private bool SayTime()
         {
             var tod = TimeOfDay.Instance;
@@ -881,6 +1004,8 @@ namespace CustomItems.Items
                 return;
             var clip = queued.Count > 0 ? queued.Dequeue() : set.clips[index];
             var setName = set != null ? set.name : TopicNumbers;
+            if (setName == TopicShush)
+                quietUntil = Time.time + ShushSeconds; // помолчать: сама не болтает
             lastTopic = setName;
             lastIndex = index;
             listenUntil = 0f;
@@ -946,10 +1071,21 @@ namespace CustomItems.Items
         private static Terminal terminal;
         /// <summary>Столько скрапа на корабле — «ой, сколько предметов».</summary>
         public static int ManyItems = 20;
+        /// <summary>Скрап дешевле этого — хлам; столько хлама на корабле — «Ну и хлам тут у вас».</summary>
+        public static int JunkValue = 20, ManyJunk = 8;
+
+        private static Terminal Shop()
+        {
+            if (terminal == null)
+                terminal = FindObjectOfType<Terminal>();
+            return terminal;
+        }
         private readonly HashSet<ulong> deadIds = new HashSet<ulong>();
         private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
         private readonly List<string> reasons = new List<string>();
         private readonly List<string> pendingDeaths = new List<string>();
+        private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
+        private bool joinedSeeded, wasShipPhase = true, dropshipLanded, dropshipOpened, junkTold;
         private float deathsFlushAt;
 
         // Кто убил: ближайший к месту смерти монстр (enemyName без пробелов), иначе Unknown
@@ -1000,7 +1136,7 @@ namespace CustomItems.Items
                 eventsReady = true; // первый проход только запоминает, что уже есть
                 return;
             }
-            if (reasons.Count == 0 || !IsOn || IsTalking || isPocketed || IsJammed
+            if (reasons.Count == 0 || !IsOn || IsTalking || isPocketed || IsJammed || Time.time < quietUntil
                 || Time.time < eventFreeAt || Time.time < anyEventFreeAt || listenUntil > 0f)
                 return;
 
@@ -1015,6 +1151,9 @@ namespace CustomItems.Items
                 eventFreeAt = Time.time + EventCooldown;
                 anyEventFreeAt = Time.time + 3f;
                 noiseRange = EventNoiseRange;
+                // От скуки иногда «Давайте поиграем в Rend!» и тут же «Хотя нет…»
+                if (topic == EventsFolder + "Idle" && SayRend(0.25f))
+                    return;
                 SayFrom(set);
                 return;
             }
@@ -1029,14 +1168,30 @@ namespace CustomItems.Items
             if (round == null)
                 return;
 
+            // Дёрнули рычаг: корабль садится на луну — «Не забудьте зарядить фонарики!», кого из друзей нет
+            if (!round.inShipPhase && wasShipPhase)
+            {
+                Reason("Flashlight");
+                foreach (var folder in FriendNames.Values.Distinct())
+                {
+                    if (!round.allPlayerScripts.Any(p => p != null && (p.isPlayerControlled || p.isPlayerDead) && NameFolder(p.playerUsername) == folder))
+                        Reason("Missing/" + folder);
+                }
+            }
+            wasShipPhase = round.inShipPhase;
             if (round.shipHasLanded && !wasLanded)
+            {
                 Reason("Landed");
+                if (Shop() is { } shop && (shop.numberOfItemsInDropship > 0 || shop.orderedItemsFromTerminal != null && shop.orderedItemsFromTerminal.Count > 0))
+                    Reason("Delivery");
+            }
             wasLanded = round.shipHasLanded;
             if (round.shipIsLeaving && !wasLeaving)
             {
                 // Кто-то живой остался снаружи — «вы кого-то забыли на луне» (все мертвы — AllDead ниже)
                 if (!round.allPlayersDead && round.allPlayerScripts.Any(p => p != null && p.isPlayerControlled && !p.isPlayerDead && !p.isInHangarShipRoom))
                     Reason("ForgotSomeone");
+                Reason("Takeoff");
                 Reason("Leaving");
             }
             wasLeaving = round.shipIsLeaving;
@@ -1076,8 +1231,50 @@ namespace CustomItems.Items
                     reasons.Add(EventsFolder + folder + (many ? "/Many" : "/One"));
                     reasons.Add(EventsFolder + folder);
                 }
+                if (pendingDeaths.Count > 1)
+                    Reason("Panic");
                 pendingDeaths.Clear();
             }
+
+            // Кто подключился: «О, а вот и вы!», сначала личное Joined/<Имя>
+            var pos0 = transform.position;
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p == null)
+                    continue;
+                var id = p.playerClientId;
+                var here = p.isPlayerControlled || p.isPlayerDead;
+                if (here && joined.Add(id) && joinedSeeded)
+                {
+                    var folder = NameFolder(p.playerUsername);
+                    if (folder != null)
+                        Reason("Joined/" + folder);
+                    Reason("Joined");
+                }
+                else if (!here)
+                    joined.Remove(id); // отключился
+
+                var close = Vector3.Distance(p.transform.position, pos0) < EventRadius;
+                // Рядом мало здоровья — «Что-то вы неважно себя чувствуете»
+                if (p.isPlayerControlled && !p.isPlayerDead && close && p.health <= 30)
+                {
+                    if (lowHealth.Add(id))
+                        Reason("LowHealth");
+                }
+                else if (p.isPlayerDead || p.health > 50)
+                    lowHealth.Remove(id);
+
+                // Рядом тело — «Кругом кровь и кишки»
+                var body = p.isPlayerDead ? p.deadBody : null;
+                if (body != null && Vector3.Distance(body.transform.position, pos0) < 8f)
+                {
+                    if (bodiesSeen.Add(id))
+                        Reason("Gore");
+                }
+                else if (!p.isPlayerDead)
+                    bodiesSeen.Remove(id);
+            }
+            joinedSeeded = true;
 
             var tod = TimeOfDay.Instance;
             var night = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.75f;
@@ -1115,6 +1312,7 @@ namespace CustomItems.Items
                         if (seenEnemies.Add(id))
                         {
                             Reason("Enemy/" + enemy.enemyType.enemyName);
+                            Reason("Panic");
                             if (LoggedEnemies.Add(enemy.enemyType.enemyName))
                                 Debug.Log($"[Алиса] рядом монстр, папка фраз: Phrases/{EventsFolder}Enemy/{enemy.enemyType.enemyName}");
                         }
@@ -1193,10 +1391,13 @@ namespace CustomItems.Items
             {
                 if (credits >= 0 && terminal.groupCredits > credits)
                     Reason("Money");
+                else if (credits >= 0 && terminal.groupCredits < credits)
+                    Reason("Purchase");
                 credits = terminal.groupCredits;
             }
 
             var scrap = 0;
+            var junk = 0;
             var music = false;
             var walkie = false;
             var winston = false;
@@ -1206,7 +1407,11 @@ namespace CustomItems.Items
                 if (item == null || item.itemProperties == null)
                     continue;
                 if (item.isInShipRoom && item.itemProperties.isScrap && !item.isHeld)
+                {
                     scrap++;
+                    if (item.scrapValue < JunkValue)
+                        junk++;
+                }
                 var close = Vector3.Distance(item.transform.position, pos) < EventRadius;
                 if (close && item is BoomboxItem boombox && boombox.isPlayingMusic)
                     music = true;
@@ -1227,7 +1432,30 @@ namespace CustomItems.Items
                     itemsNear.Remove(id);
             }
             if (shipScrap >= 0 && scrap > shipScrap && round.shipHasLanded)
+            {
+                // Много дешёвого — «Ну и хлам тут у вас», раз за день
+                if (junk >= ManyJunk && !junkTold)
+                {
+                    Reason("Junk");
+                    junkTold = true;
+                }
                 Reason(scrap >= ManyItems && shipScrap < ManyItems ? "ManyItems" : "Work");
+            }
+            if (round.inShipPhase)
+                junkTold = false;
+
+            // Доставка улетела нераскрытой — «Прилетела доставка и улетела!»
+            var dropship = FindObjectOfType<ItemDropship>();
+            if (dropship != null)
+            {
+                if (dropship.shipLanded)
+                    dropshipOpened |= dropship.shipDoorsOpened;
+                else if (dropshipLanded && !dropshipOpened)
+                    Reason("DeliveryMissed");
+                if (!dropship.shipLanded)
+                    dropshipOpened = false;
+                dropshipLanded = dropship.shipLanded;
+            }
             shipScrap = scrap;
             if (music && !wasMusic)
                 Reason("Music");

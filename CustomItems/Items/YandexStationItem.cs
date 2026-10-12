@@ -90,7 +90,7 @@ namespace CustomItems.Items
         public static readonly List<YandexStationItem> All = new List<YandexStationItem>();
 
         public const string TopicGoodbye = "Goodbye", TopicRepeat = "Repeat", TopicCount = "#count",
-            TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro", TopicTimeError = "TimeError",
+            TopicNumbers = "Numbers/", TopicAnd = "And", TopicTimeIntro = "TimeIntro", TopicTimeError = "TimeError",
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown", TopicBored = "Game/Bored",
             TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear",
             TopicWhoAreYou = "WhoAreYou", TopicShush = "Shush", TopicSorry = "Sorry", TopicInsult = "Insult",
@@ -196,6 +196,13 @@ namespace CustomItems.Items
         public static float RepeatSeconds = 60f;
         /// <summary>Шанс «Я уже отвечала» на тот же вопрос (иначе отвечает снова, например новый анекдот).</summary>
         public static float RepeatChance = 0.5f;
+        /// <summary>Время числами из кусков («На часах пятнадцать часов тридцать минут»), если все куски записаны.</summary>
+        public static bool TimeInNumbers = true;
+        /// <summary>Шанс на «Алиса» ответить голосом «Слушаю!» (папка Listen), а не сигналом.</summary>
+        public static float ListenVoiceChance = 0.3f;
+        public const string TopicLoot = "#loot", TopicLootIntro = "Loot/Intro", TopicWait = "Wait", TopicListenVoice = "Listen",
+            TopicCall = "Call/", TopicMyNameIntro = "MyName/Intro", TopicLightsOn = "#lightson", TopicLightsOff = "#lightsoff",
+            TopicJoke = "Joke", TopicJokeNext = "Joke/Next", TopicWhoDied = "#whodied";
 
         public const string TopicRandom = "Random", TopicUnknown = "Unknown", TopicError = "Error",
             TopicTime = "Time", TopicStop = "#stop", SoundListen = "#listen", SoundTimeout = "#timeout";
@@ -493,7 +500,15 @@ namespace CustomItems.Items
 
             if (topic == null)
             {
-                station.Say(SoundListen);
+                // «Алиса» без вопроса: сигнал, иногда «Слушаю!» и потом слушает
+                if (station.FindSet(TopicListenVoice) != null && Random.value < ListenVoiceChance)
+                {
+                    station.Say(TopicListenVoice);
+                    station.listenUntil = Mathf.Max(Time.time, station.talkUntil) + ListenSilence;
+                    station.listenStartedAt = Time.time;
+                }
+                else
+                    station.Say(SoundListen);
                 return;
             }
             if (topic == TopicUnknown)
@@ -577,6 +592,9 @@ namespace CustomItems.Items
                 var folder = NameFolder(speaker.playerUsername);
                 if (folder != null && topic == TopicMyRole && station.FindSet(TopicRoles + folder) != null)
                     station.Say(TopicRoles + folder);
+                else if (folder != null && station.FindSet(TopicCall + folder) != null && station.FindSet(TopicMyNameIntro) != null
+                         && (station.FindSet(TopicNames + folder) == null || Random.value < 0.5f))
+                    station.SaySequence(new List<string> { TopicMyNameIntro, TopicCall + folder }); // «Вас зовут» + «Паша!»
                 else
                     station.Say(folder != null && station.FindSet(TopicNames + folder) != null ? TopicNames + folder : TopicNames + "Unknown");
             }
@@ -584,6 +602,12 @@ namespace CustomItems.Items
                 station.Say(EnemyNear(station.transform.position, EventRadius) ? TopicEnemiesNear : TopicAllClear);
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
+            else if (topic == TopicLoot)
+                station.SayLoot();
+            else if (topic == TopicWhoDied)
+                station.SayWhoDied(speaker, known);
+            else if (topic == TopicLightsOn || topic == TopicLightsOff)
+                station.SayFirst(Lights != null ? Lights(topic == TopicLightsOn) : new[] { TopicRefuse });
             else if (topic == TopicBattery)
                 station.Say(station.BatteryTopic() ?? TopicUnknown);
             else if (topic == TopicColor)
@@ -650,6 +674,8 @@ namespace CustomItems.Items
         public static Func<bool, string[]> Doors;
         /// <summary>Купить предмет (как в строке «$Flashlight: фонарик») столько штук, вернуть темы ответа.</summary>
         public static Func<string, int, string[]> Buy;
+        /// <summary>Включить (true) или выключить свет на корабле, вернуть темы ответа.</summary>
+        public static Func<bool, string[]> Lights;
         /// <summary>Шанс, что на непонятный ответ про рычаг она всё равно запустит.</summary>
         public static float LaunchAnywayChance = 0.1f;
 
@@ -719,7 +745,13 @@ namespace CustomItems.Items
             {
                 // «А у меня хорошо» — «Здорово!»; ответ на ответ тоже может ждать продолжения
                 var next = string.IsNullOrEmpty(reply) ? null : AliceIntents.MatchFollowUp(item, reply);
-                if (next != null && FindSet(next) != null)
+                if (next == TopicJoke && item == TopicJoke && FindSet(TopicJokeNext) != null && FindSet(TopicJoke) != null)
+                {
+                    // «Ещё» — «А вот ещё…» и следующий анекдот
+                    SaySequence(new List<string> { TopicJokeNext, TopicJoke });
+                    ExpectReply(TopicJoke);
+                }
+                else if (next != null && FindSet(next) != null)
                 {
                     Say(next);
                     ExpectReply(next);
@@ -1060,21 +1092,60 @@ namespace CustomItems.Items
             SendSpeak(topic, 0);
         }
 
-        /// <summary>Число словами из папок Numbers/0 … Numbers/10; больше десяти — по цифрам.</summary>
+        /// <summary>
+        /// Число словами из кусков: Numbers/0…19, десятки Numbers/20…90, сотни Numbers/100…900, Numbers/1000
+        /// («тысяча двести сорок пять»). Больше — Numbers/More2000 («Больше двух тысяч!») или
+        /// Numbers/More1000; нет куска — false (ничего не добавляет).
+        /// </summary>
         private bool AddNumber(List<string> topics, int n)
         {
             if (n < 0)
                 return false;
-            if (FindSet(TopicNumbers + n) != null)
+            var parts = new List<string>();
+            if (NumberParts(n, parts))
             {
-                topics.Add(TopicNumbers + n);
+                topics.AddRange(parts);
                 return true;
             }
-            var digits = n.ToString();
-            if (digits.Length == 1 || digits.Any(d => FindSet(TopicNumbers + d) == null))
+            var more = n >= 2000 && FindSet(TopicNumbers + "More2000") != null ? TopicNumbers + "More2000"
+                : n >= 1000 && FindSet(TopicNumbers + "More1000") != null ? TopicNumbers + "More1000" : null;
+            if (more == null)
                 return false;
-            topics.AddRange(digits.Select(d => TopicNumbers + d));
+            topics.Add(more);
             return true;
+        }
+
+        private bool NumberParts(int n, List<string> parts)
+        {
+            bool Add(int k)
+            {
+                if (FindSet(TopicNumbers + k) == null)
+                    return false;
+                parts.Add(TopicNumbers + k);
+                return true;
+            }
+            if (FindSet(TopicNumbers + n) != null)
+                return Add(n);
+            if (n >= 2000)
+                return false;
+            if (n >= 1000)
+                return Add(1000) && NumberParts(n - 1000, parts);
+            if (n >= 100)
+                return Add(n / 100 * 100) && (n % 100 == 0 || NumberParts(n % 100, parts));
+            if (n >= 20)
+                return Add(n / 10 * 10) && (n % 10 == 0 || Add(n % 10));
+            return false;
+        }
+
+        /// <summary>Перечисление: «Паша и Андрей», «Паша, Андрей и ещё Сеня» (And — «и», And/Also — «и ещё», «а также»).</summary>
+        private void AddList(List<string> topics, List<string> items)
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (i > 0 && i == items.Count - 1)
+                    topics.Add(items.Count > 2 && FindSet(TopicAnd + "/Also") != null ? TopicAnd + "/Also" : TopicAnd);
+                topics.Add(items[i]);
+            }
         }
 
         /// <summary>«Который час»: время с экрана числами. false — чисел нет, ответит фраза из Time.</summary>
@@ -1165,9 +1236,11 @@ namespace CustomItems.Items
             if (tod == null || !tod.currentDayTimeStarted)
                 return false;
             var minutes = (int)(tod.normalizedTimeOfDay * (60f * tod.numberOfHours)) + 360;
-            // Словами, а не цифрами: Time/15 — «Три часа дня», Time/Almost/7 — «Почти семь».
+            if (SayTimeNumbers(minutes))
+                return true;
+            // Словами: Time/15 — «Три часа дня», Time/Almost/7 — «Почти семь».
             // Больше получаса — уже следующий час («почти семь»); нет записи на час — ближайший
-            // записанный в пределах часа, иначе просто ближайший записанный; цифрами — никогда
+            // записанный в пределах часа, иначе просто ближайший записанный
             var hour = minutes / 60 % 24;
             var next = (hour + 1) % 24;
             var prev = (hour + 23) % 24;
@@ -1183,7 +1256,7 @@ namespace CustomItems.Items
                     return true;
                 }
             }
-            // Цифрами время не звучит: ближайший записанный час, сколько бы ни было до него
+            // Ближайший записанный час, сколько бы ни было до него
             var now = minutes / 60f;
             string best = null;
             var bestDist = float.MaxValue;
@@ -1203,6 +1276,76 @@ namespace CustomItems.Items
                 }
             }
             Say(best ?? (FindSet(TopicTimeError) != null ? TopicTimeError : TopicTime));
+            return true;
+        }
+
+        /// <summary>«Кто погиб»: имена через «и» («Паша и Андрей!», Call/&lt;Имя&gt;); все живы или имён нет — как «где все».</summary>
+        private void SayWhoDied(GameNetcodeStuff.PlayerControllerB speaker, string command)
+        {
+            var round = StartOfRound.Instance;
+            var dead = round == null ? new List<string>() : round.allPlayerScripts
+                .Where(p => p != null && p.isPlayerDead)
+                .Select(p => NameFolder(p.playerUsername)).Where(f => f != null && FindSet(TopicCall + f) != null)
+                .Distinct().Select(f => TopicCall + f).ToList();
+            if (dead.Count == 0)
+            {
+                Say(WhereIsTopic(speaker, command));
+                return;
+            }
+            var topics = new List<string>();
+            AddList(topics, dead);
+            SaySequence(topics);
+        }
+
+        /// <summary>«Сколько на корабле»: «Смотрю…» (Wait), «Всего на корабле» (Loot/Intro) и сумма лута числом.</summary>
+        private void SayLoot()
+        {
+            var total = 0;
+            foreach (var item in FindObjectsOfType<GrabbableObject>())
+            {
+                if (item != null && item.itemProperties != null && item.itemProperties.isScrap && item.isInShipRoom)
+                    total += item.scrapValue;
+            }
+            var topics = new List<string>();
+            if (FindSet(TopicWait) != null && Random.value < 0.5f)
+                topics.Add(TopicWait);
+            topics.Add(TopicLootIntro);
+            if (AddNumber(topics, total))
+                SaySequence(topics);
+            else
+                Say(TopicUnknown);
+        }
+
+        /// <summary>
+        /// «На часах» (Time/Intro) + часы числом + Time/Hours/One|Few|Many («час», «часа», «часов») + минуты до 5
+        /// + Time/Minutes/Many («минут»). Не хватает куска — false, тогда словами из Time/&lt;час&gt;.
+        /// </summary>
+        private bool SayTimeNumbers(int minutes)
+        {
+            if (!TimeInNumbers)
+                return false;
+            var h = minutes / 60 % 24;
+            var m = (minutes % 60 + 2) / 5 * 5;
+            if (m == 60)
+            {
+                m = 0;
+                h = (h + 1) % 24;
+            }
+            var topics = new List<string>();
+            if (FindSet(TopicTime + "/Intro") != null)
+                topics.Add(TopicTime + "/Intro");
+            var hours = TopicTime + "/Hours/" + (h % 10 == 1 && h != 11 ? "One" : h % 10 >= 2 && h % 10 <= 4 && (h < 12 || h > 14) ? "Few" : "Many");
+            var mins = TopicTime + "/Minutes/Many";
+            if (!NumberParts(h, topics) || FindSet(hours) == null)
+                return false;
+            topics.Add(hours);
+            if (m > 0)
+            {
+                if (!NumberParts(m, topics) || FindSet(mins) == null)
+                    return false;
+                topics.Add(mins);
+            }
+            SaySequence(topics);
             return true;
         }
 
@@ -1442,6 +1585,9 @@ namespace CustomItems.Items
         /// <summary>Кто от чего погиб в этот день (для «чё с Пашей?»).</summary>
         private static readonly Dictionary<ulong, string> DeathCauses = new Dictionary<ulong, string>();
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
+        // Кто ушёл в комплекс (ждём на корабле), кто уже вернулся первым за посадку, на ком висит монстр
+        private readonly HashSet<ulong> wentInside = new HashSet<ulong>(), onHeadSeen = new HashSet<ulong>();
+        private bool firstBackTold;
         // Про кого уже сказали «Сегодня без …»: общее для всех колонок, раз в игре до посадки
         // и ещё раз после каждой посадки
         private static readonly HashSet<string> missingTold = new HashSet<string>();
@@ -1511,7 +1657,7 @@ namespace CustomItems.Items
                 var set = FindSet(topic);
                 // Кто пришёл и кого нет — говорит всегда, остальное изредка
                 var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined")
-                    || topic == EventsFolder + "NewGame";
+                    || topic == EventsFolder + "NewGame" || topic.StartsWith(EventsFolder + "FirstBack/");
                 if (set == null || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
@@ -1544,6 +1690,8 @@ namespace CustomItems.Items
             if (round.shipHasLanded && !wasLanded)
             {
                 Reason("Landed");
+                firstBackTold = false;
+                wentInside.Clear();
                 // После посадки ещё раз: кого нет (одна очистка на посадку, даже если колонок несколько)
                 if (Time.time - missingClearedAt > 120f)
                 {
@@ -1657,6 +1805,15 @@ namespace CustomItems.Items
                 }
                 else if (!p.isPlayerDead)
                     bodiesSeen.Remove(id);
+
+                // Вернулся из комплекса на корабль: «Вот и вы!» (Back), первый — «О, Андрей! А остальные где?»
+                // (FirstBack/<Имя>), без лута — «Почему с пустыми руками?», ранен — «Будьте осторожнее!»
+                if (!p.isPlayerControlled || p.isPlayerDead || !round.shipHasLanded || round.shipIsLeaving)
+                    wentInside.Remove(id);
+                else if (p.isInsideFactory)
+                    wentInside.Add(id);
+                else if (p.isInHangarShipRoom && wentInside.Remove(id))
+                    OnBack(p, round);
             }
             joinedSeeded = true;
 
@@ -1712,6 +1869,16 @@ namespace CustomItems.Items
                         continue;
                     var id = enemy.NetworkObjectId;
                     var dist = Vector3.Distance(enemy.transform.position, pos);
+                    // Монстр на голове у игрока рядом: «Какая красивая шляпа!» (Enemy/<имя>/OnHead)
+                    var head = enemy is CentipedeAI centipede ? centipede.clingingToPlayer
+                        : enemy is FlowerSnakeEnemy snake ? snake.clingingToPlayer : null;
+                    if (head != null && !enemy.isEnemyDead && Vector3.Distance(head.transform.position, pos) < EventRadius)
+                    {
+                        if (onHeadSeen.Add(id))
+                            Reason("Enemy/" + enemy.enemyType.enemyName + "/OnHead");
+                    }
+                    else
+                        onHeadSeen.Remove(id);
                     if (!enemy.isEnemyDead && dist < EventRadius)
                     {
                         if (seenEnemies.Add(id))
@@ -1864,6 +2031,20 @@ namespace CustomItems.Items
             if (winston && !wasWinston)
                 Reason("Winston");
             wasWinston = winston;
+        }
+
+        private void OnBack(GameNetcodeStuff.PlayerControllerB p, StartOfRound round)
+        {
+            var folder = NameFolder(p.playerUsername);
+            var others = round.allPlayerScripts.Any(o => o != null && o != p && o.isPlayerControlled && !o.isPlayerDead && !o.isInHangarShipRoom);
+            if (!firstBackTold && others && folder != null)
+                Reason("FirstBack/" + folder);
+            firstBackTold = true;
+            if (p.health < 50)
+                Reason("BackHurt");
+            if (p.ItemSlots == null || !p.ItemSlots.Any(i => i != null && i.itemProperties != null && i.itemProperties.isScrap))
+                Reason("BackEmpty");
+            Reason("Back");
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)

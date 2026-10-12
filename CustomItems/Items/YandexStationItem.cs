@@ -596,15 +596,17 @@ namespace CustomItems.Items
                 }
             }
 
-            // Тот же вопрос второй раз за минуту: «Я уже отвечала»
-            if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+            // Тот же вопрос второй раз за минуту: «Я уже отвечала». «Где Паша» после «где Андрей» — другой вопрос:
+            // у вопросов про человека сравниваем весь текст, а не только тему
+            var asked = topic == TopicWhereIs ? topic + "|" + known : topic;
+            if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null && Random.value < RepeatChance)
             {
                 station.lastAskedAt = Time.time;
                 station.Say(TopicRepeat);
                 return;
             }
-            station.lastAsked = topic;
+            station.lastAsked = asked;
             station.lastAskedAt = Time.time;
 
             if (station.AnswerMore(speaker, topic, known))

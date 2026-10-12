@@ -152,12 +152,20 @@ namespace CustomItems.Items
         private void SayEarned(PlayerControllerB speaker)
         {
             earned.TryGetValue(speaker.playerClientId, out var sum);
+            // Нет «Вы принесли на» — по имени кусками: «Паша…» + «…принёс на…» / «…пока ничего не принёс.»
+            var me = NamePiece(NameFolder(speaker.playerUsername));
+            var glued = FindSet("Earned/Intro") == null && me != null;
             if (sum <= 0)
             {
-                SayFirst("Earned/None", "Loot/Low", TopicUnknown);
+                if (FindSet("Earned/None") == null && me != null && FindSet("Earned/Tail/None") != null)
+                    SaySequence(new List<string> { me, "Earned/Tail/None" });
+                else
+                    SayFirst("Earned/None", "Loot/Low", TopicUnknown);
                 return;
             }
-            var topics = Existing("Earned/Intro");
+            var topics = glued ? Existing(me, "Earned/Tail/Intro") : Existing("Earned/Intro");
+            if (glued && topics.Count < 2)
+                topics.Clear();
             if (topics.Count == 0 || !AddNumber(topics, sum))
             {
                 SayFirst("Loot/High", "Ok");
@@ -181,7 +189,11 @@ namespace CustomItems.Items
                 SayFirst("Earned/Nobody", "Loot/Low", TopicUnknown);
                 return;
             }
-            SaySequence(Existing("Earned/BestIs", TopicCall + name));
+            // Нет «Больше всех принёс» — «Паша…» + «…сегодня лучше всех!»
+            if (FindSet("Earned/BestIs") == null && NamePiece(name) != null && FindSet("Opinion/Tail/Best") != null)
+                SaySequence(new List<string> { NamePiece(name), "Opinion/Tail/Best" });
+            else
+                SaySequence(Existing("Earned/BestIs", TopicCall + name));
         }
 
         // «Сколько у нас денег?» — «На счету» + число кредитов
@@ -189,7 +201,9 @@ namespace CustomItems.Items
         {
             var terminal = FindObjectOfType<Terminal>();
             var topics = Existing("Credits/Intro");
-            if (terminal == null || topics.Count == 0 || !AddNumber(topics, terminal.groupCredits))
+            // Нет «На счету» — просто число и «…кредитов.»
+            var bare = topics.Count == 0 && FindSet(Glue + "Unit/Credits") != null;
+            if (terminal == null || topics.Count == 0 && !bare || !AddNumber(topics, terminal.groupCredits))
             {
                 SayFirst(terminal != null && terminal.groupCredits < 50 ? "Buy/NoMoney" : "Credits", TopicUnknown);
                 return;

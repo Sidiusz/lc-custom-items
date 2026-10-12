@@ -293,7 +293,12 @@ namespace CustomItems.Items
                     SaySelfWhere();
                     return true;
                 case TopicCoin:
-                    SayFirst(Random.value < 0.03f ? "Coin/Edge" : Random.value < 0.5f ? "Coin/Heads" : "Coin/Tails", TopicUnknown);
+                    // Иногда сначала «Подбрасываю!»
+                    var coin = Random.value < 0.03f ? "Coin/Edge" : Random.value < 0.5f ? "Coin/Heads" : "Coin/Tails";
+                    if (FindSet(coin) != null && FindSet("Coin/Intro") != null && Random.value < 0.4f)
+                        SaySequence(new List<string> { "Coin/Intro", coin });
+                    else
+                        SayFirst(coin, TopicUnknown);
                     return true;
                 case TopicDice:
                     var dice = Existing("Dice/Intro");
@@ -367,7 +372,9 @@ namespace CustomItems.Items
                         && FindSet(ctxTopic) is { } set && set.clips.Length > 1)
                     {
                         lastAsked = null;
-                        Speak(Existing("More/Intro").Take(Random.value < 0.5f ? 1 : 0).Append(ctxTopic).ToList());
+                        var more = ctxTopic == "Advice" && FindSet("Advice/More") != null ? new List<string> { "Advice/More" }
+                            : Existing("More/Intro").Take(Random.value < 0.5f ? 1 : 0).ToList();
+                        Speak(more.Append(ctxTopic).ToList());
                         return true;
                     }
                     SayFirst("More/Nothing", "Ok");
@@ -633,7 +640,13 @@ namespace CustomItems.Items
                 options.Add("Advice/Quota");
             var pick = options.FirstOrDefault(o => FindSet(o) != null);
             if (pick == null || Random.value > 0.7f)
-                return false;
+            {
+                // Иногда «Совет:» перед обычным советом
+                if (FindSet("Advice") == null || FindSet("Advice/Intro") == null || Random.value > 0.35f)
+                    return false;
+                SaySequence(new List<string> { "Advice/Intro", "Advice" });
+                return true;
+            }
             Say(pick);
             return true;
         }
@@ -694,7 +707,7 @@ namespace CustomItems.Items
         {
             var named = FriendNamed(known);
             var whole = WhereIsTopic(speaker, known);
-            if (named == null || NamePiece(named) == null || Random.value < 0.35f)
+            if (named == null || NamePiece(named) == null || Random.value < 0.35f && FindSet(whole) != null)
             {
                 Say(whole);
                 return true;
@@ -818,7 +831,7 @@ namespace CustomItems.Items
             }
             var place = Glue + "Place/" + (inside ? "Inside" : "Ship");
             var topics = new List<string>();
-            if (FindSet(place) != null && Random.value < 0.6f)
+            if (FindSet(place) != null && (Random.value < 0.6f || FindSet(folder + "Intro") == null))
             {
                 AddList(topics, pieces);
                 topics.Add(place);
@@ -841,6 +854,16 @@ namespace CustomItems.Items
             {
                 var topics = new List<string> { "News/Died" };
                 AddList(topics, died);
+                SaySequence(topics);
+                return;
+            }
+            // Нет «Плохие новости. Погиб…» — «Мы кого-то потеряли. Паша… …погиб.»
+            var deadNames = recent.Where(m => m.what == "died").Select(m => NamePiece(m.who)).Where(n => n != null).Distinct().ToList();
+            if (deadNames.Count > 0 && FindSet(Glue + "Place/Dead") != null)
+            {
+                var topics = Existing("News/Died/Someone");
+                AddList(topics, deadNames);
+                topics.Add(Glue + "Place/Dead");
                 SaySequence(topics);
                 return;
             }
@@ -903,6 +926,13 @@ namespace CustomItems.Items
             if (tail != null && NamePiece(name) != null && (Random.value < 0.6f || FindSet("Opinion/" + name) == null))
             {
                 SaySequence(new List<string> { NamePiece(name), tail });
+                return;
+            }
+            // Своё мнение о нём: целой фразой (Opinion/<Имя>) или кусками «Сеня…» + «…душа компании» (Opinion/Tail/<Имя>)
+            var own = "Opinion/Tail/" + name;
+            if (FindSet(own) != null && NamePiece(name) != null && (Random.value < 0.6f || FindSet("Opinion/" + name) == null))
+            {
+                SaySequence(new List<string> { NamePiece(name), own });
                 return;
             }
             SayFirst("Opinion/" + name, "Opinion/Unknown", TopicUnknown);
@@ -1049,13 +1079,30 @@ namespace CustomItems.Items
                 SayFirst("Math/Negative", "Math/Hard", "Math");
                 return true;
             }
-            var topics = Existing("Math/Intro");
+            var topics = new List<string>();
+            // Иногда повторяет пример: «Семь… …плюс… пять… Будет… двенадцать»
+            var op = Has("плюс", "прибав", "сложи") ? "Math/Op/Plus" : Has("минус", "отним", "вычест") ? "Math/Op/Minus" : null;
+            if (op != null && FindSet(op) != null && a < 1000 && b < 1000 && Random.value < 0.35f)
+            {
+                var echo = new List<string>();
+                if (NumberParts(a, echo))
+                {
+                    echo.Add(op);
+                    if (NumberParts(b, echo))
+                        topics.AddRange(echo);
+                }
+            }
+            var intro = Existing("Math/Intro");
+            if (intro.Count > 0)
+                topics.Add(intro[0]);
             if (result > 1999 || !AddNumber(topics, (int)result))
             {
                 SayFirst("Math/Hard", "Math");
                 return true;
             }
-            if (Random.value < 0.25f)
+            if (a == 2 && b == 2 && result == 4 && FindSet("Math/Quota") != null && Random.value < 0.5f)
+                topics.Add("Math/Quota"); // «…Минус квота — ноль.»
+            else if (Random.value < 0.25f)
                 topics.AddRange(Existing("Math/Easy"));
             SaySequence(topics);
             return true;
@@ -1185,6 +1232,17 @@ namespace CustomItems.Items
             || topic == EventsFolder + "Comfort/Ask" || topic == EventsFolder + "QuotaEnough" || topic.StartsWith(EventsFolder + "DiedAgain")
             || topic.StartsWith(EventsFolder + "Back/Rich") || topic == EventsFolder + "Lonely/Ask" && Random.value < 0.5f
             || topic == EventsFolder + "AFK/Ask" && Random.value < 0.5f;
+
+        // Повод без своей записи, но из кусков: «Паша…» + «…был хорошим сотрудником.» (поминки), «Паша…» + «Опять!»
+        private List<string> GluedEvent(string topic)
+        {
+            string Name(string prefix) => topic.StartsWith(EventsFolder + prefix) ? NamePiece(topic.Substring((EventsFolder + prefix).Length)) : null;
+            if (Name("Memorial/") is { } dead && FindSet("Opinion/Tail/Dead") != null)
+                return new List<string> { dead, "Opinion/Tail/Dead" };
+            if (Name("DiedAgain/") is { } again && FindSet(EventsFolder + "DiedAgain") != null)
+                return new List<string> { again, EventsFolder + "DiedAgain" };
+            return null;
+        }
 
         // Повод с продолжением: «Куда летим?» ждёт название луны. true — сказано здесь
         private bool SayEventContext(string topic)

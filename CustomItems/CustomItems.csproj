@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>CustomItems</AssemblyName>
+    <RootNamespace>CustomItems</RootNamespace>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <!-- BepInEx и UnityEngine.Modules 2022.x лежат в фиде BepInEx, а не на nuget.org -->
+    <RestoreAdditionalProjectSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.bepinex.dev/v3/index.json
+    </RestoreAdditionalProjectSources>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>embedded</DebugType>
+
+    <!-- Путь к папке BepInEx/plugins профиля r2modman/Gale. Если задан, после сборки
+         DLL и AssetBundle копируются туда автоматически. Пример:
+         dotnet build -p:PluginDir="C:\Users\me\AppData\Roaming\r2modmanPlus-local\LethalCompany\profiles\Dev\BepInEx\plugins" -->
+    <PluginDir></PluginDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.*" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
+    <!-- Публицизированные библиотеки игры (Assembly-CSharp и т.д.), только для компиляции -->
+    <PackageReference Include="LethalCompany.GameLibs.Steam" Version="81.0.5-ngd.0" PrivateAssets="all" />
+    <PackageReference Include="Evaisa.LethalLib" Version="1.2.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- AssetBundle из Unity кладётся в Bundles/ в корне репозитория -->
+  <ItemGroup>
+    <None Include="..\Bundles\customitems" Condition="Exists('..\Bundles\customitems')" CopyToOutputDirectory="PreserveNewest" Link="customitems" />
+  </ItemGroup>
+
+  <Target Name="CopyToPluginDir" AfterTargets="Build" Condition="'$(PluginDir)' != ''">
+    <MakeDir Directories="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="..\Bundles\customitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\customitems')" />
+  </Target>
+
+</Project>

@@ -107,3 +107,18 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# ---- Мод (C#), лежит в CustomItems/ вне Assets/ ----
+# Unity-правило *.csproj выше игнорирует все проекты, а проект мода нужен в git
+!/CustomItems/CustomItems.csproj
+/CustomItems/[Bb]in/
+/CustomItems/[Oo]bj/
+.idea/
+
+# Служебные файлы сборки бандлов (сам бандл customitems коммитится)
+/Bundles/*.manifest
+/Bundles/Bundles
+
+# Рипнутые ассеты игры (персонаж для превью и т.п.) — только локально, в репозиторий не кладём
+/Assets/_Ripped/
+/Assets/_Ripped.meta

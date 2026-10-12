@@ -92,7 +92,17 @@ namespace CustomItems.Items
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown";
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
-        public const string TopicNames = "Names/", TopicMyName = "#myname";
+        public const string TopicNames = "Names/", TopicMyName = "#myname", TopicBattery = "#battery",
+            TopicColor = "#color", TopicAgree = "Agree", TopicRefuse = "Refuse", TopicOff = "Off";
+
+        // Записи цветов по порядку bodyColors (серая, голубая, розовая, чёрная): своя папка, иначе ближайшая
+        private static readonly string[][] ColorFolders =
+        {
+            new[] { "Color/Grey", "Color/White" },
+            new[] { "Color/Blue", "Color/DarkBlue" },
+            new[] { "Color/Pink" },
+            new[] { "Color/Black" },
+        };
 
         /// <summary>
         /// Друзья по нику Steam: ник (без регистра и значков) → папка Names/&lt;Папка&gt;.
@@ -264,10 +274,12 @@ namespace CustomItems.Items
                 queued.Clear();
                 talkUntil = 0f;
                 // Выключают — прощается. Номер по счётчику выключений, чтобы у всех одна фраза
-                var bye = FindSet(TopicGoodbye);
+                var off = FindSet(TopicOff);
+                var goodbye = FindSet(TopicGoodbye);
+                var bye = off != null && goodbye != null ? (goodbyes % 2 == 0 ? off : goodbye) : off ?? goodbye;
                 if (bye != null)
                 {
-                    audioSource.clip = bye.clips[goodbyes++ % bye.clips.Length];
+                    audioSource.clip = bye.clips[goodbyes++ / 2 % bye.clips.Length];
                     audioSource.Play();
                     return;
                 }
@@ -390,6 +402,16 @@ namespace CustomItems.Items
             }
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
+            else if (topic == TopicBattery)
+                station.Say(station.BatteryTopic() ?? TopicUnknown);
+            else if (topic == TopicColor)
+                station.Say(station.ColorTopic() ?? TopicUnknown);
+            else if (topic == TopicRefuse)
+            {
+                // «Не хочу» вперемешку с «Хочу!»
+                var agree = station.FindSet(TopicAgree) != null && (station.FindSet(TopicRefuse) == null || Random.value < 0.5f);
+                station.Say(agree ? TopicAgree : TopicRefuse);
+            }
             else if (topic == TopicTime && station.SayTime())
                 return;
             else
@@ -466,8 +488,12 @@ namespace CustomItems.Items
                 return TopicGameAsk;
             if (Has("любишь", "люблю", "нравлюсь", "нравится"))
                 return "Love";
-            if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай"))
-                return "Refuse";
+            if (Has("заряд", "батаре"))
+                return TopicBattery;
+            if (Has("цвет"))
+                return TopicColor;
+            if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай", "хочешь", "будешь"))
+                return TopicRefuse;
             if (Has("хорошо", "ладно", "понятно", "ясно", "окей") || Regex.IsMatch(command, @"^(я|мы|мне|нам)\s"))
                 return "Ok";
             if (Has("до свидания", "до встречи", "прощай", "увидимся") || Regex.IsMatch(command, @"(^|\s)пока(\s|$)"))
@@ -644,6 +670,28 @@ namespace CustomItems.Items
                 SaySequence(topics);
             else
                 Say(TopicUnknown);
+        }
+
+        /// <summary>«Какой заряд»: Battery/0 … Battery/100 (по 10%) или словами (Battery/Full …).</summary>
+        private string BatteryTopic()
+        {
+            var charge = insertedBattery != null ? Mathf.Clamp01(insertedBattery.charge) : 1f;
+            var percent = "Battery/" + Mathf.RoundToInt(charge * 10f) * 10;
+            var words = "Battery/" + (charge >= 0.95f ? "Full" : charge >= 0.75f ? "AlmostFull" : charge >= 0.5f ? "MoreHalf"
+                : charge >= 0.2f ? "LessHalf" : "AlmostEmpty");
+            var hasPercent = FindSet(percent) != null;
+            var hasWords = FindSet(words) != null;
+            if (hasPercent && hasWords)
+                return Random.value < 0.5f ? percent : words;
+            return hasPercent ? percent : hasWords ? words : null;
+        }
+
+        /// <summary>«Какого ты цвета»: запись своего цвета или ближайшего, иначе null.</summary>
+        private string ColorTopic()
+        {
+            EnsureColor();
+            var folders = ColorFolders[colorIndex % ColorFolders.Length];
+            return folders.FirstOrDefault(f => FindSet(f) != null);
         }
 
         private string CountTopic(int players)
@@ -941,6 +989,9 @@ namespace CustomItems.Items
                 if (count != null)
                     reasons.Add(count);
             }
+            // Все ушли от колонки: «А можно с вами?»
+            if (near == 0 && playersNear > 0)
+                Reason("LeftBehind");
             playersNear = near;
 
             // Кто-то рядом отпил энергетик или Егермейстер

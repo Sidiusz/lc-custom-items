@@ -189,3 +189,35 @@ Events/PlayerDied/Daniil|Даниил! Нет!
 Events/PlayerDied/Andrey|Андрей, ну как так.
 Events/PlayerDied/Arseniy|Сеня! Сеня?
 Events/PlayerDied/Pavel|Паша всё.
+
+# «Какой заряд»: Battery/0 … Battery/100 (по 10%) или словами
+Battery/0|Ноль процентов.
+Battery/10|Десять процентов.
+Battery/20|Двадцать процентов.
+Battery/30|Тридцать процентов.
+Battery/40|Сорок процентов.
+Battery/50|Пятьдесят процентов.
+Battery/60|Шестьдесят процентов.
+Battery/70|Семьдесят процентов.
+Battery/80|Восемьдесят процентов.
+Battery/90|Девяносто процентов.
+Battery/100|Сто процентов.
+Battery/Full|Заряжена на полную.
+Battery/AlmostFull|Почти полная.
+Battery/MoreHalf|Больше половины заряда.
+Battery/LessHalf|Меньше половины заряда.
+Battery/AlmostEmpty|Почти разряжена.
+Events/LowBattery|Требуется зарядка.
+Events/LowBattery|Низкий заряд батареи.
+# «Какого ты цвета»: своя папка на цвет корпуса, иначе ближайшая (серая → White, голубая → DarkBlue)
+Color/Grey|Серый.
+Color/White|Белый.
+Color/Blue|Голубой.
+Color/DarkBlue|Синий.
+Color/Pink|Розовый.
+Color/Black|Чёрный.
+Agree|Хочу!
+Agree|Буду!
+Off|Отключаюсь!
+Events/LeftBehind|А можно с вами?
+Events/Idle|Я хочу пиццы.

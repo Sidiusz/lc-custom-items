@@ -70,6 +70,7 @@ namespace CustomItems
         private readonly Dictionary<int, float> hearUntil = new Dictionary<int, float>();
         private readonly Dictionary<int, string> lastPartial = new Dictionary<int, string>();
         private readonly HashSet<int> answered = new HashSet<int>();
+        private readonly HashSet<VoiceTap> taps = new HashSet<VoiceTap>(), touchedTaps = new HashSet<VoiceTap>();
         private volatile bool micOn;
         private volatile int micPlayer;
         private int outputRate;
@@ -106,6 +107,7 @@ namespace CustomItems
             var listen = comms != null && round.allPlayerScripts != null
                          && (!HostListens || nm != null && nm.IsServer);
             var any = false;
+            touchedTaps.Clear();
             if (listen)
             {
                 var local = GameNetworkManager.Instance?.localPlayerController;
@@ -141,6 +143,8 @@ namespace CustomItems
                         tap.Player = i;
                         tap.Rate = outputRate;
                         tap.On = on;
+                        touchedTaps.Add(tap);
+                        taps.Add(tap);
                     }
                 }
             }
@@ -148,6 +152,13 @@ namespace CustomItems
             {
                 micOn = false;
                 hearUntil.Clear();
+            }
+            // Голос перешёл к другому игроку: старый тап молчит, иначе слал бы звук под чужим именем
+            taps.RemoveWhere(t => t == null);
+            foreach (var tap in taps)
+            {
+                if (!touchedTaps.Contains(tap))
+                    tap.On = false;
             }
             if (any && worker == null)
                 StartWorker();

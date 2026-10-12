@@ -1,7 +1,7 @@
 # Готовит модель плюшевого Уинстона для предмета Winston из Tools/Winston/Winton.blend:
 # убирает скелет и лишние объекты, уменьшает до размера игрушки, запекает цвет
-# вместе с AO (вторая UV) в одну текстуру и пишет FBX со встроенной текстурой
-# в Assets/Sources/Art/Models/Winston/.
+# вместе с AO (вторая UV) в одну текстуру и пишет FBX в Art/Models/Winston/ и PNG
+# в Art/Textures/Winston/. Материал HDRP/Lit с этой текстурой делает ItemAssets.cs.
 #
 # Запуск из корня репозитория (Blender или pip-пакет bpy):
 #   blender -b --factory-startup -P Tools/Winston/model.py
@@ -20,6 +20,7 @@ from mathutils import Matrix, Vector
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Winton.blend")
 OUT_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Models", "Winston")
+TEX_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Textures", "Winston")
 NAME = "Winston"
 TEX = 1024
 HEIGHT = 0.26  # высота игрушки; в исходнике сувенир 0.5 м
@@ -82,10 +83,9 @@ def bake_texture(obj):
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.bake(type="EMIT")
-    image.filepath_raw = os.path.join(OUT_DIR, NAME + ".png")
+    image.filepath_raw = os.path.join(TEX_DIR, NAME + ".png")
     image.file_format = "PNG"
     image.save()
-    image.pack()  # превью рендерится уже после удаления PNG
 
     # Простой материал вместо шейдера Overwatch: его FBX-экспорт не понимает
     me.materials.clear()
@@ -147,6 +147,7 @@ def main():
     preview = argv[argv.index("--preview") + 1] if "--preview" in argv else None
 
     os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(TEX_DIR, exist_ok=True)
     obj = load_mesh()
     bake_texture(obj)
     print(f"{NAME}: {len(obj.data.polygons)} граней, {len(obj.data.vertices)} вершин, "
@@ -164,14 +165,10 @@ def main():
         axis_up="Y",
         bake_space_transform=True,
         mesh_smooth_type="FACE",
-        path_mode="COPY",
-        embed_textures=True,
+        path_mode="STRIP",  # встроенную текстуру Unity не подхватывает, она лежит отдельным PNG
         bake_anim=False,
         add_leaf_bones=False,
     )
-    # Текстура уже внутри FBX; отдельный PNG в Assets дал бы дубликат в Unity
-    os.remove(os.path.join(OUT_DIR, NAME + ".png"))
-
     if preview:
         render_preview(obj, os.path.abspath(preview), back="--back" in argv)
 

@@ -52,6 +52,14 @@ namespace CustomItems
                 info.compatibleNouns = infoNouns.ToArray();
         }
 
+        // Рожок и горн (NoisemakerProp): колонка рядом может сказать Events/Horn. ItemActivate идёт у всех, решает хост
+        [HarmonyPatch(typeof(NoisemakerProp), nameof(NoisemakerProp.ItemActivate))]
+        [HarmonyPostfix]
+        private static void Horn(NoisemakerProp __instance)
+        {
+            YandexStationItem.OnHorn(__instance.transform.position);
+        }
+
         private static bool IsStation(Terminal terminal, TerminalNode node)
         {
             if (node == null || node.buyItemIndex < 0 || node.buyItemIndex >= terminal.buyableItemsList.Length)

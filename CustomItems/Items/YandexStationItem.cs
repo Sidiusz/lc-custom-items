@@ -92,7 +92,20 @@ namespace CustomItems.Items
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown", TopicBored = "Game/Bored",
             TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear",
             TopicWhoAreYou = "WhoAreYou", TopicShush = "Shush", TopicSorry = "Sorry", TopicInsult = "Insult",
-            TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel";
+            TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel",
+            TopicFavoriteColor = "FavoriteColor";
+
+        /// <summary>Рядом дунули в рожок или горн (вызывает патч плагина) — Events/Horn.</summary>
+        public static void OnHorn(Vector3 position)
+        {
+            foreach (var s in All)
+            {
+                if (s != null && Vector3.Distance(s.transform.position, position) < EventRadius)
+                    s.hornHeard = true;
+            }
+        }
+
+        private bool hornHeard;
         /// <summary>Столько секунд после «замолчи» колонка не болтает сама.</summary>
         public static float ShushSeconds = 60f;
 
@@ -448,6 +461,16 @@ namespace CustomItems.Items
                 station.Say(station.BatteryTopic() ?? TopicUnknown);
             else if (topic == TopicColor)
                 station.Say(station.ColorTopic() ?? TopicUnknown);
+            else if (topic == TopicFavoriteColor)
+            {
+                // Любимый цвет — любой из записанных: FavoriteColor и все Color/*
+                var sets = station.phraseSets?.Where(x => x != null && x.clips.Length > 0
+                    && (x.name == TopicFavoriteColor || x.name.StartsWith("Color/"))).ToList();
+                if (sets != null && sets.Count > 0)
+                    station.SayFrom(sets[Random.Range(0, sets.Count)]);
+                else
+                    station.Say(TopicUnknown);
+            }
             else if (topic == TopicRefuse)
             {
                 // «Не хочу» вперемешку с «Хочу!»
@@ -575,8 +598,12 @@ namespace CustomItems.Items
                 return "Navigation";
             if (Has("скоро", "долго"))
                 return "Almost";
+            if (Has("любим") && Has("цвет"))
+                return TopicFavoriteColor;
             if (Has("цвет"))
                 return TopicColor;
+            if (Has("выгляжу", "костюм", "мне идет"))
+                return EventsFolder + "Suit";
             if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай", "хочешь", "будешь"))
                 return TopicRefuse;
             if (Has("хорошо", "ладно", "понятно", "ясно", "окей") || Regex.IsMatch(command, @"^(я|мы|мне|нам)\s"))
@@ -1198,6 +1225,12 @@ namespace CustomItems.Items
             if (round.allPlayersDead && !wasAllDead && !round.inShipPhase)
                 Reason("AllDead");
             wasAllDead = round.allPlayersDead;
+
+            if (hornHeard)
+            {
+                hornHeard = false;
+                Reason("Horn");
+            }
 
             var dead = 0;
             foreach (var p in round.allPlayerScripts)

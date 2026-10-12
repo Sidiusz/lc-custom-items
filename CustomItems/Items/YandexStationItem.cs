@@ -964,12 +964,23 @@ namespace CustomItems.Items
             if (tod == null || !tod.currentDayTimeStarted)
                 return false;
             var minutes = (int)(tod.normalizedTimeOfDay * (60f * tod.numberOfHours)) + 360;
-            // Целой фразой на этот час: Time/15 — «Три часа дня»
-            var hourTopic = TopicTime + "/" + minutes / 60 % 24;
-            if (FindSet(hourTopic) != null)
+            // Словами, а не цифрами: Time/15 — «Три часа дня», Time/Almost/7 — «Почти семь».
+            // Больше получаса — уже следующий час («почти семь»); нет записи на час — ближайший
+            // записанный в пределах часа; цифры — только если ничего не нашлось
+            var hour = minutes / 60 % 24;
+            var next = (hour + 1) % 24;
+            var prev = (hour + 23) % 24;
+            var late = minutes % 60 > 30;
+            var order = late
+                ? new[] { TopicTime + "/Almost/" + next, TopicTime + "/" + next, TopicTime + "/" + hour, TopicTime + "/Almost/" + hour }
+                : new[] { TopicTime + "/" + hour, TopicTime + "/Almost/" + hour, TopicTime + "/" + prev, TopicTime + "/Almost/" + next, TopicTime + "/" + next };
+            foreach (var hourTopic in order)
             {
-                Say(hourTopic);
-                return true;
+                if (FindSet(hourTopic) != null)
+                {
+                    Say(hourTopic);
+                    return true;
+                }
             }
             var topics = new List<string> { TopicTimeIntro };
             if (!AddNumber(topics, minutes / 60 % 24) || !AddNumber(topics, minutes % 60))

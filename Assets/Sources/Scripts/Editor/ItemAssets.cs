@@ -65,6 +65,7 @@ public static class ItemAssets
             VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
             ToolTips = new[] { "Drink : [LMB]" },
             SaveItemVariable = true, // сохранять оставшиеся глотки
+            Clips = new[] { ("drinkClip", Art + "/Audio/Jagermeister/JagermeisterDrink.wav") },
             Customize = SetupJagermeister,
         },
         new Spec
@@ -421,12 +422,21 @@ public static class ItemAssets
         var glass = AssetDatabase.LoadAssetAtPath<Material>(JagerGlass);
         if (glass == null)
         {
-            glass = NewLitMaterial(JagerGlass, Color.white, 0.85f);
+            glass = NewLitMaterial(JagerGlass, Color.white, 0.5f);
             glass.SetTexture("_BaseColorMap", AssetDatabase.LoadAssetAtPath<Texture2D>(JagerTexture));
-            MakeTransparent(glass);
         }
         var liquid = AssetDatabase.LoadAssetAtPath<Material>(JagerLiquid)
-                     ?? NewLitMaterial(JagerLiquid, new Color(0.22f, 0.08f, 0.03f), 0.7f);
+                     ?? NewLitMaterial(JagerLiquid, new Color(0.22f, 0.08f, 0.03f), 0.4f);
+
+        // Настройки применяются и к уже созданным материалам (при Rebuild Item Prefabs).
+        // Гладкое стекло с Preserve Specular Lighting давало в игре яркий оранжевый блик
+        // поверх всей бутылки: отражение не гасится альфой. Делаем стекло матовее и
+        // гасим блик вместе с прозрачностью.
+        glass.SetFloat("_Smoothness", 0.5f);
+        glass.SetFloat("_EnableBlendModePreserveSpecularLighting", 0f);
+        MakeTransparent(glass);
+        liquid.SetFloat("_Smoothness", 0.4f);
+        EditorUtility.SetDirty(liquid);
 
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
             r.sharedMaterial = r.name.StartsWith("Liquid") ? liquid : glass;

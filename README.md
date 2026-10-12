@@ -5,9 +5,15 @@
 
 ## Структура
 
+Репозиторий одновременно Unity-проект (HDRP, Unity 2022.3.62f2) и C#-проект мода.
+
 ```
 lc-custom-items/
-├── CustomItems/
+├── Assets/                       Unity: модели, звуки, иконки предметов
+│   └── Editor/BuildBundles.cs    меню Lethal Company → Build AssetBundles
+├── Packages/, ProjectSettings/   Unity
+├── Bundles/                      собранный AssetBundle `customitems` (коммитится)
+├── CustomItems/                  C#-проект мода (вне Assets/, Unity его не видит)
 │   ├── CustomItems.csproj        ссылки на BepInEx, LethalLib, библиотеки игры (NuGet)
 │   ├── Plugin.cs                 список предметов и их регистрация
 │   └── Items/
@@ -15,38 +21,34 @@ lc-custom-items/
 │       ├── ItemFactory.cs        собирает из голой модели сетевой предмет
 │       ├── CustomGrabbable.cs    база: анимации/звуки из ванили, шейдеры HDRP
 │       └── RubberDuckItem.cs     пример поведения
-├── UnityEditor/BuildBundles.cs   скрипт сборки бандла для пустого Unity-проекта
-├── Bundles/                      собранный AssetBundle `customitems` (коммитится)
-├── Unity/                        Unity-проект с моделями (создаёшь сам, мусор Unity игнорируется)
 └── thunderstore/manifest.json    для публикации на Thunderstore
 ```
 
 ## 1. Что нужно установить
 
 - .NET SDK 8 (или новее) — для `dotnet build`.
-- Unity **2022.3.x** (лучше 2022.3.62f1, как в игре). Шаблон Lethal Company не нужен.
+- Unity 2022.3.62f2 (как у игры). Шаблон Lethal Company не нужен.
 - r2modman или Gale с профилем Lethal Company, где стоят **BepInExPack** и **LethalLib**.
 
 ## 2. Unity: только модель и звуки
 
 Всё, что обычно настраивают в Unity (ассет Item, NetworkObject, коллайдер, Rigidbody, скан-нода, скрипт), мод создаёт сам в коде. В Unity нужен только бандл с ассетами.
 
-1. Создайте пустой 3D-проект в папке `Unity/` этого репозитория (шаблон "3D (HDRP)" ещё лучше, см. «Если модель розовая»). Если Unity Hub ругается, что папка не пустая, создайте проект рядом и перенесите его содержимое в `Unity/`.
-2. Скопируйте `UnityEditor/BuildBundles.cs` в `Assets/Editor/`.
-3. Импортируйте модель (fbx/obj/blend), сделайте из неё префаб `RubberDuck`. Масштаб: 1 единица = 1 метр, уточка ~0.2–0.3. Центр модели примерно в её середине.
-4. Импортируйте звук писка и назовите его `Squeak`.
-5. По желанию: картинку-иконку (Texture Type = Sprite) для инвентаря. Без неё берётся иконка ванильного предмета.
-6. Выделите префаб и звук, внизу инспектора в поле AssetBundle впишите `customitems`.
-7. Меню **Lethal Company → Build AssetBundles**. Если проект лежит в `Unity/`, бандл сразу окажется в `Bundles/customitems`. Если проект в другом месте, скопируйте `AssetBundles/customitems` в `Bundles/` вручную.
+1. Откройте корень репозитория в Unity Hub (Add → Add project from disk).
+2. Импортируйте модель (fbx/obj/blend), сделайте из неё префаб `RubberDuck`. Масштаб: 1 единица = 1 метр, уточка ~0.2–0.3. Центр модели примерно в её середине. Материалы на шейдере HDRP/Lit, как в игре.
+3. Импортируйте звук писка и назовите его `Squeak`.
+4. По желанию: картинку-иконку (Texture Type = Sprite) для инвентаря. Без неё берётся иконка ванильного предмета.
+5. Выделите префаб и звук, внизу инспектора в поле AssetBundle впишите `customitems`.
+6. Меню **Lethal Company → Build AssetBundles**. Бандл окажется в `Bundles/customitems`, откуда его заберёт сборка мода.
 
 Код ищет ассеты по имени (`ModelAsset`, `Squeak` в `Plugin.cs`), так что имена в Unity и в коде должны совпадать.
 
-**Если модель розовая.** Код при появлении предмета переводит материалы на игровой шейдер HDRP/Lit с той же текстурой и цветом. Если это не сработает (розовая модель или без текстуры), сделайте Unity-проект на шаблоне "3D (HDRP)" и материалы на шейдере HDRP/Lit, тогда конвертация не понадобится.
+Если материал всё-таки на другом шейдере (например, Standard из импортированной модели), код при появлении предмета переведёт его на HDRP/Lit с той же текстурой и цветом.
 
 ## 3. Сборка
 
 ```bash
-cd lc-custom-items/CustomItems
+cd CustomItems
 dotnet build -c Release
 ```
 

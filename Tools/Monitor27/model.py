@@ -1,5 +1,6 @@
 # Генерирует низкополигональный монитор 27" для предмета Monitor27:
-# меш, UV-атлас, текстуру 512x512 и FBX с встроенной текстурой в Assets/Sources/Art/Models/Monitor27/.
+# меш, UV-атлас и FBX в Assets/Sources/Art/Models/Monitor27/, текстуру 512x512
+# в Assets/Sources/Art/Textures/Monitor27/. Материал с текстурой собирает Editor/ItemAssets.cs.
 #
 # Запуск из корня репозитория:
 #   blender -b --factory-startup -P Tools/Monitor27/model.py
@@ -18,6 +19,7 @@ from mathutils import Vector
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Models", "Monitor27")
+TEX_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Textures", "Monitor27")
 NAME = "Monitor27"
 TEX = 512
 
@@ -162,7 +164,7 @@ def build_texture():
     pix[..., :3] = srgb[::-1]                    # Blender хранит строки снизу вверх
     image = bpy.data.images.new(NAME, TEX, TEX, alpha=False)
     image.pixels.foreach_set(pix.ravel())
-    image.filepath_raw = os.path.join(OUT_DIR, NAME + ".png")
+    image.filepath_raw = os.path.join(TEX_DIR, NAME + ".png")
     image.file_format = "PNG"
     image.save()
     image.pack()
@@ -337,6 +339,7 @@ def main():
     preview = argv[argv.index("--preview") + 1] if "--preview" in argv else None
 
     os.makedirs(OUT_DIR, exist_ok=True)
+    os.makedirs(TEX_DIR, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
     image = build_texture()
@@ -359,13 +362,10 @@ def main():
         axis_up="Y",
         bake_space_transform=True,
         mesh_smooth_type="FACE",
-        path_mode="COPY",
-        embed_textures=True,
+        path_mode="STRIP",
         bake_anim=False,
         add_leaf_bones=False,
     )
-    # Текстура уже внутри FBX; отдельный PNG в Assets дал бы дубликат в Unity
-    os.remove(os.path.join(OUT_DIR, NAME + ".png"))
 
     if preview:
         render_preview(obj, os.path.abspath(preview), back="--back" in argv)

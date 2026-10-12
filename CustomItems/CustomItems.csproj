@@ -52,26 +52,27 @@
   </ItemGroup>
 
   <!-- Vosk для Яндекс Станции: vosk/ рядом с DLL мода (нативные библиотеки Windows x64 и русская модель).
-       Модель (~45 МБ) скачивается один раз в obj/ при первой сборке. -->
-  <PropertyGroup>
-    <VoskModelName>vosk-model-small-ru-0.22</VoskModelName>
-    <VoskModelCache>$(MSBuildProjectDirectory)/obj/vosk</VoskModelCache>
-  </PropertyGroup>
-
-  <Target Name="FetchVoskModel" BeforeTargets="Build" Condition="!Exists('$(VoskModelCache)/$(VoskModelName)/am')">
-    <DownloadFile SourceUrl="https://alphacephei.com/vosk/models/$(VoskModelName).zip" DestinationFolder="$(VoskModelCache)" />
-    <Unzip SourceFiles="$(VoskModelCache)/$(VoskModelName).zip" DestinationFolder="$(VoskModelCache)" />
-    <Delete Files="$(VoskModelCache)/$(VoskModelName).zip" />
-  </Target>
+       Модель своя, в Vosk/model-ru (собирает Tools/YandexStation/model/build.sh): акустика vosk-model-ru-0.42
+       и граф со словами Алисы. final.mdl лежит кусками до 100 МБ (лимит GitHub), сборка склеивает его. -->
+  <ItemGroup>
+    <None Remove="Vosk/**" />
+  </ItemGroup>
 
   <Target Name="CopyVosk" AfterTargets="Build">
+    <PropertyGroup>
+      <VoskModelOut>$(TargetDir)vosk/model-ru</VoskModelOut>
+    </PropertyGroup>
     <ItemGroup>
       <VoskNative Include="$(PkgVosk)/build/lib/win-x64/*.dll" />
-      <VoskModel Include="$(VoskModelCache)/$(VoskModelName)/**/*" />
+      <VoskModel Include="Vosk/model-ru/**/*" Exclude="Vosk/model-ru/am/final.mdl.part*" />
+      <VoskModelPart Include="Vosk/model-ru/am/final.mdl.part*" />
     </ItemGroup>
     <Copy SourceFiles="$(PkgVosk)/lib/netstandard2.0/Vosk.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(VoskNative)" DestinationFolder="$(TargetDir)vosk" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(VoskModel)" DestinationFolder="$(TargetDir)vosk/model-ru/%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(VoskModel)" DestinationFolder="$(VoskModelOut)/%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(VoskModelOut)/am" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="copy /b /y @(VoskModelPart->'&quot;%(FullPath)&quot;', '+') &quot;$(VoskModelOut)/am/final.mdl&quot; &gt;nul" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="cat @(VoskModelPart->'&quot;%(FullPath)&quot;', ' ') &gt; &quot;$(VoskModelOut)/am/final.mdl&quot;" />
   </Target>
 
   <Target Name="CopyToPluginDir" AfterTargets="CopyVosk" Condition="'$(PluginDir)' != ''">

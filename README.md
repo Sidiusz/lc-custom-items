@@ -100,6 +100,8 @@ lc-custom-items/
 
 «Какой заряд» — `Battery/0` … `Battery/100` (по 10%) или словами `Battery/Full`, `AlmostFull`, `MoreHalf`, `LessHalf`, `AlmostEmpty`. «Какого ты цвета» — `Color/Grey`, `Blue`, `Pink`, `Black` по корпусу, иначе ближайший (`White` для серой, `DarkBlue` для голубой). На «сделай», «хочешь» колонка вперемешку отвечает `Agree` («Хочу!») и `Refuse` («Не хочу»). При выключении и разряде звучит `Off` («Отключаюсь!») вперемешку с `Goodbye`. Событие `Events/LeftBehind` — все отошли от колонки.
 
+«Алиса, кто я?» — роль друга из `Roles/<Папка>` по той же таблице ников (без папки — имя из `Names`). «Кто тут», «кто здесь», «кто ты» — `ItsMe` («Это я!»), «кто это», «кто виноват» — `ItsYou` («Это вы!»). Розовая колонка на «какого ты цвета» говорит `Color/Pink`, иначе `Color/Purple`.
+
 Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `AllowInterrupt`, `JammingWeathers`, `UseGrammar`, `ExtraPhrases`.
 
 Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас там `Alice*.wav`, озвученные Silero TTS (женский голос xenia) из списка `Tools/YandexStation/phrases.txt`: поправьте текст и запустите `python Tools/YandexStation/phrases.py` (нужны torch и ffmpeg), он перезапишет только `Alice*.wav`, свои записи не тронет. Другой голос: `python phrases.py baya` или `kseniya`.

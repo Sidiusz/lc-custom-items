@@ -92,7 +92,7 @@ namespace CustomItems.Items
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown";
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
-        public const string TopicNames = "Names/", TopicMyName = "#myname", TopicBattery = "#battery",
+        public const string TopicNames = "Names/", TopicMyName = "#myname", TopicMyRole = "#myrole", TopicRoles = "Roles/", TopicBattery = "#battery",
             TopicColor = "#color", TopicAgree = "Agree", TopicRefuse = "Refuse", TopicOff = "Off";
 
         // Записи цветов по порядку bodyColors (серая, голубая, розовая, чёрная): своя папка, иначе ближайшая
@@ -100,7 +100,7 @@ namespace CustomItems.Items
         {
             new[] { "Color/Grey", "Color/White" },
             new[] { "Color/Blue", "Color/DarkBlue" },
-            new[] { "Color/Pink" },
+            new[] { "Color/Pink", "Color/Purple" },
             new[] { "Color/Black" },
         };
 
@@ -393,12 +393,15 @@ namespace CustomItems.Items
                 station.Say(TopicGameAsk);
                 station.gameAnswerUntil = station.talkUntil + GameAnswerSeconds;
             }
-            else if (topic == TopicMyName)
+            else if (topic == TopicMyName || topic == TopicMyRole)
             {
-                // Спрашивает локальный игрок: распознавание идёт у него
+                // Спрашивает локальный игрок: распознавание идёт у него. «Кто я» — роль, без неё имя
                 var me = GameNetworkManager.Instance?.localPlayerController;
                 var folder = me != null ? NameFolder(me.playerUsername) : null;
-                station.Say(folder != null && station.FindSet(TopicNames + folder) != null ? TopicNames + folder : TopicNames + "Unknown");
+                if (folder != null && topic == TopicMyRole && station.FindSet(TopicRoles + folder) != null)
+                    station.Say(TopicRoles + folder);
+                else
+                    station.Say(folder != null && station.FindSet(TopicNames + folder) != null ? TopicNames + folder : TopicNames + "Unknown");
             }
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
@@ -480,8 +483,14 @@ namespace CustomItems.Items
             }
             if (Has("врем", "который час", "сколько час"))
                 return TopicTime;
-            if (Has("как меня зовут", "кто я", "мое имя", "знаешь меня"))
+            if (Has("кто я", "чем я занимаюсь", "моя роль", "кем я работаю"))
+                return TopicMyRole;
+            if (Has("как меня зовут", "мое имя", "знаешь меня"))
                 return TopicMyName;
+            if (Has("кто тут", "кто здесь", "кто там", "кто говорит", "кто ты", "ты кто"))
+                return "ItsMe";
+            if (Has("кто это", "кто виноват", "кто сделал"))
+                return "ItsYou";
             if (Has("сколько нас", "нас сколько", "сколько игроков"))
                 return TopicCount;
             if (Has("поиграем", "сыграем", "поиграть", "сыграть", "игру"))

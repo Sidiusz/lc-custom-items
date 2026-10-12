@@ -138,18 +138,21 @@ namespace CustomItems
             YandexStationItem.EventsEnabled = Config.Bind(events, "Enabled", true,
                 "Колонка сама изредка реагирует на то, что вокруг: монстр рядом, посадка, смерть игрока, ночь, мало заряда. " +
                 "Фразы в папках Phrases/Events/<Тема>; тема без фраз молчит").Value;
-            YandexStationItem.EventChance = Config.Bind(events, "Chance", 0.35f,
-                "Шанс (0..1), что колонка что-то скажет на повод").Value;
-            YandexStationItem.EventCooldown = Config.Bind(events, "Cooldown", 45f,
-                "Сколько секунд колонка молчит после реплики на событие").Value;
-            YandexStationItem.EventTopicCooldown = Config.Bind(events, "TopicCooldown", 180f,
-                "Одна и та же тема (например, та же собака) не чаще, чем раз в столько секунд").Value;
+            YandexStationItem.EventChance = Rarer(Config.Bind(events, "Chance", 0.2f,
+                "Шанс (0..1), что колонка что-то скажет на повод"), 0.35f);
+            YandexStationItem.EventCooldown = Rarer(Config.Bind(events, "Cooldown", 90f,
+                "Сколько секунд колонка молчит после реплики на событие"), 45f);
+            YandexStationItem.EventTopicCooldown = Rarer(Config.Bind(events, "TopicCooldown", 600f,
+                "Одна и та же тема (например, та же собака) не чаще, чем раз в столько секунд"), 180f);
             YandexStationItem.EventRadius = Config.Bind(events, "EnemyRadius", 15f,
                 "С какого расстояния (м) колонка замечает монстра").Value;
             YandexStationItem.EventNoiseRange = Config.Bind(events, "NoiseRange", 25f,
                 "Как далеко монстры слышат реплику на событие (м). Слепая собака прибежит на голос").Value;
-            YandexStationItem.IdleSeconds = Config.Bind(events, "IdleSeconds", 120f,
-                "Примерно раз во столько секунд колонка может поболтать сама (тема Idle), если рядом игрок. 0 — никогда").Value;
+            YandexStationItem.IdleSeconds = Rarer(Config.Bind(events, "IdleSeconds", 240f,
+                "Примерно раз во столько секунд колонка может поболтать сама (тема Idle), если рядом игрок. 0 — никогда"), 120f);
+            YandexStationItem.WhimChance = Config.Bind(section, "WhimChance", 0.15f,
+                "Шанс (0..1), что колонка капризничает вместо ответа: «Нет связи с сервером» (Error), «Не хочу» (Refuse), " +
+                "«Вы что-то бормочете?» (Mumble) или «Не поняла» (Unknown). На солнечной вспышке ошибка всегда").Value;
 
             var voice = Config.Bind(section, "VoiceCommands", true,
                 "Отвечать на голос из голосового чата («Алиса, какая погода?»). Распознаётся офлайн и только когда " +
@@ -214,6 +217,14 @@ namespace CustomItems
                 Log.LogWarning("Алиса: не прочитала " + own + ": " + e.Message);
             }
             Log.LogInfo($"Алиса: примеров вопросов {AliceIntents.Count}");
+        }
+
+        // События стали реже: старые значения по умолчанию в уже созданном конфиге меняем на новые
+        private static float Rarer(BepInEx.Configuration.ConfigEntry<float> entry, float oldDefault)
+        {
+            if (Mathf.Approximately(entry.Value, oldDefault))
+                entry.Value = (float)entry.DefaultValue;
+            return entry.Value;
         }
 
         private void SetupToyGun()

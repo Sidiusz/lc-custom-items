@@ -27,3 +27,8 @@ public class WalkieTalkie : GrabbableObject { }
 public class TimeOfDay : NetworkBehaviour { }
 public class SelectableLevel : ScriptableObject { }
 public enum LevelWeatherType { None = -1 }
+public class Battery { }
+public class BoomboxItem : GrabbableObject { }
+public class DeadBodyInfo : MonoBehaviour { }
+public class EnemyType : ScriptableObject { }
+public class Terminal : NetworkBehaviour { }

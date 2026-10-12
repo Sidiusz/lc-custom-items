@@ -710,6 +710,12 @@ namespace CustomItems.Items
                 var refuse = LaunchCheck != null ? LaunchCheck() : new[] { TopicRefuse };
                 if (refuse != null && refuse.Length > 0)
                     station.SayFirst(refuse);
+                else if (Hurried(known) && Launch != null)
+                {
+                    // «Взлетай, взлетай, взлетай!» — без «Вы уверены?»: «Поняла, поняла, не кричите, взлетаем»
+                    var done = Launch();
+                    station.SayFirst(done.Length > 0 && done[0] == "Launch/Takeoff" ? new[] { "Launch/Hurry" }.Concat(done).ToArray() : done);
+                }
                 else
                     station.Ask(AskLaunch, null, LaunchConfirm);
             }

@@ -51,7 +51,7 @@ namespace CustomItems.Items
             ("Events/Shot", "Events/Panic/Спокойно! Без паники"), ("Events/Mine/Pressed", "Events/Panic/Мы погибнем мы все умрём"),
             ("Loot/High", "Events/ManyItems/Ого, сколько всего"), ("Loot/Low", "Events/Junk/Ну и хлам тут у вас"),
             ("WhoDied/Intro", "Events/PlayerDied/Кто-то умер"), ("Stopping", "Ok/Сделано"),
-            ("Shout", "Launch/Takeoff/Поняла, поняла, не кричите, взлетаем"),
+            
             ("Events/Company", "QuotaNotDone/Не забудьте про квоту"), ("Events/Teleported", "Events/Back/Вот и вы"),
             ("Events/Teleported", "Greeting/Вы вернулись"), ("Nav/Arrived/Ship", "Events/Back/Вот и вы"),
             ("Scan/VeryMany", "Events/ManyItems/Ого, сколько всего"), ("Events/Inside", "Events/Idle/Как то тихо стало"),

@@ -104,6 +104,15 @@ namespace CustomItems.Items
             Ask(AskLost, null, FindSet("Nav/Lost") != null ? "Nav/Lost" : mine);
         }
 
+        // Команду на взлёт повторили в одной фразе: «взлетай взлетай», «погнали погнали»
+        private static readonly string[] LaunchStems = { "взлет", "взлёт", "погнал", "полетел", "поехал", "запуск", "запуст", "улета" };
+
+        private static bool Hurried(string command)
+        {
+            var words = (command ?? "").ToLowerInvariant().Split(new[] { ' ', ',', '!', '.' }, System.StringSplitOptions.RemoveEmptyEntries);
+            return words.Count(w => LaunchStems.Any(w.StartsWith)) >= 2;
+        }
+
         // ---- Встреча на корабле ----
 
         /// <summary>Сколько секунд надо пробыть вне корабля, чтобы на возвращение колонка сказала «Андрей! Вот и вы».</summary>

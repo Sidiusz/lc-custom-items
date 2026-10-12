@@ -3,7 +3,7 @@
 //                она и SidiuszCustomItems.Items.dll, кроме того, что в Unity уже есть.
 //                Assembly-CSharp.dll игры сюда НЕ кладётся: для DLL с этим именем Unity не создаёт
 //                скрипты, и Item/ScanNodeProperties в ассетах оказываются «missing script».
-//                Вместо неё нужные типы игры объявлены заглушками в Assets/Sources/GameStubs
+//                Вместо неё нужные типы игры объявлены заглушками в Assets/Sources/Scripts/GameStubs
 //                (компилируются в Assembly-CSharp проекта, а в игре находят настоящие классы);
 //   SidiuszCustomItems/ SidiuszCustomItems.Items.dll из CustomItems/bin после dotnet build (скрипты
 //                предметов и ItemRegistry; BepInEx и LethalLib ей не нужны).

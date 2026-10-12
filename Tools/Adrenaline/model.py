@@ -1,5 +1,6 @@
 """
-Генератор банки "Adrenaline Game Fuel" (синяя Energy Power): текстура, низкополигональная модель (FBX) и иконка.
+Генератор банки "Adrenaline Game Fuel" (синяя Energy Power): текстура и низкополигональная модель (FBX).
+Иконку инвентаря рисует Unity (Lethal Company → Render Item Icons) в Textures/Adrenaline/AdrenalineIcon.png.
 
 Запуск (обычный Python 3.13, Blender как модуль):
     pip install bpy pillow numpy
@@ -8,7 +9,6 @@
 Пишет в Assets/Sources/Art/:
     Textures/Adrenaline/AdrenalineCan.png       текстура 512x512 (этикетка + металл)
     Models/Adrenaline/AdrenalineCan.fbx         модель: Can (целая, центр в середине) и Crushed (мятая пустая)
-    Textures/Adrenaline/AdrenalineCanIcon.png   иконка для инвентаря 256x256
 """
 import math
 import os
@@ -22,7 +22,6 @@ MODEL_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Models", "Adrenaline
 TEX_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Textures", "Adrenaline")
 TEX = os.path.join(TEX_DIR, "AdrenalineCan.png")
 FBX = os.path.join(MODEL_DIR, "AdrenalineCan.fbx")
-ICON = os.path.join(TEX_DIR, "AdrenalineCanIcon.png")
 
 SIZE = 512
 LABEL_V0 = 0.25  # этикетка занимает v 0.25..1, ниже служебная полоса металла
@@ -370,41 +369,9 @@ def make_crushed(can):
     return obj
 
 
-def render_icon(obj):
-    """Белый силуэт банки на прозрачном фоне, как у ванильных иконок."""
-    import bpy
-
-    scene = bpy.context.scene
-    scene.render.engine = "BLENDER_WORKBENCH"
-    scene.display.shading.light = "STUDIO"
-    scene.display.shading.color_type = "SINGLE"
-    scene.display.shading.single_color = (0.92, 0.92, 0.92)
-    scene.display.shading.show_object_outline = True
-    scene.display.shading.object_outline_color = (0.35, 0.35, 0.35)
-    scene.render.film_transparent = True
-    scene.render.resolution_x = scene.render.resolution_y = 256
-    scene.render.image_settings.file_format = "PNG"
-    scene.render.image_settings.color_mode = "RGBA"
-    scene.view_settings.view_transform = "Standard"
-
-    obj.rotation_euler = (0, math.radians(-20), math.radians(30))
-    cam_data = bpy.data.cameras.new("Cam")
-    cam_data.type = "ORTHO"
-    cam_data.ortho_scale = 0.21
-    cam = bpy.data.objects.new("Cam", cam_data)
-    scene.collection.objects.link(cam)
-    cam.location = (0.0, -1.0, 0.0)
-    cam.rotation_euler = (math.radians(90), 0, 0)
-    scene.camera = cam
-    scene.render.filepath = ICON
-    bpy.ops.render.render(write_still=True)
-    print(f"Иконка: {ICON}")
-
-
 if __name__ == "__main__":
     os.makedirs(MODEL_DIR, exist_ok=True)
     os.makedirs(TEX_DIR, exist_ok=True)
     make_texture()
     print(f"Текстура: {TEX}")
-    can = make_model()
-    render_icon(can)
+    make_model()

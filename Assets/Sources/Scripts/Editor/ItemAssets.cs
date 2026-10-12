@@ -79,7 +79,7 @@ public static class ItemAssets
             VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
             ToolTips = new[] { "Drink : [LMB]" },
             SaveItemVariable = true, // сохранять оставшиеся глотки
-            Icon = Art + "/Textures/Adrenaline/AdrenalineCanIcon.png",
+            Icon = Art + "/Textures/Adrenaline/AdrenalineIcon.png",
             Texture = Art + "/Textures/Adrenaline/AdrenalineCan.png",
             HiddenChildren = new[] { "Crushed" }, // мятую пустую банку показывает AdrenalineItem
         },
@@ -677,7 +677,7 @@ public static class ItemAssets
         if (missing.Length > 0 && Application.isBatchMode)
         {
             // MonoScript без класса (GetClass() == null) оживает после переимпорта своего .cs
-            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets/Sources/GameStubs" }))
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets/Sources/Scripts/GameStubs" }))
                 AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             missing = Missing();

@@ -1,0 +1,5 @@
+newmtl ToyGunPlastic
+Kd 1.000 1.000 1.000
+Ks 0.200 0.200 0.200
+Ns 40
+map_Kd ToyGunTexture.png

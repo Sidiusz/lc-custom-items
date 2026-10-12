@@ -48,6 +48,27 @@ namespace CustomItems
             if (duck != null)
                 duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
 
+            var toyGun = Register<ToyGunItem>(bundle, new CustomItemDef
+            {
+                Name = "Toy gun",
+                ModelAsset = "ToyGun",
+                TemplateItem = "Zap gun",
+                IsScrap = false,
+                DefaultRarity = 0,
+                DefaultInShop = true,
+                DefaultPrice = 30,
+                Weight = 1.03f,
+                ToolTips = new[] { "Shoot : [LMB]" },
+                // На полу лежит на боку. Положение в руке подгоняется в игре (README, раздел 5)
+                RestingRotation = new Vector3(0f, 0f, 90f),
+            });
+            if (toyGun != null)
+            {
+                toyGun.shotClip = bundle.LoadAsset<AudioClip>("ToyGunShot");
+                ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
+                    "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
+            }
+
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
 

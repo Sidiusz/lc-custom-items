@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -86,6 +87,11 @@ namespace CustomItems.Items
         /// <summary>Все колонки в мире: по ним плагин решает, слушать ли голос.</summary>
         public static readonly List<YandexStationItem> All = new List<YandexStationItem>();
 
+        public const string TopicGoodbye = "Goodbye", TopicRepeat = "Repeat", TopicCount = "#count",
+            TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro";
+        /// <summary>Тот же вопрос в течение стольких секунд — колонка отвечает фразой из Repeat.</summary>
+        public static float RepeatSeconds = 60f;
+
         public const string TopicRandom = "Random", TopicUnknown = "Unknown", TopicError = "Error",
             TopicTime = "Time", TopicStop = "#stop", SoundListen = "#listen", SoundTimeout = "#timeout";
 
@@ -140,6 +146,7 @@ namespace CustomItems.Items
         private bool shownPocketed;
 
         private bool isOn;
+        private int goodbyes;
         private int colorIndex = -1; // -1: ещё не знаем (клиент ждёт хоста)
         private float talkUntil;
         private bool clockWhileTalking;
@@ -210,7 +217,16 @@ namespace CustomItems.Items
             if (!on && audioSource != null)
             {
                 audioSource.Stop();
+                queued.Clear();
                 talkUntil = 0f;
+                // Выключают — прощается. Номер по счётчику выключений, чтобы у всех одна фраза
+                var bye = FindSet(TopicGoodbye);
+                if (bye != null)
+                {
+                    audioSource.clip = bye.clips[goodbyes++ % bye.clips.Length];
+                    audioSource.Play();
+                    return;
+                }
             }
             PlaySound(on ? turnOnClip : turnOffClip);
         }
@@ -297,8 +313,28 @@ namespace CustomItems.Items
                 topic = station.CustomTopic(known) ?? topic;
             if (station.IsJammed && topic != TopicStop)
                 topic = TopicError;
-            station.Say(topic);
+
+            // Тот же вопрос второй раз за минуту: «Я уже отвечала»
+            if (topic != TopicStop && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+                && station.FindSet(TopicRepeat) != null)
+            {
+                station.lastAskedAt = Time.time;
+                station.Say(TopicRepeat);
+                return;
+            }
+            station.lastAsked = topic;
+            station.lastAskedAt = Time.time;
+
+            if (topic == TopicCount)
+                station.SayCount(PlayersNear(station, 15f));
+            else if (topic == TopicTime && station.SayTime())
+                return;
+            else
+                station.Say(topic);
         }
+
+        private string lastAsked;
+        private float lastAskedAt;
 
         /// <summary>Есть ли рядом с локальным игроком включённая колонка (тогда плагин слушает голос).</summary>
         public static bool AnyNearLocalPlayer() => Nearest(HearingRadius) != null;
@@ -358,6 +394,10 @@ namespace CustomItems.Items
             }
             if (Has("врем", "который час", "сколько час"))
                 return TopicTime;
+            if (Has("сколько нас", "нас сколько", "сколько игроков"))
+                return TopicCount;
+            if (Has("до свидания", "до встречи", "прощай", "увидимся") || Regex.IsMatch(command, @"(^|\s)пока(\s|$)"))
+                return TopicGoodbye;
             if (Has("привет", "здравств", "хай", "добр"))
                 return "Greeting";
             if (Has("шутк", "пошути", "анекдот", "рассмеши"))
@@ -457,6 +497,97 @@ namespace CustomItems.Items
             SendSpeak(set.name, index);
         }
 
+        // Фраза из кусочков: «сейчас» + «один» «четыре» + «три» «пять». Уходит одной строкой
+        // «#seq» с парами тема/номер, у всех играет одинаково.
+        private const string SeqPrefix = "#seq\n";
+
+        private void SaySequence(List<string> topics)
+        {
+            var parts = new List<string>();
+            foreach (var t in topics)
+            {
+                var set = FindSet(t);
+                if (set != null)
+                    parts.Add(set.name + "\t" + Random.Range(0, set.clips.Length));
+            }
+            if (parts.Count == 0)
+                return;
+            askedLocally = true;
+            var topic = SeqPrefix + string.Join("\n", parts);
+            Speak(topic, 0);
+            SendSpeak(topic, 0);
+        }
+
+        /// <summary>Число словами из папок Numbers/0 … Numbers/10; больше десяти — по цифрам.</summary>
+        private bool AddNumber(List<string> topics, int n)
+        {
+            if (n < 0)
+                return false;
+            if (FindSet(TopicNumbers + n) != null)
+            {
+                topics.Add(TopicNumbers + n);
+                return true;
+            }
+            var digits = n.ToString();
+            if (digits.Length == 1 || digits.Any(d => FindSet(TopicNumbers + d) == null))
+                return false;
+            topics.AddRange(digits.Select(d => TopicNumbers + d));
+            return true;
+        }
+
+        /// <summary>«Который час»: время с экрана числами. false — чисел нет, ответит фраза из Time.</summary>
+        private bool SayTime()
+        {
+            var tod = TimeOfDay.Instance;
+            if (tod == null || !tod.currentDayTimeStarted)
+                return false;
+            var minutes = (int)(tod.normalizedTimeOfDay * (60f * tod.numberOfHours)) + 360;
+            var topics = new List<string> { TopicTimeIntro };
+            if (!AddNumber(topics, minutes / 60 % 24) || !AddNumber(topics, minutes % 60))
+                return false;
+            SaySequence(topics);
+            return true;
+        }
+
+        /// <summary>«Сколько нас»: Count/1, Count/2, Count/3, Count/Many, иначе число.</summary>
+        private void SayCount(int players)
+        {
+            var topic = CountTopic(players);
+            if (topic != null)
+            {
+                Say(topic);
+                return;
+            }
+            var topics = new List<string>();
+            if (AddNumber(topics, players))
+                SaySequence(topics);
+            else
+                Say(TopicUnknown);
+        }
+
+        private string CountTopic(int players)
+        {
+            var exact = "Count/" + players;
+            if (FindSet(exact) != null)
+                return exact;
+            return players >= 4 && FindSet("Count/Many") != null ? "Count/Many" : null;
+        }
+
+        private static int PlayersNear(YandexStationItem station, float radius)
+        {
+            var round = StartOfRound.Instance;
+            if (round == null)
+                return 0;
+            var count = 0;
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p != null && p.isPlayerControlled && !p.isPlayerDead
+                    && Vector3.Distance(p.transform.position, station.transform.position) < radius)
+                    count++;
+            }
+            return count;
+        }
+
         private PhraseSet FindSet(string topic)
         {
             if (phraseSets == null)
@@ -470,6 +601,24 @@ namespace CustomItems.Items
             return null;
         }
 
+        private readonly Queue<AudioClip> queued = new Queue<AudioClip>();
+
+        // Следующий кусочек фразы, как только доиграл предыдущий
+        private void PlayQueued()
+        {
+            if (queued.Count == 0 || audioSource == null || audioSource.isPlaying)
+                return;
+            if (!IsOn)
+            {
+                queued.Clear();
+                return;
+            }
+            var clip = queued.Dequeue();
+            audioSource.clip = clip;
+            audioSource.Play();
+            WalkieTalkie.TransmitOneShotAudio(audioSource, clip);
+        }
+
         private bool IsTalking => Time.time < talkUntil && audioSource != null && audioSource.isPlaying;
 
         private void Speak(string topic, int index)
@@ -479,6 +628,7 @@ namespace CustomItems.Items
             switch (topic)
             {
                 case TopicStop:
+                    queued.Clear();
                     audioSource.Stop();
                     talkUntil = 0f;
                     return;
@@ -492,21 +642,37 @@ namespace CustomItems.Items
                     return;
             }
 
-            var set = FindSet(topic);
-            if (set == null || index < 0 || index >= set.clips.Length || set.clips[index] == null)
+            queued.Clear();
+            if (topic.StartsWith(SeqPrefix))
+            {
+                foreach (var part in topic.Substring(SeqPrefix.Length).Split('\n'))
+                {
+                    var pair = part.Split('\t');
+                    var s = pair.Length == 2 ? FindSet(pair[0]) : null;
+                    if (s != null && int.TryParse(pair[1], out var i) && i >= 0 && i < s.clips.Length && s.clips[i] != null)
+                        queued.Enqueue(s.clips[i]);
+                }
+                if (queued.Count == 0)
+                    return;
+                topic = TopicNumbers;
+            }
+
+            var set = queued.Count > 0 ? null : FindSet(topic);
+            if (queued.Count == 0 && (set == null || index < 0 || index >= set.clips.Length || set.clips[index] == null))
                 return;
-            var clip = set.clips[index];
-            lastTopic = set.name;
+            var clip = queued.Count > 0 ? queued.Dequeue() : set.clips[index];
+            var setName = set != null ? set.name : TopicNumbers;
+            lastTopic = setName;
             lastIndex = index;
             listenUntil = 0f;
-            clockWhileTalking = set.name == TopicTime;
+            clockWhileTalking = setName == TopicTime || setName == TopicNumbers;
 
             // Ошибка (солнечная вспышка) — обычная фраза из папки Error, голосом Алисы
             audioSource.Stop();
             audioSource.clip = clip;
             audioSource.Play();
             WalkieTalkie.TransmitOneShotAudio(audioSource, clip);
-            talkUntil = Time.time + clip.length;
+            talkUntil = Time.time + clip.length + queued.Sum(c => c.length);
             nextExpression = 0f;
 
             // Шум слышат монстры; считаем его только у того, кто спросил, чтобы не дублировать
@@ -551,7 +717,13 @@ namespace CustomItems.Items
         private float noiseRange;
         private float nextEventCheck, eventFreeAt, nextIdle;
         private bool eventsReady, wasLanded, wasLeaving, wasHeld, wasNight, lowBatteryTold;
-        private int deadPlayers;
+        private int deadPlayers, playersNear, sipsSeen = -1, shipScrap = -1, credits = -1;
+        private bool wasLate, wasMusic, wasWalkie;
+        private float nextScan;
+        private readonly Dictionary<ulong, int> suits = new Dictionary<ulong, int>();
+        private static Terminal terminal;
+        /// <summary>Столько скрапа на корабле — «ой, сколько предметов».</summary>
+        public static int ManyItems = 20;
         private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
         private readonly List<string> reasons = new List<string>();
 
@@ -577,7 +749,7 @@ namespace CustomItems.Items
             {
                 if (topicFreeAt.TryGetValue(topic, out var free) && Time.time < free)
                     continue;
-                var set = FindSet(EventsFolder + topic);
+                var set = FindSet(topic);
                 if (set == null || Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
@@ -590,6 +762,8 @@ namespace CustomItems.Items
         }
 
         // Поводы появляются один раз, в момент перемены (сел корабль, подошёл монстр...)
+        private void Reason(string topic) => reasons.Add(EventsFolder + topic);
+
         private void CollectReasons()
         {
             var round = StartOfRound.Instance;
@@ -597,10 +771,10 @@ namespace CustomItems.Items
                 return;
 
             if (round.shipHasLanded && !wasLanded)
-                reasons.Add("Landed");
+                Reason("Landed");
             wasLanded = round.shipHasLanded;
             if (round.shipIsLeaving && !wasLeaving)
-                reasons.Add("Leaving");
+                Reason("Leaving");
             wasLeaving = round.shipIsLeaving;
 
             var dead = 0;
@@ -610,24 +784,24 @@ namespace CustomItems.Items
                     dead++;
             }
             if (dead > deadPlayers && !round.inShipPhase)
-                reasons.Add("PlayerDied");
+                Reason("PlayerDied");
             deadPlayers = dead;
 
             var tod = TimeOfDay.Instance;
             var night = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.75f;
             if (night && !wasNight)
-                reasons.Add("Night");
+                Reason("Night");
             wasNight = night;
 
             if (isHeld && !wasHeld)
-                reasons.Add("PickedUp");
+                Reason("PickedUp");
             wasHeld = isHeld;
 
             if (insertedBattery != null)
             {
                 if (insertedBattery.charge < 0.15f && !lowBatteryTold && IsOn)
                 {
-                    reasons.Add("LowBattery");
+                    Reason("LowBattery");
                     lowBatteryTold = true;
                 }
                 else if (insertedBattery.charge > 0.5f)
@@ -648,7 +822,7 @@ namespace CustomItems.Items
                     {
                         if (seenEnemies.Add(id))
                         {
-                            reasons.Add("Enemy/" + enemy.enemyType.enemyName);
+                            Reason("Enemy/" + enemy.enemyType.enemyName);
                             if (LoggedEnemies.Add(enemy.enemyType.enemyName))
                                 Debug.Log($"[Алиса] рядом монстр, папка фраз: Phrases/{EventsFolder}Enemy/{enemy.enemyType.enemyName}");
                         }
@@ -658,12 +832,92 @@ namespace CustomItems.Items
                 }
             }
 
+            var late = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.9f;
+            if (late && !wasLate)
+                Reason("LateDay");
+            wasLate = late;
+
+            // Сколько нас: компания рядом выросла
+            var near = PlayersNear(this, 8f);
+            if (near > playersNear && near > 0)
+            {
+                var count = CountTopic(near);
+                if (count != null)
+                    reasons.Add(count);
+            }
+            playersNear = near;
+
+            // Кто-то рядом отпил энергетик или Егермейстер
+            if (DrinkAnimation.Sips != sipsSeen)
+            {
+                if (sipsSeen >= 0 && Vector3.Distance(DrinkAnimation.LastSipAt, transform.position) < EventRadius)
+                    Reason("Drink");
+                sipsSeen = DrinkAnimation.Sips;
+            }
+
+            // Смена костюма у игрока рядом
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p == null || !p.isPlayerControlled)
+                    continue;
+                var id = p.playerClientId;
+                if (suits.TryGetValue(id, out var suit) && suit != p.currentSuitID
+                    && Vector3.Distance(p.transform.position, transform.position) < EventRadius)
+                    Reason("Suit");
+                suits[id] = p.currentSuitID;
+            }
+
+            // Дорогое — раз в несколько секунд: поиск объектов по сцене
+            if (Time.time > nextScan)
+            {
+                nextScan = Time.time + 5f;
+                ScanScene(round);
+            }
+
             if (IdleSeconds > 0f && Time.time > nextIdle)
             {
                 if (nextIdle > 0f && PlayerNear(this, 8f))
-                    reasons.Add("Idle");
+                    Reason("Idle");
                 nextIdle = Time.time + IdleSeconds * Random.Range(0.7f, 1.3f);
             }
+        }
+
+        private void ScanScene(StartOfRound round)
+        {
+            if (terminal == null)
+                terminal = FindObjectOfType<Terminal>();
+            if (terminal != null)
+            {
+                if (credits >= 0 && terminal.groupCredits > credits)
+                    Reason("Money");
+                credits = terminal.groupCredits;
+            }
+
+            var scrap = 0;
+            var music = false;
+            var walkie = false;
+            var pos = transform.position;
+            foreach (var item in FindObjectsOfType<GrabbableObject>())
+            {
+                if (item == null || item.itemProperties == null)
+                    continue;
+                if (item.isInShipRoom && item.itemProperties.isScrap && !item.isHeld)
+                    scrap++;
+                var close = Vector3.Distance(item.transform.position, pos) < EventRadius;
+                if (close && item is BoomboxItem boombox && boombox.isPlayingMusic)
+                    music = true;
+                if (close && item is WalkieTalkie && item.isBeingUsed && item.isHeld)
+                    walkie = true;
+            }
+            if (shipScrap >= 0 && scrap > shipScrap && round.shipHasLanded)
+                Reason(scrap >= ManyItems && shipScrap < ManyItems ? "ManyItems" : "Work");
+            shipScrap = scrap;
+            if (music && !wasMusic)
+                Reason("Music");
+            wasMusic = music;
+            if (walkie && !wasWalkie)
+                Reason("Walkie");
+            wasWalkie = walkie;
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)
@@ -694,6 +948,7 @@ namespace CustomItems.Items
                     Say(SoundTimeout);
             }
 
+            PlayQueued();
             UpdateEvents();
             var talking = IsTalking;
             UpdateLevel(talking);

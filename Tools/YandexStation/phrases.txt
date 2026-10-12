@@ -127,3 +127,37 @@ Events/Enemy/RadMech|Робот! Огромный робот!
 Events/Enemy/Tulip Snake|Летучие ящерки! Держитесь за землю.
 Events/Enemy/Bush Wolf|В кустах кто-то есть.
 Events/Enemy/Clay Surgeon|Слышите ножницы? Не стойте рядом.
+
+# Числа: из них колонка собирает время («сейчас» + часы + минуты) и «сколько нас».
+# Больше десяти говорит по цифрам: 14 — «один, четыре».
+Numbers/0|Ноль!
+Numbers/1|Один!
+Numbers/2|Два!
+Numbers/3|Три!
+Numbers/4|Четыре!
+Numbers/5|Пять!
+Numbers/6|Шесть!
+Numbers/7|Семь!
+Numbers/8|Восемь!
+Numbers/9|Девять!
+Numbers/10|Десять!
+TimeIntro|Сейчас
+Goodbye|До свидания!
+Goodbye|Пока!
+Repeat|Я уже отвечала.
+Repeat|Не хочу повторяться.
+Count/1|Вы тут один.
+Count/2|Вас двое, и я с вами.
+Count/3|Трое! Как мушкетёры.
+Count/Many|Целая компашка!
+Events/Money|Деньги! Обожаю звук кассы.
+Events/ManyItems|Ой, сколько предметов!
+Events/Work|Работаем!
+Events/Work|А вот так!
+Events/Work|Ну так.
+Events/Drink|Энергетик? Мне тоже можно?
+Events/Music|Какая приятная музыка.
+Events/Music|Какая энергичная музыка!
+Events/Suit|Новый костюм? Вам идёт.
+Events/Walkie|Радиус действия ловит.
+Events/LateDay|Осталось не так много времени.

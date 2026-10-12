@@ -7,7 +7,7 @@
 //
 // Рендер через PreviewRenderUtility (как превью в инспекторе). HDRP не отдаёт альфу,
 // поэтому кадр снимается дважды, на чёрном и белом фоне, и прозрачность считается по разнице.
-// Экспозиция фиксируется своим Volume и подбирается по кадру, иначе автоэкспозиция HDRP пересвечивает.
+// Каждый кадр снимается в отдельной сцене превью с одинаковым светом, без своей экспозиции.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -106,6 +106,28 @@ public static class ItemIcons
 
     private static Texture2D RenderPrefab(GameObject prefab, Vector3 angles)
     {
+        try
+        {
+            var black = Shot(prefab, angles, Color.black);
+            if (black == null)
+                return null;
+            var white = Shot(prefab, angles, Color.white);
+            var result = Matte(black, white);
+            Object.DestroyImmediate(black);
+            Object.DestroyImmediate(white);
+            return result;
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"Не удалось нарисовать иконку {prefab.name}: {e.Message}");
+            return null;
+        }
+    }
+
+    // Каждый кадр снимается в новой сцене превью: при повторном рендере HDRP успевает подстроить
+    // автоэкспозицию, кадры на чёрном и белом фоне расходятся, и Matte даёт белёсую картинку
+    private static Texture2D Shot(GameObject prefab, Vector3 angles, Color background)
+    {
         var preview = new PreviewRenderUtility();
         try
         {
@@ -126,132 +148,24 @@ public static class ItemIcons
             cam.farClipPlane = distance * 2f;
             cam.orthographicSize = FitSize(cam.transform, bounds) * 1.08f;
 
-            preview.lights[0].intensity = 1.3f;
+            preview.lights[0].intensity = 1.6f;
             preview.lights[0].transform.rotation = Quaternion.Euler(35f, angles.y + 35f, 0f);
-            preview.lights[1].intensity = 0.8f;
+            preview.lights[1].intensity = 0.9f;
             preview.lights[1].transform.rotation = Quaternion.Euler(-20f, angles.y - 150f, 0f);
-            preview.ambientColor = new Color(0.45f, 0.45f, 0.45f);
+            preview.ambientColor = new Color(0.5f, 0.5f, 0.5f);
 
-            // Экспозиция: в профиле HDRP она автоматическая и на почти пустом кадре
-            // выкручивается так, что предмет выходит белым. Ставим свою, фиксированную,
-            // и подбираем её по самому кадру, чтобы яркие места предмета были около 0.9.
-            var exposure = AddFixedExposure(preview);
-            var ev = 0f;
-            Texture2D black = null;
-            for (var i = 0; i < 6; i++)
-            {
-                if (black != null)
-                    Object.DestroyImmediate(black);
-                SetExposure(exposure, ev);
-                black = Shot(preview, Color.black);
-                if (exposure == null)
-                    break;
-                var bright = Brightness(black);
-                if (bright < 0f)
-                    break; // предмета на кадре нет: подбирать нечего
-                var step = bright >= 0.995f ? 2f // пересвет, насколько сильный, не видно
-                    : bright < 0.02f ? -3f
-                    : Mathf.Log(Mathf.Pow(bright, 2.2f) / Mathf.Pow(0.9f, 2.2f), 2f);
-                if (Mathf.Abs(step) < 0.15f)
-                    break;
-                ev += step; // больше EV — темнее
-            }
-            var white = Shot(preview, Color.white);
-            var result = Matte(black, white);
-            Object.DestroyImmediate(black);
-            Object.DestroyImmediate(white);
-            if (exposure != null)
-                Object.DestroyImmediate(exposure.Profile);
-            return result;
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning($"Не удалось нарисовать иконку {prefab.name}: {e.Message}");
-            return null;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = background;
+            SetHdrpBackground(cam, background);
+            preview.BeginStaticPreview(new Rect(0, 0, Size, Size));
+            preview.Render(true, false);
+            return preview.EndStaticPreview();
         }
         finally
         {
             preview.Cleanup();
         }
     }
-
-    // Яркость светлых мест предмета (95-й перцентиль max(r,g,b) по непустым пикселям кадра на чёрном фоне),
-    // -1, если предмета на кадре нет
-    private static float Brightness(Texture2D shot)
-    {
-        var values = shot.GetPixels().Select(c => Mathf.Max(c.r, Mathf.Max(c.g, c.b))).Where(v => v > 0.004f).ToArray();
-        if (values.Length < 16)
-            return -1f;
-        Array.Sort(values);
-        return values[(int)(values.Length * 0.95f)];
-    }
-
-    private class ExposureOverride
-    {
-        public ScriptableObject Profile;
-        public object FixedExposure; // FloatParameter
-    }
-
-    // Глобальный Volume в сцене превью с фиксированной экспозицией и без тонмаппинга (цвета как в текстуре).
-    // Типы HDRP ищем по имени, как и HDAdditionalCameraData.
-    private static ExposureOverride AddFixedExposure(PreviewRenderUtility preview)
-    {
-        var volumeType = FindType("UnityEngine.Rendering.Volume");
-        var profileType = FindType("UnityEngine.Rendering.VolumeProfile");
-        var exposureType = FindType("UnityEngine.Rendering.HighDefinition.Exposure");
-        var tonemappingType = FindType("UnityEngine.Rendering.HighDefinition.Tonemapping");
-        if (volumeType == null || profileType == null || exposureType == null)
-            return null;
-        try
-        {
-            var profile = ScriptableObject.CreateInstance(profileType);
-            profile.hideFlags = HideFlags.HideAndDontSave;
-            var add = profileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
-            var exposure = add.Invoke(profile, new object[] { exposureType, true });
-            SetParameter(exposure, "mode", Enum.Parse(exposureType.Assembly.GetType("UnityEngine.Rendering.HighDefinition.ExposureMode"), "Fixed"));
-            SetParameter(exposure, "compensation", 0f);
-            if (tonemappingType != null)
-            {
-                var tonemapping = add.Invoke(profile, new object[] { tonemappingType, true });
-                SetParameter(tonemapping, "mode", Enum.Parse(tonemappingType.Assembly.GetType("UnityEngine.Rendering.HighDefinition.TonemappingMode"), "None"));
-            }
-
-            var go = new GameObject("IconVolume");
-            preview.AddSingleGO(go);
-            var volume = go.AddComponent(volumeType);
-            // В SRP Core 14 isGlobal — свойство, в других версиях — поле
-            var isGlobalProp = volumeType.GetProperty("isGlobal");
-            if (isGlobalProp != null)
-                isGlobalProp.SetValue(volume, true);
-            else
-                volumeType.GetField("isGlobal").SetValue(volume, true);
-            volumeType.GetField("priority").SetValue(volume, 10000f);
-            volumeType.GetField("sharedProfile").SetValue(volume, profile);
-            return new ExposureOverride { Profile = profile, FixedExposure = exposureType.GetField("fixedExposure").GetValue(exposure) };
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning("Не удалось зафиксировать экспозицию HDRP для иконок: " + e.Message);
-            return null;
-        }
-    }
-
-    private static void SetExposure(ExposureOverride exposure, float ev)
-    {
-        if (exposure != null)
-            exposure.FixedExposure.GetType().GetProperty("value").SetValue(exposure.FixedExposure, ev);
-    }
-
-    private static void SetParameter(object component, string name, object value)
-    {
-        var parameter = component.GetType().GetField(name).GetValue(component);
-        parameter.GetType().GetProperty("value").SetValue(parameter, value);
-        parameter.GetType().GetProperty("overrideState").SetValue(parameter, true);
-    }
-
-    private static Type FindType(string fullName) => AppDomain.CurrentDomain.GetAssemblies()
-        .Select(a => a.GetType(fullName, false))
-        .FirstOrDefault(t => t != null);
 
     // Половина большей стороны проекции границ на плоскость камеры
     private static float FitSize(Transform cam, Bounds b)
@@ -265,16 +179,6 @@ public static class ItemIcons
             half = Mathf.Max(half, Mathf.Abs(local.x), Mathf.Abs(local.y));
         }
         return Mathf.Max(half, 0.01f);
-    }
-
-    private static Texture2D Shot(PreviewRenderUtility preview, Color background)
-    {
-        preview.camera.clearFlags = CameraClearFlags.SolidColor;
-        preview.camera.backgroundColor = background;
-        SetHdrpBackground(preview.camera, background);
-        preview.BeginStaticPreview(new Rect(0, 0, Size, Size));
-        preview.Render(true, false);
-        return preview.EndStaticPreview();
     }
 
     // HDRP берёт цвет фона из HDAdditionalCameraData. Тип ищем по имени, чтобы не тянуть

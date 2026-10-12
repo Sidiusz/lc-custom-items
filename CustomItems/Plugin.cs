@@ -215,7 +215,7 @@ namespace CustomItems
             ToyGunItem.NoAmmoBody = "В инвентаре нет пулек. Их можно купить в магазине терминала.";
             ToyGunAmmoItem.TipFormat = "Пулек в пачке : {0}";
             YandexStationItem.OnOffTip = "Вкл/выкл : [LMB]";
-            YandexStationItem.ColorTip = "Цвет : [E]";
+            YandexStationItem.TalkTip = "Поболтать : [E]";
 
             try
             {

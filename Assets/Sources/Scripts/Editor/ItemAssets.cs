@@ -132,7 +132,7 @@ public static class ItemAssets
             Name = "YandexStation", ItemName = "Yandex Station", Behaviour = "CustomItems.Items.YandexStationItem",
             Scrap = false, Rarity = 0, InShop = true, Price = 100, Weight = 1.04f,
             VerticalOffset = 0.045f,    // половина высоты колонки 9 см
-            ToolTips = new[] { "Turn on/off : [LMB]", "Color : [E]" },
+            ToolTips = new[] { "Turn on/off : [LMB]", "Talk : [E]" },
             BatterySeconds = 1800f,     // полный заряд на 30 минут работы, заряжается на зарядке корабля
             SaveItemVariable = true,    // цвет и «включена»
             SyncInteract = true,        // E меняет цвет у всех

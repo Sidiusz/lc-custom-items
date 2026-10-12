@@ -13,7 +13,7 @@ Shoot : [LMB]=Выстрелить : [LMB]
 Reload : [R]=Перезарядить : [R]
 Talk : [LMB]=Говорить : [LMB]
 Turn on/off : [LMB]=Вкл/выкл : [LMB]
-Color : [E]=Цвет : [E]
+Talk : [E]=Поболтать : [E]
 
 // Сообщения
 The bottle is empty.=Бутылка пуста.

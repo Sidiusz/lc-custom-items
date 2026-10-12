@@ -118,3 +118,7 @@ InitTestScene*.unity*
 # Служебные файлы сборки бандлов (сам бандл customitems коммитится)
 /Bundles/*.manifest
 /Bundles/Bundles
+
+# Рипнутые ассеты игры (персонаж для превью и т.п.) — только локально, в репозиторий не кладём
+/Assets/_Ripped/
+/Assets/_Ripped.meta

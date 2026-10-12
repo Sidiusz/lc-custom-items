@@ -1129,7 +1129,7 @@ namespace CustomItems.Items
             var minutes = (int)(tod.normalizedTimeOfDay * (60f * tod.numberOfHours)) + 360;
             // Словами, а не цифрами: Time/15 — «Три часа дня», Time/Almost/7 — «Почти семь».
             // Больше получаса — уже следующий час («почти семь»); нет записи на час — ближайший
-            // записанный в пределах часа; цифры — только если ничего не нашлось
+            // записанный в пределах часа, иначе просто ближайший записанный; цифрами — никогда
             var hour = minutes / 60 % 24;
             var next = (hour + 1) % 24;
             var prev = (hour + 23) % 24;
@@ -1145,10 +1145,26 @@ namespace CustomItems.Items
                     return true;
                 }
             }
-            var topics = new List<string> { TopicTimeIntro };
-            if (!AddNumber(topics, minutes / 60 % 24) || !AddNumber(topics, minutes % 60))
-                return false;
-            SaySequence(topics);
+            // Цифрами время не звучит: ближайший записанный час, сколько бы ни было до него
+            var now = minutes / 60f;
+            string best = null;
+            var bestDist = float.MaxValue;
+            for (var h = 0; h < 24; h++)
+            {
+                foreach (var (topic, at) in new[] { (TopicTime + "/" + h, (float)h), (TopicTime + "/Almost/" + h, h - 0.25f) })
+                {
+                    if (FindSet(topic) == null)
+                        continue;
+                    var d = Mathf.Abs(now - at) % 24f;
+                    d = Mathf.Min(d, 24f - d);
+                    if (d < bestDist)
+                    {
+                        bestDist = d;
+                        best = topic;
+                    }
+                }
+            }
+            Say(best ?? (FindSet(TopicTimeError) != null ? TopicTimeError : TopicTime));
             return true;
         }
 

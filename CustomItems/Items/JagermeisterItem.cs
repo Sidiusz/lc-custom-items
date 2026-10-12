@@ -30,7 +30,7 @@ namespace CustomItems.Items
         private const float SoundDelay = 0.3f;
         private const float DrinkDuration = 1.4f;
 
-        [Tooltip("Глоток и выдох (Art/Audio/Jagermeister, собирается Tools/Jagermeister/sound.sh)")]
+        [Tooltip("Выдох после глотка (Art/Audio/Jagermeister, собирается Tools/Jagermeister/sound.py)")]
         public AudioClip drinkClip;
 
         private static CustomMessagingManager registeredOn;

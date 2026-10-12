@@ -8,7 +8,7 @@
 
 Пишет в Assets/Sources/Art/:
     Textures/Adrenaline/AdrenalineCan.png       текстура 512x512 (этикетка + металл)
-    Models/Adrenaline/AdrenalineCan.fbx         модель: Can (целая, центр в середине) и Crushed (мятая пустая)
+    Models/Adrenaline/AdrenalineCan.fbx         модель: Can (целая, центр в середине) и Crushed (пустая, смята с боков)
 """
 import math
 import os
@@ -205,46 +205,44 @@ BOTTOM_Z = 0.005  # вогнутое дно
 HEIGHT = 0.168
 
 
-def make_model():
+def build_mesh(name, profile=PROFILE, seg=SEG):
+    """Сетка банки по профилю; seg точек по кругу."""
     import bpy
     import bmesh
 
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    mesh = bpy.data.meshes.new("AdrenalineCan")
-    obj = bpy.data.objects.new("Can", mesh)
-    bpy.context.scene.collection.objects.link(obj)
+    mesh = bpy.data.meshes.new(name)
 
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
 
     rings = []
-    for z, r, _ in PROFILE:
-        rings.append([bm.verts.new((r * math.cos(2 * math.pi * i / SEG),
-                                    r * math.sin(2 * math.pi * i / SEG), z)) for i in range(SEG)])
+    for z, r, _ in profile:
+        rings.append([bm.verts.new((r * math.cos(2 * math.pi * i / seg),
+                                    r * math.sin(2 * math.pi * i / seg), z)) for i in range(seg)])
 
-    z_l0, z_l1 = PROFILE[2][0], PROFILE[3][0]
+    z_l0, z_l1 = PROFILE[2][0], PROFILE[3][0]  # этикетка от первого до последнего кольца
 
     # боковые стенки
-    for k in range(len(PROFILE) - 1):
-        label = PROFILE[k][2] == "label" and PROFILE[k + 1][2] == "label"
-        for i in range(SEG):
-            i2 = (i + 1) % SEG
+    for k in range(len(profile) - 1):
+        label = profile[k][2] == "label" and profile[k + 1][2] == "label"
+        for i in range(seg):
+            i2 = (i + 1) % seg
             f = bm.faces.new((rings[k][i], rings[k][i2], rings[k + 1][i2], rings[k + 1][i]))
             for loop, (kk, jj) in zip(f.loops, ((k, i), (k, i + 1), (k + 1, i + 1), (k + 1, i))):
-                z = PROFILE[kk][0]
+                z = profile[kk][0]
                 if label:
-                    u = jj / SEG
+                    u = jj / seg
                     v = LABEL_V0 + (1 - LABEL_V0) * (z - z_l0) / (z_l1 - z_l0)
                 else:
-                    u = 0.5 + 0.5 * jj / SEG
+                    u = 0.5 + 0.5 * jj / seg
                     v = 0.02 + 0.2 * z / HEIGHT
                 loop[uv].uv = (u, v)
 
     def cap(ring, z, center_uv, top):
         ring_r = ring[0].co.xy.length
         c = bm.verts.new((0, 0, z))
-        for i in range(SEG):
-            i2 = (i + 1) % SEG
+        for i in range(seg):
+            i2 = (i + 1) % seg
             verts = (c, ring[i], ring[i2]) if top else (c, ring[i2], ring[i])
             f = bm.faces.new(verts)
             for loop in f.loops:
@@ -254,13 +252,13 @@ def make_model():
 
     # крышка: внутренний бортик обода вниз к утопленной крышке
     top = rings[-1]
-    lid_ring = [bm.verts.new((0.025 * math.cos(2 * math.pi * i / SEG),
-                              0.025 * math.sin(2 * math.pi * i / SEG), LID_Z)) for i in range(SEG)]
-    for i in range(SEG):
-        i2 = (i + 1) % SEG
+    lid_ring = [bm.verts.new((0.025 * math.cos(2 * math.pi * i / seg),
+                              0.025 * math.sin(2 * math.pi * i / seg), LID_Z)) for i in range(seg)]
+    for i in range(seg):
+        i2 = (i + 1) % seg
         f = bm.faces.new((top[i], top[i2], lid_ring[i2], lid_ring[i]))
         for loop, jj, vv in zip(f.loops, (i, i + 1, i + 1, i), (0.23, 0.23, 0.20, 0.20)):
-            loop[uv].uv = (0.5 + 0.5 * jj / SEG, vv)
+            loop[uv].uv = (0.5 + 0.5 * jj / seg, vv)
     cap(lid_ring, LID_Z, (0.125, 0.125), True)
 
     # дно: вогнутое
@@ -284,6 +282,17 @@ def make_model():
         v.co.z -= HEIGHT / 2
     bm.to_mesh(mesh)
     bm.free()
+
+    return mesh
+
+
+def make_model():
+    import bpy
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    mesh = build_mesh("AdrenalineCan")
+    obj = bpy.data.objects.new("Can", mesh)
+    bpy.context.scene.collection.objects.link(obj)
 
     # Плоские грани у торцов, сглаженный бок
     mesh.shade_smooth()
@@ -337,31 +346,44 @@ def make_model():
 
 
 def make_crushed(can):
-    """Мятая пустая банка: та же сетка и развёртка, сплющенная гармошкой, с вмятинами и перекосом."""
+    """Мятая пустая банка: та же сетка и развёртка, сжатая с боков в кулаке. Высота почти та же,
+    середина сплющена с двух сторон внутрь до узкой талии с заломами, дно и крышка целые и чуть
+    повёрнуты друг к другу."""
     import bpy
 
     rng = random.Random(449)
     phases = [rng.uniform(0, 2 * math.pi) for _ in range(3)]
-    mesh = can.data.copy()
-    mesh.name = "Crushed"
+    # Та же банка, но с частыми кольцами на этикетке и вдвое большим числом точек по кругу:
+    # у целой бок из одного ряда граней, а тут ему нужно гнуться
+    z0, z1 = PROFILE[2][0], PROFILE[3][0]
+    rings = 14
+    profile = PROFILE[:2] + [(z0 + (z1 - z0) * j / rings, PROFILE[2][1], "label") for j in range(rings + 1)] \
+        + PROFILE[4:]
+    mesh = build_mesh("Crushed", profile, SEG * 2)
+    mesh.materials.append(can.data.materials[0])
     half = HEIGHT / 2
-    crushed_h = HEIGHT * 0.42
     for v in mesh.vertices:
         x, y, z = v.co
         t = (z + half) / HEIGHT                     # 0 у дна, 1 у крышки
         a = math.atan2(y, x)
-        # гармошка: середина сжимается сильнее, дно и крышка почти целые
-        tz = t + 0.18 * math.sin(2 * math.pi * t) * (1 - t)
-        nz = -half + tz * crushed_h
-        # выпирает в середине, вмятины по кругу и вдоль высоты
-        bulge = 1 + 0.22 * math.sin(math.pi * t) + 0.10 * math.sin(6 * math.pi * t) * math.sin(math.pi * t)
-        dent = 1 - 0.28 * max(0.0, math.sin(3 * a + phases[0] + 5 * t)) * math.sin(math.pi * t) \
-                 - 0.14 * max(0.0, math.sin(5 * a + phases[1] - 3 * t)) * math.sin(math.pi * t)
-        k = bulge * dent
-        # перекос: верх съехал вбок и наклонился
-        shift = 0.006 * t
-        tilt = 0.006 * (x / 0.033) * t
-        v.co = (x * k + shift, y * k, nz + tilt)
+        # сила сжатия: максимум чуть выше середины, у торцов (жёсткие ободки) почти ноль
+        m = max(0.0, math.sin(math.pi * min(max((t - 0.06) / 0.86, 0.0), 1.0))) ** 1.4
+        m *= 1 + 0.25 * math.sin(2 * math.pi * t + 0.6)
+        # сплющивание по X: стенки вдавлены внутрь до узкой щели, по Y немного раздаются
+        x2 = x * (1 - 0.78 * m)
+        y2 = y * (1 + 0.16 * m)
+        # заломы металла: складки поперёк вмятины и мелкие вмятины по кругу
+        fold = 0.0035 * m * math.sin(9 * math.pi * t + phases[0]) * math.copysign(1, x)
+        dent = 1 - 0.10 * m * max(0.0, math.sin(4 * a + phases[1] + 4 * t))
+        x2 = (x2 + fold) * dent
+        y2 *= dent
+        # пальцы вдавили сильнее одну сторону: лёгкий изгиб, верх повёрнут относительно дна
+        x2 += 0.004 * m
+        twist = math.radians(8) * t
+        c, s_ = math.cos(twist), math.sin(twist)
+        x2, y2 = x2 * c - y2 * s_, x2 * s_ + y2 * c
+        nz = z - 0.10 * HEIGHT * m * 0.5 - 0.04 * HEIGHT * (t - 0.5)
+        v.co = (x2, y2, nz)
     for poly in mesh.polygons:
         poly.use_smooth = False  # грани видны: смятый металл
     obj = bpy.data.objects.new("Crushed", mesh)

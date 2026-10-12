@@ -90,6 +90,33 @@ namespace CustomItems.Items
         }
 
         private static readonly List<Example> Examples = new List<Example>();
+        // Ответы на её встречный вопрос: тема фразы, после которой ждём ответ → примеры ответов
+        private static readonly Dictionary<string, List<Example>> FollowUps = new Dictionary<string, List<Example>>();
+
+        /// <summary>Ждёт ли колонка ответа после фразы из этой темы («а у вас как?»).</summary>
+        public static bool HasFollowUps(string topic) => topic != null && FollowUps.ContainsKey(topic);
+
+        /// <summary>Тема ответа на реплику после фразы из <paramref name="after"/>, или null.</summary>
+        public static string MatchFollowUp(string after, string reply)
+        {
+            if (after == null || !FollowUps.TryGetValue(after, out var examples))
+                return null;
+            var stems = Tokens(reply).Where(t => !t.StartsWith("алис")).Select(Stem).ToArray();
+            if (stems.Length == 0)
+                return null;
+            Example best = null;
+            var score = 0f;
+            foreach (var e in examples)
+            {
+                var sc = Score(e.Stems, stems);
+                if (sc > score + 1e-4f)
+                {
+                    score = sc;
+                    best = e;
+                }
+            }
+            return best != null && score >= Threshold ? best.Topic : null;
+        }
         private static readonly Dictionary<string, float> Idf = new Dictionary<string, float>();
         private static readonly HashSet<string> Words = new HashSet<string>();
         // Форма или основа имени → папка друга
@@ -170,7 +197,7 @@ namespace CustomItems.Items
         /// Примеры с {moon} — с каждым звучанием каждой луны («поставь асу ранс»): так распознавание
         /// охотнее собирает название из кусков словаря, а не подставляет похожее слово.
         public static IEnumerable<string> Phrases =>
-            Examples.Where(e => !e.Text.Contains("{")).Select(e => e.Text)
+            Examples.Concat(FollowUps.Values.SelectMany(l => l)).Where(e => !e.Text.Contains("{")).Select(e => e.Text)
                 .Concat(Examples.Where(e => e.Text.Contains(MoonSlot) && !e.Text.Replace(MoonSlot, "").Contains("{"))
                     .SelectMany(e => MoonPhrases.Select(m => e.Text.Replace(MoonSlot, m))))
                 .Concat(MoonPhrases)
@@ -182,6 +209,7 @@ namespace CustomItems.Items
         public static void Clear()
         {
             Examples.Clear();
+            FollowUps.Clear();
             Words.Clear();
             Idf.Clear();
         }
@@ -237,6 +265,17 @@ namespace CustomItems.Items
                     }
                     continue;
                 }
+                // Продолжение разговора: «HowAreYou/Ask > HowAreYou/Good: хорошо» — после фразы из
+                // HowAreYou/Ask («а у вас как?») ответ «хорошо» без «Алиса» получает HowAreYou/Good
+                var target = Examples;
+                var arrow = topic.IndexOf('>');
+                if (arrow > 0)
+                {
+                    var after = topic.Substring(0, arrow).Trim();
+                    topic = topic.Substring(arrow + 1).Trim();
+                    if (!FollowUps.TryGetValue(after, out target))
+                        FollowUps[after] = target = new List<Example>();
+                }
                 foreach (var phrase in line.Substring(colon + 1).Split(','))
                 {
                     var tokens = Tokens(phrase);
@@ -248,7 +287,7 @@ namespace CustomItems.Items
                         if (!IsSlot(t))
                             Words.Add(t);
                     }
-                    Examples.Add(new Example
+                    target.Add(new Example
                     {
                         Topic = topic,
                         Text = string.Join(" ", tokens),
@@ -266,7 +305,7 @@ namespace CustomItems.Items
         {
             Idf.Clear();
             var df = new Dictionary<string, int>();
-            foreach (var e in Examples)
+            foreach (var e in Examples.Concat(FollowUps.Values.SelectMany(l => l)))
             {
                 foreach (var s in e.Stems.Distinct())
                     df[s] = df.TryGetValue(s, out var n) ? n + 1 : 1;

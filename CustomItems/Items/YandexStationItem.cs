@@ -420,7 +420,17 @@ namespace CustomItems.Items
             var wake = text.IndexOf(WakeWord, StringComparison.Ordinal);
 
             // Ответ на её вопрос («Вы уверены?», «Сколько?»): «Алиса» не нужна
-            if (station.asking != null && Time.time < station.askUntil)
+            var answering = station.asking != null && Time.time < station.askUntil;
+            // Встречный вопрос («а у вас как?»): не похоже на ответ — с «Алиса» это новый вопрос, без — говорят между собой
+            if (answering && station.asking == AskFollow
+                && AliceIntents.MatchFollowUp(station.askingItem, wake >= 0 ? text.Substring(wake + WakeWord.Length) : text) == null)
+            {
+                if (wake < 0)
+                    return;
+                station.asking = null;
+                answering = false;
+            }
+            if (answering)
             {
                 var reply = wake >= 0 ? text.Substring(wake + WakeWord.Length).Trim() : text;
                 if (reply.Length == 0)
@@ -598,6 +608,8 @@ namespace CustomItems.Items
             }
             else if (topic == TopicTime && station.SayTime())
                 return;
+            else if (!topic.StartsWith("#") && station.FindSet(topic + AskSuffix) != null)
+                station.SayTopic(topic);
             else if (topic == TopicLaunch)
             {
                 // Рычаг: сначала «Вы уверены?», если корабль вообще может взлететь или сесть
@@ -622,7 +634,10 @@ namespace CustomItems.Items
                     station.Ask(AskBuy, item, BuyHowMany);
             }
             else
+            {
                 station.Say(topic);
+                station.ExpectReply(topic);
+            }
         }
 
         // ---- Корабль: рычаг, двери, магазин (делает плагин, у него игровые типы) ----
@@ -642,7 +657,29 @@ namespace CustomItems.Items
             TopicBuy = "#buy", TopicYes = "#yes", TopicNo = "#no";
         public const string LaunchConfirm = "Launch/Confirm", LaunchCancel = "Launch/Cancel", LaunchNoAnswer = "Launch/NoAnswer",
             LaunchAnyway = "Launch/Anyway", BuyHowMany = "Buy/HowMany", BuyCancel = "Buy/Cancel", BuyUnknown = "Buy/Unknown";
-        private const string AskLaunch = "launch", AskBuy = "buy";
+        private const string AskLaunch = "launch", AskBuy = "buy", AskFollow = "follow", AskSuffix = "/Ask";
+
+        // Ответ из темы или её встречного вопроса <тема>/Ask («Всё отлично, а у вас как?»), по числу записей
+        private void SayTopic(string topic)
+        {
+            var ask = FindSet(topic + AskSuffix);
+            var plain = FindSet(topic);
+            var said = ask != null && (plain == null || Random.Range(0, ask.clips.Length + plain.clips.Length) < ask.clips.Length)
+                ? topic + AskSuffix : topic;
+            Say(said);
+            ExpectReply(said);
+        }
+
+        // После фразы со встречным вопросом ждём ответ без «Алиса» (строки «Тема > Ответ: …» в intents.txt)
+        private void ExpectReply(string topic)
+        {
+            if (!AliceIntents.HasFollowUps(topic) || FindSet(topic) == null)
+                return;
+            asking = AskFollow;
+            askingItem = topic;
+            askStartedAt = Mathf.Max(Time.time, talkUntil);
+            askUntil = askStartedAt + ListenSilence;
+        }
 
         private static bool IsAction(string topic) =>
             topic == TopicLaunch || topic == TopicDoorsOpen || topic == TopicDoorsClose || topic == TopicBuy || topic == TopicRoute;
@@ -678,7 +715,17 @@ namespace CustomItems.Items
             if (!IsOn)
                 return;
             var intent = string.IsNullOrEmpty(reply) ? null : AliceIntents.Match(reply, out _);
-            if (kind == AskLaunch)
+            if (kind == AskFollow)
+            {
+                // «А у меня хорошо» — «Здорово!»; ответ на ответ тоже может ждать продолжения
+                var next = string.IsNullOrEmpty(reply) ? null : AliceIntents.MatchFollowUp(item, reply);
+                if (next != null && FindSet(next) != null)
+                {
+                    Say(next);
+                    ExpectReply(next);
+                }
+            }
+            else if (kind == AskLaunch)
             {
                 if (intent == TopicYes)
                     SayFirst(Launch != null ? Launch() : new[] { TopicRefuse });

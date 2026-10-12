@@ -1,5 +1,5 @@
 """
-Генератор банки "Adrenaline Game Fuel": текстура, низкополигональная модель (FBX) и иконка.
+Генератор банки "Adrenaline Game Fuel" (синяя Energy Power): текстура, низкополигональная модель (FBX) и иконка.
 
 Запуск (обычный Python 3.13, Blender как модуль):
     pip install bpy pillow numpy
@@ -43,93 +43,147 @@ def font(size, names=("InterDisplay-BlackItalic.otf", "Inter-BlackItalic.otf",
 # ---------------------------------------------------------------- текстура
 
 def make_texture():
+    """Синяя банка по мотивам Adrenaline Energy Power: логотип, серебряная «А», красная плашка."""
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
-    lh = int(SIZE * (1 - LABEL_V0))  # высота этикетки в пикселях (сверху картинки)
-
-    # --- этикетка: чёрная банка, оранжево-красный разрез, вертикальный логотип
-    label = Image.new("RGB", (SIZE, lh), (14, 14, 16))
+    lh = int(SIZE * (1 - LABEL_V0))  # высота этикетки в атласе
+    # Рисуем в пропорциях развёртки (окружность 20.7 см x высота 13.4 см), потом растягиваем до lh
+    W, H = SIZE, 332
+    label = Image.new("RGB", (W, H))
+    px = label.load()
+    for y in range(H):
+        for x in range(W):
+            # синий градиент + мягкие вертикальные блики, как у металлизированной банки
+            k = 0.5 + 0.5 * math.cos((x / W) * 2 * math.pi * 2)
+            px[x, y] = (int(18 + 20 * k), int(52 + 40 * k), int(170 + 50 * k))
     d = ImageDraw.Draw(label)
 
-    # тонкие диагональные полосы фона
-    for x in range(-lh, SIZE, 14):
-        d.line([(x, lh), (x + lh, 0)], fill=(24, 24, 28), width=3)
+    FRONT = 150  # центр лицевой стороны по горизонтали
 
-    # огненный клин по диагонали (уходит за шов, поэтому рисуем со сдвигом дважды)
-    for shift in (0, -SIZE):
-        pts = [(shift + 250, lh), (shift + 330, lh), (shift + 470, 0), (shift + 410, 0)]
-        d.polygon(pts, fill=(255, 92, 0))
-        pts = [(shift + 290, lh), (shift + 318, lh), (shift + 458, 0), (shift + 436, 0)]
-        d.polygon(pts, fill=(255, 196, 30))
-        pts = [(shift + 200, lh), (shift + 222, lh), (shift + 362, 0), (shift + 342, 0)]
-        d.polygon(pts, fill=(200, 24, 24))
+    # серебряные диагональные полосы справа от «А» (только в клине, чтобы не мешать тексту)
+    stripes = Image.new("RGB", (W, H), (205, 212, 228))
+    mask = Image.new("L", (W, H), 0)
+    md = ImageDraw.Draw(mask)
+    for x in range(-200, W, 9):
+        md.line([(x, H), (x + 120, 0)], fill=255, width=2)
+    clip = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(clip).polygon([(FRONT - 10, H), (FRONT + 125, H), (FRONT + 125, 0), (FRONT + 110, 0)], fill=255)
+    label.paste(stripes, (0, 0), Image.composite(mask, Image.new("L", (W, H), 0), clip))
 
-    # вертикальный логотип ADRENALINE (читается снизу вверх)
-    f_logo = font(78)
-    txt = "ADRENALINE"
-    bbox = d.textbbox((0, 0), txt, font=f_logo)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    logo = Image.new("RGBA", (tw + 24, th + 24), (0, 0, 0, 0))
-    ld = ImageDraw.Draw(logo)
-    ld.text((12 - bbox[0], 12 - bbox[1]), txt, font=f_logo, fill=(255, 255, 255),
-            stroke_width=4, stroke_fill=(255, 92, 0))
-    logo = logo.rotate(90, expand=True)
-    logo = logo.resize((logo.width, min(logo.height, lh - 30)))
-    label.paste(logo, (70, (lh - logo.height) // 2), logo)
+    # верхний и нижний серебряный пояс
+    d.rectangle([0, 0, W, 22], fill=(200, 204, 214))
+    d.rectangle([0, H - 10, W, H], fill=(200, 204, 214))
+    f_orig = font(15)
+    for x in (FRONT - 40, FRONT + 210):
+        d.text((x, 3), "ORIGINAL", font=f_orig, fill=(220, 30, 40))
+    d.text((FRONT - 58, 25), "АБСОЛЮТНАЯ ЭНЕРГИЯ", font=font(11, ("Inter-Black.otf", "DejaVuSans-Bold.ttf")),
+           fill=(255, 255, 255))
 
-    # GAME FUEL рядом с логотипом
-    f_sub = font(30)
-    sub = Image.new("RGBA", (220, 44), (0, 0, 0, 0))
-    ImageDraw.Draw(sub).text((4, 2), "GAME FUEL", font=f_sub, fill=(255, 140, 0))
-    sub = sub.rotate(90, expand=True)
-    label.paste(sub, (70 + logo.width + 2, (lh - sub.height) // 2 + 40), sub)
+    # логотип Adrenaline
+    f_logo = font(46)
+    txt = "Adrenaline"
+    bb = d.textbbox((0, 0), txt, font=f_logo)
+    tw = bb[2] - bb[0]
+    d.text((FRONT - tw // 2 - bb[0], 42 - bb[1]), txt, font=f_logo, fill=(255, 255, 255),
+           stroke_width=3, stroke_fill=(10, 25, 90))
+    # ENERGY (красным) + POWER (белым)
+    f_ep = font(24)
+    w1 = d.textlength("ENERGY", font=f_ep)
+    w2 = d.textlength("POWER", font=f_ep)
+    x0 = FRONT - (w1 + w2) / 2 + 20
+    d.text((x0, 94), "ENERGY", font=f_ep, fill=(235, 30, 45), stroke_width=1, stroke_fill=(255, 255, 255))
+    d.text((x0 + w1, 94), "POWER", font=f_ep, fill=(255, 255, 255), stroke_width=1, stroke_fill=(10, 25, 90))
 
-    # обратная сторона: состав мелким текстом и объём
-    f_small = font(13, ("DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"))
-    for i, line in enumerate(["ENERGY DRINK", "CAFFEINE 32mg/100ml", "TAURINE  B-VITAMINS",
-                              "NOT FOR CHILDREN", "PROPERTY OF", "THE COMPANY"]):
-        d.text((340, 30 + i * 18), line, font=f_small, fill=(190, 190, 190))
-    d.text((360, lh - 48), "0.449 L", font=font(26), fill=(255, 255, 255))
+    # большая серебряная «А» с красно-белыми росчерками
+    f_a = font(190)
+    a_img = Image.new("RGBA", (220, 220), (0, 0, 0, 0))
+    ad = ImageDraw.Draw(a_img)
+    bb = ad.textbbox((0, 0), "A", font=f_a)
+    ad.text((110 - (bb[0] + bb[2]) // 2, 110 - (bb[1] + bb[3]) // 2), "A", font=f_a, fill=(255, 255, 255),
+            stroke_width=5, stroke_fill=(235, 30, 45))
+    # металлический градиент внутри буквы
+    grad = Image.new("RGBA", a_img.size)
+    gp = grad.load()
+    for y in range(a_img.height):
+        for x in range(a_img.width):
+            v = int(170 + 70 * math.sin((x + y) * 0.05))
+            gp[x, y] = (v, v + 4, min(255, v + 15), 255)
+    alpha = a_img.split()[3]
+    red_edge = Image.eval(a_img.convert("L"), lambda p: 255 if p < 140 else 0)
+    metal = Image.composite(Image.new("RGBA", a_img.size, (235, 30, 45, 255)), grad, red_edge)
+    metal.putalpha(alpha)
+    label.paste(metal, (FRONT - 120, 112), metal)
+    # росчерки
+    d.arc([FRONT - 120, 120, FRONT + 30, 330], 200, 280, fill=(255, 255, 255), width=4)
+    d.arc([FRONT - 112, 128, FRONT + 38, 338], 200, 270, fill=(235, 30, 45), width=3)
 
-    # кромки этикетки
-    d.rectangle([0, 0, SIZE, 5], fill=(150, 150, 155))
-    d.rectangle([0, lh - 6, SIZE, lh], fill=(150, 150, 155))
+    # объём
+    d.text((FRONT + 18, 228), "0,449", font=font(40), fill=(255, 255, 255), stroke_width=2,
+           stroke_fill=(10, 25, 90))
 
-    img.paste(label, (0, 0))
+    # красная плашка «ВСЕ ТЫ МОЖЕШЬ»
+    d.rectangle([FRONT - 100, 284, FRONT + 110, 308], fill=(225, 30, 40))
+    f_b = font(17, ("Inter-Black.otf", "DejaVuSans-Bold.ttf"))
+    bw = d.textlength("ВСЕ ТЫ МОЖЕШЬ", font=f_b)
+    d.text((FRONT + 5 - bw / 2, 286), "ВСЕ ТЫ МОЖЕШЬ", font=f_b, fill=(255, 255, 255))
+
+    # оборот: маленький логотип и мелкий текст состава
+    BACK = FRONT + W // 2
+    d.text((BACK - 80, 30), "Adrenaline", font=font(28), fill=(255, 255, 255), stroke_width=2,
+           stroke_fill=(10, 25, 90))
+    f_small = font(8, ("Inter-Bold.otf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf"))
+    lines = ["НАПИТОК БЕЗАЛКОГОЛЬНЫЙ ТОНИЗИРУЮЩИЙ", "ГАЗИРОВАННЫЙ «ADRENALINE GAME FUEL»",
+             "СОСТАВ: ВОДА, САХАР, РЕГУЛЯТОРЫ", "КИСЛОТНОСТИ, КОФЕИН, ТАУРИН,",
+             "АРОМАТИЗАТОРЫ, ВИТАМИНЫ B3, B6, B12.", "НЕ РЕКОМЕНДУЕТСЯ ДЕТЯМ И ТЕМ,",
+             "КТО ХОЧЕТ ДОЖИТЬ ДО КВОТЫ.", "ИЗГОТОВИТЕЛЬ: THE COMPANY",
+             "ХРАНИТЬ ВДАЛИ ОТ ЛЕСТНИЦЫ И ДЖЕСТЕРА.", "ОБЪЁМ 0,449 Л"]
+    for i, line in enumerate(lines):
+        d.text((BACK - 86, 74 + i * 13), line, font=f_small, fill=(235, 238, 250))
+    d.rectangle([BACK - 82, 220, BACK - 20, 250], fill=(240, 240, 240))
+    for i in range(14):
+        d.line([(BACK - 78 + i * 4, 223), (BACK - 78 + i * 4, 247)], fill=(20, 20, 20), width=1 + i % 2)
+    # «ENERGYPOWER» вертикально вдоль шва
+    side = Image.new("RGBA", (300, 34), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(side)
+    sd.text((4, 0), "ENERGY", font=font(28), fill=(235, 30, 45))
+    sd.text((4 + sd.textlength("ENERGY", font=font(28)), 0), "POWER", font=font(28), fill=(255, 255, 255))
+    side = side.rotate(-90, expand=True)
+    label.paste(side, (FRONT + 130, 26), side)
+
+    img.paste(label.resize((SIZE, lh), Image.BICUBIC), (0, 0))
 
     # --- служебная полоса металла (v 0..0.25 = нижние 128 px картинки)
     strip_y = lh
     sd = ImageDraw.Draw(img)
     # u 0..0.25: крышка, u 0.25..0.5: дно, u 0.5..1: металл для обода и горлышка
     for x in range(SIZE // 2, SIZE):
-        g = 150 + int(50 * math.sin(x * 0.09))
-        sd.line([(x, strip_y), (x, SIZE)], fill=(g, g, g + 6))
+        g = 175 + int(40 * math.sin(x * 0.09))
+        sd.line([(x, strip_y), (x, SIZE)], fill=(g, g + 2, g + 8))
     c = SIZE // 8
-    for cx, base in ((c, 175), (3 * c, 140)):
+    for cx, base in ((c, 185), (3 * c, 150)):
         cy = strip_y + c
-        sd.ellipse([cx - c + 2, cy - c + 2, cx + c - 2, cy + c - 2], fill=(base, base, base + 5))
+        sd.ellipse([cx - c + 2, cy - c + 2, cx + c - 2, cy + c - 2], fill=(base, base + 2, base + 8))
         sd.ellipse([cx - c + 12, cy - c + 12, cx + c - 12, cy + c - 12], outline=(base - 45,) * 3, width=3)
-    # отверстие и язычок на крышке
     cx, cy = c, strip_y + c
     sd.rounded_rectangle([cx - 12, cy - 34, cx + 12, cy - 8], radius=8, fill=(40, 40, 40))
-    sd.rounded_rectangle([cx - 10, cy - 6, cx + 10, cy + 26], radius=7, outline=(110, 110, 115), width=3)
-    sd.text((3 * c - 26, strip_y + c - 8), "LOT 13", font=f_small, fill=(90, 90, 95))
+    sd.rounded_rectangle([cx - 10, cy - 6, cx + 10, cy + 26], radius=7, outline=(120, 120, 128), width=3)
+    sd.text((3 * c - 26, strip_y + c - 8), "LOT 13", font=font(13, ("DejaVuSans-Bold.ttf",)), fill=(90, 90, 95))
 
-    # --- грязь и потёртости в духе игры
+    # --- лёгкая грязь и потёртости в духе игры
     a = np.asarray(img).astype(np.float32)
-    noise = np.random.normal(0, 7, a.shape[:2])[..., None]
+    noise = np.random.normal(0, 5, a.shape[:2])[..., None]
     blotch = Image.fromarray((np.random.rand(SIZE // 16, SIZE // 16) * 255).astype(np.uint8))
     blotch = np.asarray(blotch.resize((SIZE, SIZE), Image.BICUBIC).filter(ImageFilter.GaussianBlur(6)),
                         dtype=np.float32)[..., None] / 255.0
-    a = a * (0.78 + 0.22 * blotch) + noise
+    a = a * (0.85 + 0.15 * blotch) + noise
     scratches = Image.new("L", (SIZE, SIZE), 0)
     sc = ImageDraw.Draw(scratches)
-    for _ in range(70):
+    for _ in range(45):
         x, y = random.randrange(SIZE), random.randrange(lh)
         ang = random.uniform(-0.6, 0.6)
-        ln = random.randint(6, 30)
-        sc.line([(x, y), (x + ln * math.cos(ang), y + ln * math.sin(ang))], fill=random.randint(60, 140), width=1)
+        ln = random.randint(6, 26)
+        sc.line([(x, y), (x + ln * math.cos(ang), y + ln * math.sin(ang))], fill=random.randint(50, 120), width=1)
     s = np.asarray(scratches, dtype=np.float32)[..., None] / 255.0
-    a = a * (1 - s) + 175 * s
+    a = a * (1 - s) + 200 * s
     Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)).save(TEX)
 
 

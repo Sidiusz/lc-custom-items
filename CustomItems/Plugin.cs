@@ -48,7 +48,7 @@ namespace CustomItems
             if (duck != null)
                 duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
 
-            Register<AdrenalineItem>(bundle, new CustomItemDef
+            var adrenaline = Register<AdrenalineItem>(bundle, new CustomItemDef
             {
                 Name = "Adrenaline Game Fuel",
                 ModelAsset = "AdrenalineCan",
@@ -59,7 +59,18 @@ namespace CustomItems
                 DefaultRarity = 30,
                 Weight = 1.01f,
                 VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
+                ToolTips = new[] { "Drink : [LMB]" },
             });
+            if (adrenaline != null)
+            {
+                adrenaline.itemProperties.saveItemVariable = true; // пустая банка остаётся пустой после сохранения
+                AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
+                    "Ники через запятую: этих игроков энергетик не бодрит, а вырубает").Value.Split(',');
+                AdrenalineItem.BoostDuration = Config.Bind("Adrenaline Game Fuel", "BoostSeconds", 30f,
+                    "Сколько секунд стамина восстанавливается быстрее").Value;
+                AdrenalineItem.SleepDuration = Config.Bind("Adrenaline Game Fuel", "SleepSeconds", 10f,
+                    "Сколько секунд спит игрок из SleepyPlayers").Value;
+            }
 
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }

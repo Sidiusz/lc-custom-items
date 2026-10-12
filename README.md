@@ -135,7 +135,7 @@ lc-custom-items/
 
 «Стоп», «хватит», «замолчи» обрывают ответ.
 
-Распознавание лежит рядом с DLL мода: `Vosk.dll` и папка `vosk/` (нативные библиотеки Windows x64 и модель `model-ru`). Модель лежит в репозитории, `CustomItems/Vosk/model-ru` (около 150 МБ, `final.mdl` кусками до 100 МБ из-за лимита GitHub). `dotnet build` склеивает её и кладёт всё это в папку сборки и в `PluginDir`. Пересобрать модель (например, после новых лун в intents.txt) — `Tools/YandexStation/model/build.sh` на Linux, там же написано, что для этого нужно.
+Распознавание лежит рядом с DLL мода: `Vosk.dll` и папка `vosk/` (нативные библиотеки Windows x64 и модель `model-ru`). Модель лежит в репозитории, `CustomItems/Vosk/model-ru` (около 80 МБ: веса акустики округлены до 7 бит мантиссы, точность та же, и `final.mdl` лежит в zip). `dotnet build` распаковывает её и кладёт всё это в папку сборки и в `PluginDir`. Пересобрать модель (например, после новых лун в intents.txt) — `Tools/YandexStation/model/build.sh` на Linux, там же написано, что для этого нужно.
 
 ## 2.1. Как предмет держится в руке: превью в Unity
 
@@ -210,7 +210,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/` и `vosk/` (около 160 МБ из-за модели распознавания). Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/` и `vosk/` (около 155 МБ, из них модель распознавания около 70 МБ). Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
 
 ## Благодарности
 

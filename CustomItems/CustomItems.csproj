@@ -53,7 +53,7 @@
 
   <!-- Vosk для Яндекс Станции: vosk/ рядом с DLL мода (нативные библиотеки Windows x64 и русская модель).
        Модель своя, в Vosk/model-ru (собирает Tools/YandexStation/model/build.sh): акустика vosk-model-ru-0.42
-       и граф со словами Алисы. final.mdl лежит кусками до 100 МБ (лимит GitHub), сборка склеивает его. -->
+       и граф со словами Алисы. final.mdl лежит в zip (53 МБ вместо 118), сборка распаковывает его. -->
   <ItemGroup>
     <None Remove="Vosk/**" />
   </ItemGroup>
@@ -64,15 +64,12 @@
     </PropertyGroup>
     <ItemGroup>
       <VoskNative Include="$(PkgVosk)/build/lib/win-x64/*.dll" />
-      <VoskModel Include="Vosk/model-ru/**/*" Exclude="Vosk/model-ru/am/final.mdl.part*" />
-      <VoskModelPart Include="Vosk/model-ru/am/final.mdl.part*" />
+      <VoskModel Include="Vosk/model-ru/**/*" Exclude="Vosk/model-ru/am/final.mdl.zip" />
     </ItemGroup>
     <Copy SourceFiles="$(PkgVosk)/lib/netstandard2.0/Vosk.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(VoskNative)" DestinationFolder="$(TargetDir)vosk" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(VoskModel)" DestinationFolder="$(VoskModelOut)/%(RecursiveDir)" SkipUnchangedFiles="true" />
-    <MakeDir Directories="$(VoskModelOut)/am" />
-    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="copy /b /y @(VoskModelPart->'&quot;%(FullPath)&quot;', '+') &quot;$(VoskModelOut)/am/final.mdl&quot; &gt;nul" />
-    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="cat @(VoskModelPart->'&quot;%(FullPath)&quot;', ' ') &gt; &quot;$(VoskModelOut)/am/final.mdl&quot;" />
+    <Unzip SourceFiles="Vosk/model-ru/am/final.mdl.zip" DestinationFolder="$(VoskModelOut)/am" SkipUnchangedFiles="true" />
   </Target>
 
   <Target Name="CopyToPluginDir" AfterTargets="CopyVosk" Condition="'$(PluginDir)' != ''">

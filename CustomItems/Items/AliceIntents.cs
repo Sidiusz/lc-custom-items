@@ -210,12 +210,19 @@ namespace CustomItems.Items
                 }
                 if (topic.StartsWith("@"))
                 {
-                    // Луна: «@Titan: титан, титана» — как её называют вслух
-                    foreach (var alias in line.Substring(colon + 1).Split(',').SelectMany(a => Tokens(a, keepYo: true)))
+                    // Луна: «@Titan: титан, титана» — как её называют вслух. Кусками через пробел
+                    // («асу ранс») — как слышит распознавание: такие сверяются только склеенными
+                    var moon = topic.Substring(1).Trim();
+                    foreach (var alias in line.Substring(colon + 1).Split(','))
                     {
-                        Words.Add(alias);
-                        MoonStems[Stem(alias)] = topic.Substring(1).Trim();
-                        MoonSounds[Normalize(alias)] = topic.Substring(1).Trim();
+                        var parts = Tokens(alias, keepYo: true);
+                        if (parts.Length == 0)
+                            continue;
+                        foreach (var w in parts)
+                            Words.Add(w);
+                        if (parts.Length == 1)
+                            MoonStems[Stem(parts[0])] = moon;
+                        MoonSounds[Normalize(string.Concat(parts))] = moon;
                     }
                     continue;
                 }

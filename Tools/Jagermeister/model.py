@@ -78,7 +78,6 @@ def lathe(bm, uv, profile, v_range, cap_bottom, cap_top):
     for r in range(len(rows) - 1):
         for k in range(SEGMENTS):
             k2 = (k + 1) % SEGMENTS
-            # Против часовой снаружи, чтобы нормали смотрели наружу
             f = bm.faces.new((rows[r][k], rows[r][k2], rows[r + 1][k2], rows[r + 1][k]))
             f.smooth = True
             u0, u1 = 1 - k / SEGMENTS, 1 - (k + 1) / SEGMENTS
@@ -110,6 +109,9 @@ def make_object(name, fill, material):
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
     fill(bm, uv)
+    # lathe() обходит кольца так, что грани смотрят внутрь; разворачиваем все разом
+    # (UV остаются на своих вершинах). Без этого Unity отсекает лицевую сторону.
+    bmesh.ops.reverse_faces(bm, faces=bm.faces[:])
     bm.normal_update()
     bm.to_mesh(mesh)
     bm.free()

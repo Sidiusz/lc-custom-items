@@ -29,6 +29,10 @@ AUDIO_DIR = os.path.join(REPO, "Assets", "Sources", "Art", "Audio", "ToyGun")
 MODEL_NAME = "ToyGunModel"
 TEXTURE_NAME = "ToyGunTexture"
 SOUND_NAME = "ToyGunShot"
+RELOAD_SOUND_NAME = "ToyGunReload"
+DRY_SOUND_NAME = "ToyGunDryFire"
+# Во сколько раз игрушка крупнее настоящего пистолета: в руке игрока 1:1 выглядит крошечным
+SCALE = 1.6
 TEXTURE_SIZE = 1024
 
 # Точка, где рука держит рукоять, и центр дула (u, v в мм)
@@ -248,7 +252,13 @@ def finalize(parts):
     # Начало координат на рукояти, мм → метры
     offset = to_world(*ORIGIN_UV)
     gun.data.transform(Matrix.Translation(-offset))
-    gun.data.transform(Matrix.Scale(0.001, 4))
+    gun.data.transform(Matrix.Scale(0.001 * SCALE, 4))
+    # Треугольники сразу: так текстура запекается на тех же треугольниках, что увидит Unity
+    bm = bmesh.new()
+    bm.from_mesh(gun.data)
+    bmesh.ops.triangulate(bm, faces=bm.faces, quad_method="BEAUTY", ngon_method="BEAUTY")
+    bm.to_mesh(gun.data)
+    bm.free()
     bpy.ops.object.shade_smooth_by_angle(angle=math.radians(35), keep_sharp_edges=True)
     return gun
 
@@ -267,8 +277,11 @@ def bake(gun):
     bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.004)
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    def target(name):
+    def target(name, fill):
+        # Фон незапечённых мест: цвет рамки для цвета и белый для AO, иначе мипмапы
+        # затягивают чёрный фон в тонкие острова (чёрные точки на модели в игре)
         img = bpy.data.images.new(name, TEXTURE_SIZE, TEXTURE_SIZE, alpha=False)
+        img.pixels[:] = np.tile(np.array(fill, dtype=np.float32), TEXTURE_SIZE * TEXTURE_SIZE)
         for mat in gun.data.materials:
             nodes = mat.node_tree.nodes
             node = nodes.get("BakeTarget") or nodes.new("ShaderNodeTexImage")
@@ -277,11 +290,11 @@ def bake(gun):
             nodes.active = node
         return img
 
-    color = target("color")
-    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=8)
-    ao = target("ao")
+    color = target("color", (120 / 255, 185 / 255, 230 / 255, 1))  # цвет рамки в sRGB
+    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, margin=24, use_clear=False)
+    ao = target("ao", (1, 1, 1, 1))
     scene.world = scene.world or bpy.data.worlds.new("World")
-    bpy.ops.object.bake(type="AO", margin=8)
+    bpy.ops.object.bake(type="AO", margin=24, use_clear=False)
 
     c = np.array(color.pixels[:]).reshape(-1, 4)
     a = np.array(ao.pixels[:]).reshape(-1, 4)[:, :1]
@@ -315,21 +328,55 @@ def export(gun):
                           export_materials=True, path_mode="RELATIVE", apply_modifiers=True)
 
 
-def write_shot_sound(path, rate=44100):
+RATE = 44100
+
+
+def write_shot_sound(path):
     """Пластиковый щелчок пружины и короткий хлопок с падающим тоном."""
     rng = np.random.default_rng(3)
-    t = np.arange(int(rate * 0.18)) / rate
+    t = np.arange(int(RATE * 0.18)) / RATE
     click = rng.normal(0, 1, t.size) * np.exp(-t * 400)
     freq = 900 * np.exp(-t * 18) + 250
-    pop = np.sin(2 * np.pi * np.cumsum(freq) / rate) * np.exp(-t * 35)
+    pop = np.sin(2 * np.pi * np.cumsum(freq) / RATE) * np.exp(-t * 35)
     rattle = rng.normal(0, 1, t.size) * np.exp(-((t - 0.04) ** 2) / 0.0002) * 0.25
-    signal = 0.55 * click + 0.7 * pop + rattle
-    signal /= np.max(np.abs(signal))
-    data = (signal * 0.8 * 32767).astype("<i2")
+    write_wav(path, 0.55 * click + 0.7 * pop + rattle)
+
+
+def plastic_click(t, at, pitch, rng):
+    """Короткий щелчок пластика в момент at."""
+    dt = np.clip(t - at, 0, None)
+    on = t >= at
+    tone = np.sin(2 * np.pi * pitch * dt) * np.exp(-dt * 120)
+    noise = rng.normal(0, 1, t.size) * np.exp(-dt * 300)
+    return on * (0.6 * tone + 0.8 * noise)
+
+
+def write_reload_sound(path):
+    """Перезарядка: защёлка магазина, шуршание пулек, щелчок затвора."""
+    rng = np.random.default_rng(5)
+    t = np.arange(int(RATE * 0.75)) / RATE
+    rattle = np.zeros_like(t)
+    for at in rng.uniform(0.12, 0.42, 14):  # пульки сыплются в магазин
+        rattle += plastic_click(t, at, rng.uniform(2500, 4000), rng) * 0.25
+    signal = (plastic_click(t, 0.02, 900, rng) + rattle + plastic_click(t, 0.55, 700, rng)
+              + plastic_click(t, 0.6, 1100, rng) * 0.7)
+    write_wav(path, signal)
+
+
+def write_dry_fire_sound(path):
+    """Пустой магазин: сухой щелчок спуска."""
+    rng = np.random.default_rng(7)
+    t = np.arange(int(RATE * 0.12)) / RATE
+    write_wav(path, plastic_click(t, 0.005, 1400, rng), volume=0.5)
+
+
+def write_wav(path, signal, volume=0.8):
+    signal = signal / np.max(np.abs(signal))
+    data = (signal * volume * 32767).astype("<i2")
     with wave.open(path, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
-        w.setframerate(rate)
+        w.setframerate(RATE)
         w.writeframes(data.tobytes())
 
 
@@ -351,10 +398,10 @@ def render_preview(gun, path):
     cam.data.lens = 55
     scene.collection.objects.link(cam)
     scene.camera = cam
-    center = Vector((0, -0.045, 0.02))
+    center = Vector((0, -0.045, 0.02)) * SCALE
     root, ext = os.path.splitext(path)
     for i, view in enumerate([Vector((0.5, -0.32, 0.16)), Vector((-0.45, 0.25, 0.1))]):
-        cam.location = center + view
+        cam.location = center + view * SCALE
         cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()
         scene.render.filepath = path if i == 0 else f"{root}_back{ext}"
         bpy.ops.render.render(write_still=True)
@@ -371,11 +418,17 @@ def main():
     bake(gun)
     export(gun)
     write_shot_sound(os.path.join(AUDIO_DIR, SOUND_NAME + ".wav"))
+    write_reload_sound(os.path.join(AUDIO_DIR, RELOAD_SOUND_NAME + ".wav"))
+    write_dry_fire_sound(os.path.join(AUDIO_DIR, DRY_SOUND_NAME + ".wav"))
 
     tris = sum(len(p.vertices) - 2 for p in gun.data.polygons)
-    muzzle = (to_world(MUZZLE_U, BORE_V) - to_world(*ORIGIN_UV)) * 0.001
+    muzzle = (to_world(MUZZLE_U, BORE_V) - to_world(*ORIGIN_UV)) * 0.001 * SCALE
     # В Unity: x = Blender x (OBJ зеркалит, но x = 0), y = Blender z, z = -Blender y
     print(f"Треугольников: {tris}; дуло в Unity: (0, {muzzle.z:.4f}, {-muzzle.y:.4f})")
+    xs, ys, zs = zip(*(v.co for v in gun.data.vertices))
+    lo, hi = Vector((-max(xs), min(zs), -max(ys))), Vector((-min(xs), max(zs), -min(ys)))
+    print(f"Границы в Unity: центр {tuple(round(c, 4) for c in (lo + hi) / 2)}, "
+          f"размер {tuple(round(c, 4) for c in hi - lo)}")
     if preview:
         render_preview(gun, os.path.abspath(preview))
 

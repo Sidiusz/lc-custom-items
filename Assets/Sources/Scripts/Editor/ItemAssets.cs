@@ -45,6 +45,8 @@ public static class ItemAssets
         public bool TwoHanded;
         public float VerticalOffset = 0.1f;
         public Vector3 RestingRotation;
+        public Vector3 RotationOffset;
+        public bool SyncInteract;                                    // Q/E-взаимодействие у всех игроков
         public string[] ToolTips = new string[0];
         public bool SaveItemVariable;
         public string Icon;                                          // путь к спрайту, необязательно
@@ -63,6 +65,7 @@ public static class ItemAssets
             VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
             ToolTips = new[] { "Drink : [LMB]" },
             SaveItemVariable = true, // сохранять оставшиеся глотки
+            Clips = new[] { ("drinkClip", Art + "/Audio/Jagermeister/JagermeisterDrink.wav") },
             Customize = SetupJagermeister,
         },
         new Spec
@@ -88,11 +91,28 @@ public static class ItemAssets
         {
             Name = "ToyGun", ItemName = "Toy gun", Behaviour = "CustomItems.Items.ToyGunItem",
             Template = "Zap gun",
-            Scrap = false, Rarity = 0, InShop = true, Price = 30, Weight = 1.03f,
-            ToolTips = new[] { "Shoot : [LMB]" },
+            MinValue = 40, MaxValue = 90, Rarity = 25, Weight = 1.03f,
+            ToolTips = new[] { "Shoot : [LMB]", "Reload : [R]" },
             RestingRotation = new Vector3(0f, 0f, 90f), // на полу лежит на боку
-            Clips = new[] { ("shotClip", Art + "/Audio/ToyGun/ToyGunShot.wav") },
+            VerticalOffset = 0.03f,                      // половина толщины
+            RotationOffset = new Vector3(0f, 90f, 0f),   // стволом вперёд
+            SaveItemVariable = true,                     // пульки в магазине
+            SyncInteract = true,                         // перезарядка у всех игроков
+            Clips = new[]
+            {
+                ("shotClip", Art + "/Audio/ToyGun/ToyGunShot.wav"),
+                ("reloadClip", Art + "/Audio/ToyGun/ToyGunReload.wav"),
+                ("dryFireClip", Art + "/Audio/ToyGun/ToyGunDryFire.wav"),
+            },
             Customize = SetupToyGun,
+        },
+        new Spec
+        {
+            Name = "ToyGunAmmo", ItemName = "Toy gun pellets", Behaviour = "CustomItems.Items.ToyGunAmmoItem",
+            Scrap = false, Rarity = 0, InShop = true, Price = 15, Weight = 1.01f,
+            VerticalOffset = 0.046f,  // половина высоты коробки с клапаном
+            SaveItemVariable = true,  // остаток пулек в пачке
+            Texture = Art + "/Textures/ToyGunAmmo/ToyGunAmmo.png",
         },
         new Spec
         {
@@ -190,6 +210,9 @@ public static class ItemAssets
 
         MarkBundle(RegistryPath);
         AssetDatabase.SaveAssets();
+        var icons = ItemIcons.RenderMissing();
+        if (icons > 0)
+            created.Add($"иконки: {icons}");
         if (created.Count > 0)
             Debug.Log("Предметы: созданы\n" + string.Join("\n", created));
     }
@@ -212,11 +235,12 @@ public static class ItemAssets
         Set(item, "canBeGrabbedBeforeGameStart", true);
         Set(item, "allowDroppingAheadOfPlayer", true);
         Set(item, "syncUseFunction", true);
+        Set(item, "syncInteractLRFunction", spec.SyncInteract);
         Set(item, "canBeInspected", false);
         Set(item, "saveItemVariable", spec.SaveItemVariable);
         Set(item, "toolTips", spec.ToolTips);
         Set(item, "positionOffset", Vector3.zero);
-        Set(item, "rotationOffset", Vector3.zero);
+        Set(item, "rotationOffset", spec.RotationOffset);
         Set(item, "restingRotation", spec.RestingRotation);
         Set(item, "verticalOffset", spec.VerticalOffset);
         var groups = Field(item, "spawnPositionTypes");
@@ -364,7 +388,7 @@ public static class ItemAssets
     private const string ToyGunTexture = Art + "/Textures/ToyGun/ToyGunTexture.png";
     private const string ToyGunMaterial = Art + "/Materials/ToyGun/ToyGunMaterial.mat";
     // Дуло в координатах модели (скрипт Tools/ToyGun/model.py печатает её при запуске)
-    private static readonly Vector3 ToyGunMuzzle = new Vector3(0f, 0.084f, 0.125f);
+    private static readonly Vector3 ToyGunMuzzle = new Vector3(0f, 0.1344f, 0.2f);
 
     private static void SetupToyGun(GameObject root)
     {
@@ -402,12 +426,21 @@ public static class ItemAssets
         var glass = AssetDatabase.LoadAssetAtPath<Material>(JagerGlass);
         if (glass == null)
         {
-            glass = NewLitMaterial(JagerGlass, Color.white, 0.85f);
+            glass = NewLitMaterial(JagerGlass, Color.white, 0.5f);
             glass.SetTexture("_BaseColorMap", AssetDatabase.LoadAssetAtPath<Texture2D>(JagerTexture));
-            MakeTransparent(glass);
         }
         var liquid = AssetDatabase.LoadAssetAtPath<Material>(JagerLiquid)
-                     ?? NewLitMaterial(JagerLiquid, new Color(0.22f, 0.08f, 0.03f), 0.7f);
+                     ?? NewLitMaterial(JagerLiquid, new Color(0.22f, 0.08f, 0.03f), 0.4f);
+
+        // Настройки применяются и к уже созданным материалам (при Rebuild Item Prefabs).
+        // Гладкое стекло с Preserve Specular Lighting давало в игре яркий оранжевый блик
+        // поверх всей бутылки: отражение не гасится альфой. Делаем стекло матовее и
+        // гасим блик вместе с прозрачностью.
+        glass.SetFloat("_Smoothness", 0.5f);
+        glass.SetFloat("_EnableBlendModePreserveSpecularLighting", 0f);
+        MakeTransparent(glass);
+        liquid.SetFloat("_Smoothness", 0.4f);
+        EditorUtility.SetDirty(liquid);
 
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
             r.sharedMaterial = r.name.StartsWith("Liquid") ? liquid : glass;
@@ -468,6 +501,9 @@ public static class ItemAssets
 
         string[] Missing()
         {
+            // GetAllRuntimeMonoScripts видит только загруженные MonoScript'ы, а сразу после запуска (-executeMethod) они ещё не загружены
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets" }))
+                AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GUIDToAssetPath(guid));
             var known = new HashSet<Type>(MonoImporter.GetAllRuntimeMonoScripts()
                 .Where(m => m != null).Select(m => m.GetClass()).Where(c => c != null));
             return needed.Where(t => !known.Contains(t)).Select(t => t.Name).ToArray();
@@ -476,6 +512,9 @@ public static class ItemAssets
         var missing = Missing();
         if (missing.Length > 0 && Application.isBatchMode)
         {
+            // MonoScript без класса (GetClass() == null) оживает после переимпорта своего .cs
+            foreach (var guid in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets/Sources/GameStubs" }))
+                AssetDatabase.ImportAsset(AssetDatabase.GUIDToAssetPath(guid), ImportAssetOptions.ForceUpdate);
             AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
             missing = Missing();
         }

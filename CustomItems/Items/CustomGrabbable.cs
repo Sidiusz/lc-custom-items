@@ -18,6 +18,10 @@ namespace CustomItems.Items
 
         protected AudioSource audioSource;
 
+        // Пауза между использованиями (ЛКМ), чтобы предмет нельзя было спамить. Своя пауза
+        // задаётся полем Use Cooldown на префабе или в коде предмета; 0 означает «по умолчанию».
+        public const float DefaultUseCooldown = 1f;
+
         private static readonly HashSet<Item> PreparedItems = new HashSet<Item>();
         private static readonly Dictionary<Material, Material> ConvertedMaterials = new Dictionary<Material, Material>();
         private static Shader hdrpLit;
@@ -40,6 +44,8 @@ namespace CustomItems.Items
                 audioSource.outputAudioMixerGroup = mixerSource.outputAudioMixerGroup;
 
             FixMaterials();
+            if (useCooldown <= 0f)
+                useCooldown = DefaultUseCooldown;
             base.Start();
         }
 

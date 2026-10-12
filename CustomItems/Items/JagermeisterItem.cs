@@ -1,3 +1,5 @@
+using System.Collections;
+using GameNetcodeStuff;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -22,8 +24,16 @@ namespace CustomItems.Items
         private const string SipsMessage = ModInfo.Guid + ".jagermeister.sips";
         private const string RequestMessage = ModInfo.Guid + ".jagermeister.request";
 
+        // Глоток: бутылка подносится ко рту ванильной анимацией TZP-Inhalant, звук
+        // начинается, когда бутылка у рта, эффект и уровень жидкости меняются в конце.
+        private const string DrinkAnimBool = "useTZPItem";
+        private const float SoundDelay = 0.3f;
+        private const float DrinkDuration = 1.4f;
+
+        [Tooltip("Глоток и выдох (Art/Audio/Jagermeister, собирается Tools/Jagermeister/sound.sh)")]
+        public AudioClip drinkClip;
+
         private static CustomMessagingManager registeredOn;
-        private static AudioClip gulpClip;
 
         private int sipsLeft = -1; // -1: ещё не знаем (клиент ждёт ответа хоста)
         private GameObject[] liquidLayers;
@@ -31,7 +41,7 @@ namespace CustomItems.Items
         public override void Start()
         {
             base.Start();
-            useCooldown = 1.5f;
+            useCooldown = 3f; // звук глотка с выдохом ~2.8 с
             RegisterMessages();
             FindLiquid();
 
@@ -70,13 +80,76 @@ namespace CustomItems.Items
             // Пока хост не ответил, клиент всё равно даёт выпить: хост пришлёт точное число.
             if (sipsLeft > 0)
                 sipsLeft--;
-            UpdateLiquid();
 
-            PlayGulp();
-            DrunkEffects.AddSip(playerHeldBy);
+            StopDrinking();
+            drinking = StartCoroutine(Drink(playerHeldBy));
 
             if (IsServer)
                 BroadcastSips();
+        }
+
+        public override void PocketItem()
+        {
+            StopDrinking();
+            base.PocketItem();
+        }
+
+        public override void DiscardItem()
+        {
+            StopDrinking();
+            base.DiscardItem();
+        }
+
+        private Coroutine drinking;
+        private PlayerControllerB animatedPlayer;
+
+        // Идёт на всех клиентах (глоток синхронизирует игра). Анимацию ставит только
+        // владелец: позу рук остальным раздаёт сама игра вместе с анимациями игрока.
+        private IEnumerator Drink(PlayerControllerB player)
+        {
+            if (player == GameNetworkManager.Instance.localPlayerController)
+            {
+                animatedPlayer = player;
+                player.activatingItem = true;
+                player.playerBodyAnimator.SetBool(DrinkAnimBool, true);
+            }
+
+            yield return new WaitForSeconds(SoundDelay);
+            if (audioSource != null && drinkClip != null)
+            {
+                audioSource.pitch = Random.Range(0.95f, 1.05f);
+                audioSource.PlayOneShot(drinkClip);
+                WalkieTalkie.TransmitOneShotAudio(audioSource, drinkClip);
+            }
+
+            yield return new WaitForSeconds(DrinkDuration - SoundDelay);
+            ResetAnimation();
+            UpdateLiquid();
+            DrunkEffects.AddSip(player);
+            drinking = null;
+        }
+
+        // Бутылку убрали или выбросили посреди глотка: опускаем руку сразу, а глоток
+        // всё равно засчитан (число глотков уже уменьшено у всех).
+        private void StopDrinking()
+        {
+            if (drinking == null)
+                return;
+            StopCoroutine(drinking);
+            drinking = null;
+            ResetAnimation();
+            UpdateLiquid();
+            if (playerHeldBy != null)
+                DrunkEffects.AddSip(playerHeldBy);
+        }
+
+        private void ResetAnimation()
+        {
+            if (animatedPlayer == null)
+                return;
+            animatedPlayer.activatingItem = false;
+            animatedPlayer.playerBodyAnimator.SetBool(DrinkAnimBool, false);
+            animatedPlayer = null;
         }
 
         private void FindLiquid()
@@ -112,15 +185,6 @@ namespace CustomItems.Items
                 sipsLeft = Random.Range(1, MaxSips + 1);
         }
 
-        private void PlayGulp()
-        {
-            if (audioSource == null)
-                return;
-            gulpClip ??= MakeGulpClip();
-            audioSource.pitch = Random.Range(0.9f, 1.1f);
-            audioSource.PlayOneShot(gulpClip);
-            WalkieTalkie.TransmitOneShotAudio(audioSource, gulpClip);
-        }
 
         // ---- Синхронизация числа глотков ----
 
@@ -189,41 +253,6 @@ namespace CustomItems.Items
             if (spawned == null || !spawned.TryGetValue(objectId, out var obj) || obj == null)
                 return null;
             return obj.GetComponent<JagermeisterItem>();
-        }
-
-        // ---- Звук глотка: несколько «бульков», синтезируются один раз ----
-
-        private static AudioClip MakeGulpClip()
-        {
-            const int rate = 44100;
-            const int gulps = 3;
-            const float gulpLength = 0.16f;
-            const float gap = 0.26f;
-            var total = (int)(rate * (gap * (gulps - 1) + gulpLength + 0.05f));
-            var data = new float[total];
-            var rng = new System.Random(1337);
-
-            for (var g = 0; g < gulps; g++)
-            {
-                var start = (int)(rate * g * gap);
-                var length = (int)(rate * gulpLength);
-                var phase = 0.0;
-                var noise = 0f;
-                for (var i = 0; i < length && start + i < total; i++)
-                {
-                    var t = (float)i / length;
-                    // Пузырь: тон быстро съезжает вниз, мягкая атака и затухание
-                    var freq = Mathf.Lerp(340f, 140f, Mathf.Sqrt(t)) * (1f - 0.08f * g);
-                    phase += 2 * System.Math.PI * freq / rate;
-                    var env = Mathf.Sin(Mathf.PI * Mathf.Pow(t, 0.6f)) * (1f - t);
-                    noise = Mathf.Lerp(noise, (float)(rng.NextDouble() * 2 - 1), 0.08f);
-                    data[start + i] += ((float)System.Math.Sin(phase) * 0.8f + noise * 0.5f) * env * 0.7f;
-                }
-            }
-
-            var clip = AudioClip.Create("JagermeisterGulp", total, 1, rate, false);
-            clip.SetData(data, 0);
-            return clip;
         }
     }
 }

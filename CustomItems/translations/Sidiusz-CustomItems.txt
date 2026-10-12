@@ -1,13 +1,15 @@
-// CustomItems (Sidiusz): Егермейстер, энергетик, монитор, игрушечный пистолет, плюшевый Уинстон
+// CustomItems (Sidiusz): Егермейстер, энергетик, монитор, игрушечный пистолет и пульки к нему, плюшевый Уинстон
 @item Jagermeister=Егермейстер|егермейстер|m
 @item Adrenaline Game Fuel=Энергетик Adrenaline|энергетик Adrenaline|m
 @item Computer monitor=Монитор|монитор|m
 @item Toy gun=Игрушечный пистолет|игрушечный пистолет|m
+@item Toy gun pellets=Пачка пулек|пачку пулек|f
 @item Winston plush=Плюшевый Уинстон|плюшевого Уинстона|m
 
 // Подсказки управления
 Drink : [LMB]=Выпить : [LMB]
 Shoot : [LMB]=Выстрелить : [LMB]
+Reload : [R]=Перезарядить : [R]
 Talk : [LMB]=Говорить : [LMB]
 
 // Сообщения

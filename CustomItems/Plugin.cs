@@ -65,8 +65,7 @@ namespace CustomItems
                 "Сколько секунд после глотка стамина восстанавливается быстрее").Value;
             AdrenalineItem.HeartAttackChancePerSip = Config.Bind(adrenaline, "HeartAttackChancePerSip", 1f,
                 "Шанс сердечного приступа в процентах за каждый глоток за день: 1-й глоток 1%, 2-й 2%, 3-й 3%...").Value;
-            ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
-                "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
+            SetupToyGun();
 
             LoadRussianTranslation(Path.Combine(dir, "translations"));
 
@@ -103,6 +102,27 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
             if (!asScrap && !inShop)
                 LethalLib.Modules.Items.RegisterItem(item);
+        }
+
+        private void SetupToyGun()
+        {
+            ToyGunItem.DamagePerPellet = Config.Bind("Toy gun", "Damage", 0.1f,
+                "Урон за пульку. Дробная часть копится: при 0.1 каждые 10 попаданий в одну цель наносят 1 урон").Value;
+            ToyGunItem.MagazineSize = Mathf.Max(1, Config.Bind("Toy gun", "MagazineSize", 12,
+                "Сколько пулек помещается в магазин").Value);
+            ToyGunAmmoItem.BoxSize = Mathf.Max(1, Config.Bind("Toy gun pellets", "PelletsPerBox", 24,
+                "Сколько пулек в одной пачке из магазина терминала").Value);
+            var keyName = Config.Bind("Toy gun", "ReloadKey", "R",
+                "Клавиша перезарядки (имя из Unity Input System: R, T, G...). E тоже перезаряжает").Value;
+            if (System.Enum.TryParse<Key>(keyName, true, out var key))
+                ToyGunReloadKey.Key = key;
+            else
+                Log.LogWarning($"Не знаю клавишу '{keyName}', перезарядка на {ToyGunReloadKey.Key}");
+            ToyGunItem.ReloadKeyName = ToyGunReloadKey.Key.ToString();
+
+            var go = new GameObject("SidiuszCustomItems.ToyGunReloadKey") { hideFlags = HideFlags.HideAndDontSave };
+            DontDestroyOnLoad(go);
+            go.AddComponent<ToyGunReloadKey>();
         }
 
         private void SetupItemTuner()
@@ -143,6 +163,12 @@ namespace CustomItems
                 null, new[] { typeof(string), typeof(System.Func<string, bool>) }, null);
             if (load == null)
                 return; // русификатора нет: остаётся английский
+
+            // Строки с числами по точному тексту не переводятся, их переводим сами
+            ToyGunItem.AmmoTipFormat = "Пульки : {0}/{1}";
+            ToyGunItem.NoAmmoHeader = "Игрушечный пистолет";
+            ToyGunItem.NoAmmoBody = "В инвентаре нет пулек. Их можно купить в магазине терминала.";
+            ToyGunAmmoItem.TipFormat = "Пулек в пачке : {0}";
 
             try
             {

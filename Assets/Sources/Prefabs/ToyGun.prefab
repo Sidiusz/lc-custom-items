@@ -58,8 +58,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 0.0288, y: 0.174, z: 0.18900001}
-  m_Center: {x: 0.00019999966, y: 0.019999996, z: 0.030499995}
+  m_Size: {x: 0.0461, y: 0.2784, z: 0.3024}
+  m_Center: {x: 0, y: 0.032, z: 0.0488}
 --- !u!54 &860016289655139420
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -226,6 +226,8 @@ MonoBehaviour:
   rotateObject: 0
   templateItemName: Zap gun
   shotClip: {fileID: 8300000, guid: 2d6656d313d928f458b85e07bc49c594, type: 3}
+  reloadClip: {fileID: 8300000, guid: af969092ca2842eb9e12a83dab732246, type: 3}
+  dryFireClip: {fileID: 8300000, guid: 9e9cc3166def40c28cd78f0b25f9c0f7, type: 3}
 --- !u!1 &6035962818853278031
 GameObject:
   m_ObjectHideFlags: 0
@@ -251,7 +253,7 @@ Transform:
   m_GameObject: {fileID: 6035962818853278031}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.084, z: 0.125}
+  m_LocalPosition: {x: 0, y: 0.1344, z: 0.2}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -284,7 +286,7 @@ Transform:
   m_GameObject: {fileID: 7844915391375893830}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.00019999966, y: 0.019999996, z: 0.030499995}
+  m_LocalPosition: {x: 0, y: 0.032, z: 0.0488}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -327,10 +329,10 @@ MonoBehaviour:
   minRange: 1
   requiresLineOfSight: 1
   headerText: Toy gun
-  subText: 
+  subText: 'Value: '
   scrapValue: 0
   creatureScanID: -1
-  nodeType: 0
+  nodeType: 2
 --- !u!1001 &7474608543960690741
 PrefabInstance:
   m_ObjectHideFlags: 0

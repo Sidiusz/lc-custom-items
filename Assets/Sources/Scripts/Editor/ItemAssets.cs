@@ -231,7 +231,7 @@ public static class ItemAssets
                 // Оффсеты из Spec и старых ассетов считались от пивота модели (обычно её центра)
                 if (itemIsNew || pivotIsOld)
                 {
-                    MovePivotOffsets(item, lift);
+                    MovePivotOffsets(item, lift * prefab.transform.localScale.y);
                     created.Add($"{spec.Name}: пивот внизу, модель поднята на {lift:0.###} м, оффсеты в Item пересчитаны");
                 }
             }
@@ -302,6 +302,9 @@ public static class ItemAssets
 
     private static GameObject BuildPrefab(Spec spec, GameObject model, ScriptableObject item, string path, out float lift)
     {
+        // Масштаб корня настраивается (окно настройки в игре → Scale префаба), пересборка его не сбрасывает
+        var previous = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        var scale = previous != null ? previous.transform.localScale : Vector3.one;
         var root = new GameObject(spec.Name);
         try
         {
@@ -364,6 +367,7 @@ public static class ItemAssets
             if (spec.Phrases)
                 Set(behaviour, "phraseSets", PhraseSets(behaviour));
 
+            root.transform.localScale = scale;
             EnsureFolder(PrefabsDir);
             return PrefabUtility.SaveAsPrefabAsset(root, path);
         }

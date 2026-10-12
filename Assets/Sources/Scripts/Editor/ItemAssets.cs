@@ -65,6 +65,7 @@ public static class ItemAssets
             VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
             ToolTips = new[] { "Drink : [LMB]" },
             SaveItemVariable = true, // сохранять оставшиеся глотки
+            Customize = SetupJagermeister,
         },
         new Spec
         {
@@ -358,6 +359,57 @@ public static class ItemAssets
         var muzzle = new GameObject("Muzzle");
         muzzle.transform.SetParent(root.transform, false);
         muzzle.transform.localPosition = ToyGunMuzzle;
+    }
+
+    // ---------------- Егермейстер: прозрачное стекло, сквозь которое видна жидкость
+
+    private const string JagerTexture = Art + "/Textures/Jagermeister/Jagermeister.png";
+    private const string JagerGlass = Art + "/Materials/Jagermeister/JagermeisterGlass.mat";
+    private const string JagerLiquid = Art + "/Materials/Jagermeister/JagermeisterLiquid.mat";
+
+    // Модель (Tools/Jagermeister/model.py): Bottle и Liquid1..Liquid3, слои жидкости
+    // прячет JagermeisterItem по числу оставшихся глотков.
+    private static void SetupJagermeister(GameObject root)
+    {
+        var glass = AssetDatabase.LoadAssetAtPath<Material>(JagerGlass);
+        if (glass == null)
+        {
+            glass = NewLitMaterial(JagerGlass, Color.white, 0.85f);
+            glass.SetTexture("_BaseColorMap", AssetDatabase.LoadAssetAtPath<Texture2D>(JagerTexture));
+            MakeTransparent(glass);
+        }
+        var liquid = AssetDatabase.LoadAssetAtPath<Material>(JagerLiquid)
+                     ?? NewLitMaterial(JagerLiquid, new Color(0.22f, 0.08f, 0.03f), 0.7f);
+
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            r.sharedMaterial = r.name.StartsWith("Liquid") ? liquid : glass;
+    }
+
+    private static Material NewLitMaterial(string path, Color color, float smoothness)
+    {
+        EnsureFolder(Path.GetDirectoryName(path));
+        var shader = Shader.Find("HDRP/Lit");
+        var material = new Material(shader != null ? shader : Shader.Find("Standard"));
+        material.SetColor("_BaseColor", color);
+        material.SetColor("_Color", color);
+        material.SetFloat("_Smoothness", smoothness);
+        AssetDatabase.CreateAsset(material, path);
+        return material;
+    }
+
+    // Прозрачность HDRP/Lit с альфой из текстуры. HDMaterial берём рефлексией, чтобы
+    // не добавлять сборку HDRP в asmdef; он же выставляет ключевые слова и рендер-стейт.
+    private static void MakeTransparent(Material material)
+    {
+        material.SetFloat("_SurfaceType", 1f);
+        material.SetFloat("_BlendMode", 0f); // Alpha
+        material.SetFloat("_EnableFogOnTransparent", 1f);
+        var hd = Type.GetType("UnityEngine.Rendering.HighDefinition.HDMaterial, Unity.RenderPipelines.HighDefinition.Runtime");
+        hd?.GetMethod("SetSurfaceType", new[] { typeof(Material), typeof(bool) })?.Invoke(null, new object[] { material, true });
+        hd?.GetMethod("ValidateMaterial", new[] { typeof(Material) })?.Invoke(null, new object[] { material });
+        if (hd == null)
+            Debug.LogWarning("Егермейстер: не нашёл HDMaterial, проверьте в инспекторе, что у стекла Surface Type = Transparent");
+        EditorUtility.SetDirty(material);
     }
 
     // ---------------- помощники

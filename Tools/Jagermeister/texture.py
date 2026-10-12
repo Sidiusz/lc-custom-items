@@ -6,6 +6,9 @@
   u: обхват бутылки, 0.5 = перед (этикетка), шов сзади;
   v 0.00-0.80: стекло от дна (0) до верха горлышка (0.80);
   v 0.82-1.00: крышка.
+
+Альфа: стекло полупрозрачное (сквозь него видна жидкость), этикетка, лента на
+горлышке и крышка непрозрачные. Материал стекла в Unity прозрачный (ItemAssets.cs).
 """
 import math
 import os
@@ -16,8 +19,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 SIZE = 512
 OUT = os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Sources", "Art", "Textures", "Jagermeister", "Jagermeister.png")
 
-GLASS = (24, 52, 30)
-GLASS_LIGHT = (58, 96, 56)
+GLASS = (34, 78, 44)
+GLASS_LIGHT = (90, 140, 88)
+GLASS_ALPHA = 120
 CAP = (22, 34, 24)
 ORANGE = (222, 112, 30)
 CREAM = (236, 220, 178)
@@ -72,22 +76,39 @@ def cap(img):
 def neck_band(img):
     """Оранжевая лента на горлышке, видна под крышкой."""
     d = ImageDraw.Draw(img)
-    y0 = px(0, 0.76)[1]
-    y1 = px(0, 0.70)[1]
+    y0 = px(0, NECK_BAND[0])[1]
+    y1 = px(0, NECK_BAND[1])[1]
     d.rectangle([0, y0, SIZE, y1], fill=ORANGE)
     d.line([(0, y0), (SIZE, y0)], fill=INK, width=2)
     d.line([(0, y1), (SIZE, y1)], fill=INK, width=2)
 
 
-def label(img):
-    d = ImageDraw.Draw(img)
+NECK_BAND = (0.76, 0.70)
+
+
+def label_shape():
     cx = SIZE / 2
     w = 0.24 * SIZE / 2
     top = px(0, 0.58)[1]
     bottom = px(0, 0.10)[1]
     peak = top - 22
     # Этикетка с «крышей» сверху, как у настоящей бутылки
-    shape = [(cx - w, bottom), (cx - w, top), (cx, peak), (cx + w, top), (cx + w, bottom)]
+    return cx, w, top, bottom, peak, [(cx - w, bottom), (cx - w, top), (cx, peak), (cx + w, top), (cx + w, bottom)]
+
+
+def alpha_mask():
+    """Непрозрачно всё, кроме стекла; на стекле этикетка и лента тоже непрозрачные."""
+    mask = Image.new("L", (SIZE, SIZE), 255)
+    d = ImageDraw.Draw(mask)
+    d.rectangle([0, px(0, 0.80)[1], SIZE, SIZE], fill=GLASS_ALPHA)
+    d.rectangle([0, px(0, NECK_BAND[0])[1], SIZE, px(0, NECK_BAND[1])[1]], fill=255)
+    d.polygon(label_shape()[-1], fill=255)
+    return mask
+
+
+def label(img):
+    d = ImageDraw.Draw(img)
+    cx, w, top, bottom, peak, shape = label_shape()
     d.polygon(shape, fill=ORANGE)
     inner = [(cx - w + 6, bottom - 6), (cx - w + 6, top + 4), (cx, peak + 9),
              (cx + w - 6, top + 4), (cx + w - 6, bottom - 6)]
@@ -140,6 +161,7 @@ def main():
     cap(img)
     grime(img)
     img = img.quantize(48).convert("RGB")
+    img.putalpha(alpha_mask())
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     img.save(os.path.normpath(OUT))
     print("saved", os.path.normpath(OUT))

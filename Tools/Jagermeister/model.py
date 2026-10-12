@@ -6,6 +6,7 @@
 Сначала texture.py (рисует Jagermeister.png). UV-раскладка описана там же.
 Размеры настоящей бутылки 0,7 л: ~25 см в высоту, ~8,5 см в ширину. 1 единица = 1 метр.
 Центр модели в середине бутылки, перёд (этикетка) смотрит в -Y Блендера.
+Объекты: Bottle (стекло и крышка) и Liquid1..Liquid3 (жидкость снизу вверх).
 """
 import math
 import os
@@ -95,33 +96,66 @@ def lathe(bm, uv, profile, v_range, cap_bottom, cap_top):
         disk(rows[-1], v_range[1] - 0.01, flip=False)
 
 
-def build():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    mesh = bpy.data.meshes.new(NAME)
+# Жидкость внутри: три одинаковых слоя, по одному на глоток (JagermeisterItem прячет
+# верхние, когда глотков осталось меньше). Чуть уже стекла и от дна до плеч.
+LIQUID_HALF = 0.038
+LIQUID_BOTTOM = 0.006
+LIQUID_TOP = 0.150
+LIQUID_LAYERS = 3
+LIQUID_COLOR = (0.22, 0.08, 0.03, 1.0)  # тёмно-коричневый, как сам ликёр
+
+
+def make_object(name, fill, material):
+    mesh = bpy.data.meshes.new(name)
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new("UVMap")
-    lathe(bm, uv, GLASS_PROFILE, GLASS_V, cap_bottom=True, cap_top=False)
-    lathe(bm, uv, CAP_PROFILE, CAP_V, cap_bottom=False, cap_top=True)
+    fill(bm, uv)
     bm.normal_update()
     bm.to_mesh(mesh)
     bm.free()
+    mesh.materials.append(material)
 
-    obj = bpy.data.objects.new(NAME, mesh)
+    obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
-    bpy.context.view_layer.objects.active = obj
-    obj.select_set(True)
-    # Гладкие стенки, острые рёбра у дна и на торце крышки
-    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(50))
-
-    mat = bpy.data.materials.new(NAME)
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes["Principled BSDF"]
-    bsdf.inputs["Roughness"].default_value = 0.35
-    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
-    tex.image = bpy.data.images.load(os.path.join(TEX_DIR, NAME + ".png"))
-    mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
-    mesh.materials.append(mat)
     return obj
+
+
+def build():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    glass = bpy.data.materials.new(NAME)
+    glass.use_nodes = True
+    bsdf = glass.node_tree.nodes["Principled BSDF"]
+    bsdf.inputs["Roughness"].default_value = 0.15
+    tex = glass.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.load(os.path.join(TEX_DIR, NAME + ".png"))
+    glass.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    glass.node_tree.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+
+    liquid = bpy.data.materials.new(NAME + "Liquid")
+    liquid.use_nodes = True
+    lb = liquid.node_tree.nodes["Principled BSDF"]
+    lb.inputs["Base Color"].default_value = LIQUID_COLOR
+    lb.inputs["Roughness"].default_value = 0.3
+    liquid.diffuse_color = LIQUID_COLOR
+
+    objects = [make_object("Bottle", lambda bm, uv: (
+        lathe(bm, uv, GLASS_PROFILE, GLASS_V, cap_bottom=True, cap_top=False),
+        lathe(bm, uv, CAP_PROFILE, CAP_V, cap_bottom=False, cap_top=True)), glass)]
+
+    step = (LIQUID_TOP - LIQUID_BOTTOM) / LIQUID_LAYERS
+    for i in range(LIQUID_LAYERS):
+        h0 = LIQUID_BOTTOM + step * i
+        profile = [(h0, LIQUID_HALF, 4.0), (h0 + step, LIQUID_HALF, 4.0)]
+        objects.append(make_object(f"Liquid{i + 1}", lambda bm, uv, p=profile, first=(i == 0): lathe(
+            bm, uv, p, (0.0, 0.0), cap_bottom=first, cap_top=True), liquid))
+
+    for obj in objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = objects[0]
+    # Гладкие стенки, острые рёбра у дна, на торце крышки и на крышках слоёв жидкости
+    bpy.ops.object.shade_smooth_by_angle(angle=math.radians(50))
+    return objects
 
 
 def export():

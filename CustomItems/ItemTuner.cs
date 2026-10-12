@@ -7,7 +7,6 @@ using GameNetcodeStuff;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering;
 
 namespace CustomItems
 {
@@ -16,15 +15,13 @@ namespace CustomItems
     ///
     /// Две вкладки: «В руке» (Position/Rotation Offset) и «На полу» (Resting Rotation и высота над полом,
     /// которая меряется по нижней точке лежащего предмета). Крутить предмет можно кнопками или мышью
-    /// прямо в мире, а камеру можно вынести наружу и облетать предмет, чтобы видеть его со стороны,
-    /// как его видят друзья. «Сохранить» пишет значения в BepInEx/config/SidiuszCustomItems.tuning.txt,
+    /// прямо в мире. «Сохранить» пишет значения в BepInEx/config/SidiuszCustomItems.tuning.txt,
     /// и при следующем запуске они применяются сами.
     ///
     /// Пока окно открыто, камера игрока, ходьба и действия с предметом отключены, чтобы клик по окну
     /// не стрелял и не пил.
     /// </summary>
-    [DefaultExecutionOrder(30000)] // LateUpdate после игрока и предметов: камера и предмет ставятся последними
-    internal class ItemTuner : MonoBehaviour
+        internal class ItemTuner : MonoBehaviour
     {
         public static bool IsOpen { get; private set; }
         public static Key ToggleKey = Key.F8;
@@ -46,17 +43,8 @@ namespace CustomItems
         private string status = "";
         private readonly Dictionary<string, string> textBuffers = new Dictionary<string, string>();
 
-        // Мышь в мире (вне окна): ЛКМ — крутить предмет, Ctrl+ЛКМ — двигать в руке, ПКМ — облёт камеры
-        private bool rotatingItem, orbiting;
-
-        // Вид со стороны
-        private bool thirdPerson;
-        private float orbitYaw, orbitPitch = 12f, orbitDistance = 1.2f;
-        private Vector3 savedCameraPosition;
-        private Quaternion savedCameraRotation;
-        private ShadowCastingMode savedBodyShadows;
-        private bool savedArmsEnabled, savedVisorActive;
-        private PlayerControllerB viewPlayer;
+        // Мышь в мире (вне окна): ЛКМ — крутить предмет, Ctrl+ЛКМ — двигать в руке
+        private bool rotatingItem;
 
         private bool savedLook, savedMove;
         private PlayerControllerB blockedPlayer;
@@ -101,8 +89,6 @@ namespace CustomItems
                 return;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            if (thirdPerson)
-                UpdateThirdPerson();
         }
 
         private void SetOpen(bool open, bool lockCursor = true)
@@ -110,7 +96,7 @@ namespace CustomItems
             if (IsOpen == open)
                 return;
             IsOpen = open;
-            rotatingItem = orbiting = false;
+            rotatingItem = false;
             if (open)
             {
                 if (selected == null && ItemTuningStore.Items.Count > 0)
@@ -119,7 +105,6 @@ namespace CustomItems
                 return;
             }
 
-            SetThirdPerson(false);
             BlockPlayer(false);
             // Мышь прячем, только если мы в рейсе и не в меню/терминале: в главном меню она нужна
             var player = LocalPlayer;
@@ -215,24 +200,7 @@ namespace CustomItems
                 rotatingItem = true;
             if (!mouse.leftButton.isPressed)
                 rotatingItem = false;
-            if (mouse.rightButton.wasPressedThisFrame && !overWindow)
-                orbiting = true;
-            if (!mouse.rightButton.isPressed)
-                orbiting = false;
-
             var delta = mouse.delta.ReadValue();
-            if (thirdPerson)
-            {
-                if (orbiting)
-                {
-                    orbitYaw += delta.x * 0.3f;
-                    orbitPitch = Mathf.Clamp(orbitPitch - delta.y * 0.3f, -80f, 80f);
-                }
-                var wheel = mouse.scroll.ReadValue().y;
-                if (!overWindow && Mathf.Abs(wheel) > 0.01f)
-                    orbitDistance = Mathf.Clamp(orbitDistance * (1f - Mathf.Sign(wheel) * 0.1f), 0.3f, 6f);
-            }
-
             if (!rotatingItem || delta.sqrMagnitude < 0.0001f)
                 return;
             var target = Target(player);
@@ -318,102 +286,6 @@ namespace CustomItems
             Changed();
         }
 
-        // ---------------------------------------------------------------- вид со стороны
-
-        private void SetThirdPerson(bool on)
-        {
-            var player = on ? LocalPlayer : viewPlayer;
-            if (on == thirdPerson || player == null || player.gameplayCamera == null)
-            {
-                thirdPerson = on && player != null && player.gameplayCamera != null;
-                return;
-            }
-            thirdPerson = on;
-            var cam = player.gameplayCamera.transform;
-
-            if (on)
-            {
-                viewPlayer = player;
-                savedCameraPosition = cam.localPosition;
-                savedCameraRotation = cam.localRotation;
-                // Своё тело игра рисует только тенью, а руки и шлем — только для первого лица
-                if (player.thisPlayerModel != null)
-                {
-                    savedBodyShadows = player.thisPlayerModel.shadowCastingMode;
-                    player.thisPlayerModel.shadowCastingMode = ShadowCastingMode.On;
-                }
-                if (player.thisPlayerModelArms != null)
-                {
-                    savedArmsEnabled = player.thisPlayerModelArms.enabled;
-                    player.thisPlayerModelArms.enabled = false;
-                }
-                if (player.localVisor != null)
-                {
-                    savedVisorActive = player.localVisor.gameObject.activeSelf;
-                    player.localVisor.gameObject.SetActive(false);
-                }
-                orbitYaw = player.transform.eulerAngles.y + 160f; // спереди и чуть сбоку
-                orbitPitch = 12f;
-                return;
-            }
-
-            cam.localPosition = savedCameraPosition;
-            cam.localRotation = savedCameraRotation;
-            if (player.thisPlayerModel != null)
-                player.thisPlayerModel.shadowCastingMode = savedBodyShadows;
-            if (player.thisPlayerModelArms != null)
-                player.thisPlayerModelArms.enabled = savedArmsEnabled;
-            if (player.localVisor != null)
-                player.localVisor.gameObject.SetActive(savedVisorActive);
-            // Предметы снова держит рука первого лица
-            if (player.ItemSlots != null)
-            {
-                foreach (var slot in player.ItemSlots)
-                    if (slot != null && slot.parentObject == player.serverItemHolder)
-                        slot.parentObject = player.localItemHolder;
-            }
-            viewPlayer = null;
-        }
-
-        private void UpdateThirdPerson()
-        {
-            var player = viewPlayer;
-            if (player == null || player.gameplayCamera == null)
-            {
-                thirdPerson = false;
-                return;
-            }
-
-            // Предмет в руке ставим в руку полной модели — так его видят остальные игроки
-            var held = player.currentlyHeldObjectServer;
-            if (held != null && player.serverItemHolder != null)
-            {
-                // В этом кадре игра уже поставила предмет в руку первого лица: переставляем сами,
-                // по той же формуле, что GrabbableObject.LateUpdate
-                var hand = player.serverItemHolder;
-                held.parentObject = hand;
-                held.transform.rotation = hand.rotation * Quaternion.Euler(held.itemProperties.rotationOffset);
-                held.transform.position = hand.position + hand.rotation * held.itemProperties.positionOffset;
-            }
-
-            var target = Target(player);
-            var point = target != null ? Center(target) : player.transform.position + Vector3.up * 1.3f;
-            var cam = player.gameplayCamera.transform;
-            cam.position = point + Quaternion.Euler(orbitPitch, orbitYaw, 0f) * (Vector3.back * orbitDistance);
-            cam.rotation = Quaternion.LookRotation(point - cam.position);
-        }
-
-        private static Vector3 Center(GrabbableObject target)
-        {
-            var renderers = target.GetComponentsInChildren<Renderer>(false);
-            if (renderers.Length == 0)
-                return target.transform.position;
-            var bounds = renderers[0].bounds;
-            foreach (var r in renderers)
-                bounds.Encapsulate(r.bounds);
-            return bounds.center;
-        }
-
         // ---------------------------------------------------------------- окно
 
         private void OnGUI()
@@ -457,10 +329,6 @@ namespace CustomItems
             if (GUILayout.Toggle(tab == Tab.Floor, "На полу", "Button"))
                 tab = Tab.Floor;
             GUILayout.EndHorizontal();
-
-            var wantThird = GUILayout.Toggle(thirdPerson, " Вид со стороны (ПКМ в мире — облёт, колесо — ближе/дальше)");
-            if (wantThird != thirdPerson)
-                SetThirdPerson(wantThird);
 
             GUILayout.Label("Мышью в мире: ЛКМ — крутить предмет" + (tab == Tab.Hand ? ", Ctrl+ЛКМ — двигать" : "") +
                             ", с Shift — точнее.");

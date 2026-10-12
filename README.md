@@ -26,15 +26,15 @@ lc-custom-items/
 │   │   │   ├── ItemRegistry.asset    какие предметы в моде: редкость, магазин, цена
 │   │   │   └── Items/<Предмет>.asset ассеты Item: название, стоимость, вес, хват, оффсеты...
 │   │   ├── Scenes/               тестовая сцена
-│   │   ├── GameStubs/            заглушки Item, GrabbableObject, ScanNodeProperties из игры (без asmdef!)
-│   │   └── Scripts/              Unity-скрипты (HeldItemPreview)
-│   │       └── Editor/           меню Lethal Company: DLL, создание ассетов, сборка бандла
+│   │   └── Scripts/
+│   │       ├── GameStubs/        заглушки Item, GrabbableObject, ScanNodeProperties из игры (без asmdef!)
+│   │       ├── Runtime/          HeldItemPreview (asmdef CustomItems.Tools)
+│   │       └── Editor/           меню Lethal Company: DLL, создание ассетов, иконки, сборка бандла
 │   ├── Plugins/                  DLL игры и мода для редактора (создаётся сама, в .gitignore)
 │   └── Settings/                 настройки HDRP (путь задан в ProjectSettings, не переносить)
 ├── Packages/, ProjectSettings/   Unity
 ├── Bundles/                      собранный AssetBundle `sidiuszcustomitems` (коммитится)
 ├── CustomItems/                  C#-проект мода (вне Assets/, Unity его не видит)
-│   ├── CustomItems.csproj        ссылки на BepInEx, LethalLib, библиотеки игры (NuGet)
 │   ├── CustomItems.csproj        плагин BepInEx (SidiuszCustomItems.dll)
 │   ├── Plugin.cs                 грузит бандл и регистрирует предметы из ItemRegistry
 │   ├── translations/             перевод для русификатора LethalRussian
@@ -46,7 +46,7 @@ lc-custom-items/
 └── thunderstore/manifest.json    для публикации на Thunderstore
 ```
 
-Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `SidiuszCustomItems.Items.dll` копируется в `Assets/Plugins/SidiuszCustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/GameStubs/`: только поля, без логики. Папка лежит вне `Scripts/` (там asmdef) и без своего asmdef, поэтому заглушки компилируются в `Assembly-CSharp` проекта, поэтому в бандле записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
+Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `SidiuszCustomItems.Items.dll` копируется в `Assets/Plugins/SidiuszCustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/Scripts/GameStubs/`: только поля, без логики. У этой папки нет asmdef (asmdef лежат только в `Scripts/Runtime/` и `Scripts/Editor/`), заглушки компилируются в `Assembly-CSharp` проекта: в бандле они записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
 
 ## 1. Что нужно установить
 
@@ -115,7 +115,7 @@ lc-custom-items/
 
 ## 2.1. Как предмет держится в руке: превью в Unity
 
-В игре предмет каждый кадр ставится в точку руки персонажа и сдвигается на Position / Rotation Offset из его ассета Item. Компонент `HeldItemPreview` (`Assets/Sources/Scripts/`) делает в редакторе то же самое, так что оффсеты можно подобрать на глаз.
+В игре предмет каждый кадр ставится в точку руки персонажа и сдвигается на Position / Rotation Offset из его ассета Item. Компонент `HeldItemPreview` (`Assets/Sources/Scripts/Runtime/`) делает в редакторе то же самое, так что оффсеты можно подобрать на глаз.
 
 1. Рипните игру AssetRipper'ом (Export → Unity project) и откройте экспорт отдельным проектом **или** скопируйте модель игрока с нужными мешами, анимациями и аватаром в `Assets/_Ripped/`. Эта папка в `.gitignore`: ассеты игры в репозиторий не кладём.
 2. Поставьте в сцену префаб игрока. В иерархии найдите поиском `ItemHolder`: `LocalItemHolder` — рука в виде от первого лица (руки без тела), `ServerItemHolder` — рука на полной модели, как вас видят друзья. Проверьте оба.

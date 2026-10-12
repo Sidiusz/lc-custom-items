@@ -89,7 +89,8 @@ namespace CustomItems.Items
 
         public const string TopicGoodbye = "Goodbye", TopicRepeat = "Repeat", TopicCount = "#count",
             TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro", TopicTimeError = "TimeError",
-            TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown";
+            TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown", TopicBored = "Game/Bored",
+            TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear";
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
         public const string TopicNames = "Names/", TopicMyName = "#myname", TopicMyRole = "#myrole", TopicRoles = "Roles/", TopicBattery = "#battery",
@@ -388,9 +389,9 @@ namespace CustomItems.Items
             station.lastAsked = topic;
             station.lastAskedAt = Time.time;
 
-            if (topic == TopicGameAsk)
+            if (topic == TopicGameAsk || topic == TopicBored)
             {
-                station.Say(TopicGameAsk);
+                station.Say(station.FindSet(topic) != null ? topic : TopicGameAsk);
                 station.gameAnswerUntil = station.talkUntil + GameAnswerSeconds;
             }
             else if (topic == TopicMyName || topic == TopicMyRole)
@@ -403,6 +404,8 @@ namespace CustomItems.Items
                 else
                     station.Say(folder != null && station.FindSet(TopicNames + folder) != null ? TopicNames + folder : TopicNames + "Unknown");
             }
+            else if (topic == TopicEnemies)
+                station.Say(EnemyNear(station.transform.position, EventRadius) ? TopicEnemiesNear : TopicAllClear);
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
             else if (topic == TopicBattery)
@@ -493,6 +496,10 @@ namespace CustomItems.Items
                 return "ItsYou";
             if (Has("сколько нас", "нас сколько", "сколько игроков"))
                 return TopicCount;
+            if (Has("враг", "опасно", "монстр"))
+                return TopicEnemies;
+            if (Has("скучно"))
+                return TopicBored;
             if (Has("поиграем", "сыграем", "поиграть", "сыграть", "игру"))
                 return TopicGameAsk;
             if (Has("любишь", "люблю", "нравлюсь", "нравится"))
@@ -854,7 +861,7 @@ namespace CustomItems.Items
 
         private float noiseRange;
         private float nextEventCheck, eventFreeAt, nextIdle;
-        private bool eventsReady, wasLanded, wasLeaving, wasHeld, wasNight, lowBatteryTold;
+        private bool eventsReady, wasLanded, wasLeaving, wasHeld, wasNight, lowBatteryTold, wasAllDead;
         private int deadPlayers, playersNear, sipsSeen = -1, shipScrap = -1, credits = -1;
         private bool wasLate, wasMusic, wasWalkie, wasWinston;
         private int squeaksSeen = -1;
@@ -868,6 +875,42 @@ namespace CustomItems.Items
         private readonly HashSet<ulong> deadIds = new HashSet<ulong>();
         private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
         private readonly List<string> reasons = new List<string>();
+        private readonly List<string> pendingDeaths = new List<string>();
+        private float deathsFlushAt;
+
+        // Кто убил: ближайший к месту смерти монстр (enemyName без пробелов), иначе Unknown
+        private static string DeathCause(GameNetcodeStuff.PlayerControllerB p)
+        {
+            var at = p.deadBody != null ? p.deadBody.transform.position : p.placeOfDeath;
+            if (at == Vector3.zero)
+                at = p.transform.position;
+            EnemyAI best = null;
+            var bestDist = 8f * 8f;
+            foreach (var enemy in UnityEngine.Object.FindObjectsOfType<EnemyAI>())
+            {
+                if (enemy == null || enemy.enemyType == null)
+                    continue;
+                var d = (enemy.transform.position - at).sqrMagnitude;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = enemy;
+                }
+            }
+            if (best == null)
+                return "Unknown";
+            var name = best.enemyType.enemyName.Replace(" ", "");
+            Debug.Log("[Alice] " + p.playerUsername + " died (" + p.causeOfDeath + "), nearest enemy " + name);
+            return name;
+        }
+
+        private static bool EnemyNear(Vector3 pos, float radius)
+        {
+            foreach (var enemy in UnityEngine.Object.FindObjectsOfType<EnemyAI>())
+                if (enemy != null && !enemy.isEnemyDead && (enemy.transform.position - pos).sqrMagnitude < radius * radius)
+                    return true;
+            return false;
+        }
 
         // Решает хост, остальным уходит выбранная фраза, как при ответе на вопрос
         private void UpdateEvents()
@@ -916,8 +959,16 @@ namespace CustomItems.Items
                 Reason("Landed");
             wasLanded = round.shipHasLanded;
             if (round.shipIsLeaving && !wasLeaving)
+            {
+                // Кто-то живой остался снаружи — «вы кого-то забыли на луне» (все мертвы — AllDead ниже)
+                if (!round.allPlayersDead && round.allPlayerScripts.Any(p => p != null && p.isPlayerControlled && !p.isPlayerDead && !p.isInHangarShipRoom))
+                    Reason("ForgotSomeone");
                 Reason("Leaving");
+            }
             wasLeaving = round.shipIsLeaving;
+            if (round.allPlayersDead && !wasAllDead && !round.inShipPhase)
+                Reason("AllDead");
+            wasAllDead = round.allPlayersDead;
 
             var dead = 0;
             foreach (var p in round.allPlayerScripts)
@@ -936,9 +987,23 @@ namespace CustomItems.Items
                     if (folder != null)
                         Reason("PlayerDied/" + folder);
                     Reason("PlayerDied");
+                    // Причину копим пару секунд: погибли разом несколько — «их», один — «его»
+                    pendingDeaths.Add(DeathCause(p));
+                    deathsFlushAt = Time.time + 3f;
                 }
             }
             deadPlayers = dead;
+            if (pendingDeaths.Count > 0 && Time.time >= deathsFlushAt)
+            {
+                foreach (var cause in pendingDeaths.Distinct())
+                {
+                    var many = pendingDeaths.Count(c => c == cause) > 1;
+                    var folder = "DeathCause/" + cause;
+                    reasons.Add(EventsFolder + folder + (many ? "/Many" : "/One"));
+                    reasons.Add(EventsFolder + folder);
+                }
+                pendingDeaths.Clear();
+            }
 
             var tod = TimeOfDay.Instance;
             var night = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.75f;

@@ -42,6 +42,10 @@ namespace CustomItems
                 return;
             }
 
+            Lang.Russian = Config.Bind("General", "Language", "ru",
+                new BepInEx.Configuration.ConfigDescription("Язык предметов: ru или en",
+                    new BepInEx.Configuration.AcceptableValueList<string>("ru", "en"))).Value == "ru";
+
             foreach (var entry in registry.items)
                 Register(entry);
 
@@ -69,15 +73,19 @@ namespace CustomItems
                 return;
             }
 
+            // Секция конфига по английскому названию: так она не меняется при смене языка
+            var section = item.itemName;
             PreparePrefab(prefab);
             LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(prefab);
 
             // Значения из Unity служат умолчаниями, конфиг BepInEx их переопределяет
-            var section = item.itemName;
             var rarity = Config.Bind(section, "Rarity", entry.rarity,
                 "Шанс появления как скрап (вес относительно других предметов, 0 = не спавнится)").Value;
             var inShop = Config.Bind(section, "InShop", entry.inShop, "Продавать в магазине терминала").Value;
             var price = Config.Bind(section, "Price", entry.price, "Цена в магазине").Value;
+
+            if (Lang.Russian)
+                Translate(item, prefab, entry, inShop);
 
             var asScrap = item.isScrap && rarity > 0;
             if (asScrap)
@@ -86,6 +94,20 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
             if (!asScrap && !inShop)
                 LethalLib.Modules.Items.RegisterItem(item);
+        }
+
+        private static void Translate(Item item, GameObject prefab, ItemRegistry.Entry entry, bool inShop)
+        {
+            if (!string.IsNullOrEmpty(entry.nameRu))
+            {
+                // Из названия терминал делает команду buy, а кириллицу в нём не набрать
+                if (!inShop)
+                    item.itemName = entry.nameRu;
+                foreach (var scan in prefab.GetComponentsInChildren<ScanNodeProperties>(true))
+                    scan.headerText = entry.nameRu;
+            }
+            if (entry.toolTipsRu != null && entry.toolTipsRu.Length > 0)
+                item.toolTips = entry.toolTipsRu;
         }
 
         // Тег и слои игры есть не в каждом Unity-проекте, поэтому ставим их здесь по именам.

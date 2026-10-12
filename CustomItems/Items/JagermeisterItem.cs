@@ -56,7 +56,7 @@ namespace CustomItems.Items
             if (sipsLeft == 0)
             {
                 if (playerHeldBy == GameNetworkManager.Instance.localPlayerController)
-                    HUDManager.Instance.DisplayTip("Jagermeister", "The bottle is empty.");
+                    HUDManager.Instance.DisplayTip(itemProperties.itemName, Lang.T("The bottle is empty.", "Бутылка пуста."));
                 return;
             }
 

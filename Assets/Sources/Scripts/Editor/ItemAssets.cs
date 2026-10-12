@@ -34,6 +34,8 @@ public static class ItemAssets
     {
         public string Name;          // имя файлов ассета и префаба, папки в Art/*/<Name>
         public string ItemName;      // название в игре (и секция конфига BepInEx)
+        public string NameRu;        // название по-русски (в ItemRegistry)
+        public string[] ToolTipsRu = new string[0];
         public string Behaviour;     // класс поведения из CustomItems.dll
         public string Template = "Rubber Ducky"; // ванильный предмет-шаблон
         public bool Scrap = true;
@@ -57,6 +59,7 @@ public static class ItemAssets
         new Spec
         {
             Name = "Jagermeister", ItemName = "Jagermeister", Behaviour = "CustomItems.Items.JagermeisterItem",
+            NameRu = "Егермейстер", ToolTipsRu = new[] { "Выпить : [LMB]" },
             Template = "Perfume bottle",
             MinValue = 40, MaxValue = 100, Rarity = 30, Weight = 1.03f,
             VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
@@ -66,6 +69,7 @@ public static class ItemAssets
         new Spec
         {
             Name = "Adrenaline", ItemName = "Adrenaline Game Fuel", Behaviour = "CustomItems.Items.AdrenalineItem",
+            NameRu = "Энергетик Adrenaline", ToolTipsRu = new[] { "Выпить : [LMB]" },
             Template = "Red soda",
             MinValue = 80, MaxValue = 160, Rarity = 30, Weight = 1.01f,
             VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
@@ -76,6 +80,7 @@ public static class ItemAssets
         new Spec
         {
             Name = "Monitor27", ItemName = "Computer monitor", Behaviour = "CustomItems.Items.Monitor27Item",
+            NameRu = "Монитор 27\"",
             Template = "Cash register", // двуручная анимация переноски
             MinValue = 100, MaxValue = 220, Rarity = 20, Weight = 1.28f, TwoHanded = true,
             VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
@@ -83,6 +88,7 @@ public static class ItemAssets
         new Spec
         {
             Name = "ToyGun", ItemName = "Toy gun", Behaviour = "CustomItems.Items.ToyGunItem",
+            NameRu = "Игрушечный пистолет", ToolTipsRu = new[] { "Выстрел : [LMB]" },
             Template = "Zap gun",
             Scrap = false, Rarity = 0, InShop = true, Price = 30, Weight = 1.03f,
             ToolTips = new[] { "Shoot : [LMB]" },
@@ -93,6 +99,7 @@ public static class ItemAssets
         new Spec
         {
             Name = "Winston", ItemName = "Winston plush", Behaviour = "CustomItems.Items.WinstonItem",
+            NameRu = "Плюшевый Уинстон", ToolTipsRu = new[] { "Поговорить : [LMB]" },
             MinValue = 70, MaxValue = 160, Rarity = 30, Weight = 1.03f,
             VerticalOffset = 0.13f, // центр модели на середине игрушки высотой 26 см
             ToolTips = new[] { "Talk : [LMB]" },
@@ -299,13 +306,26 @@ public static class ItemAssets
     {
         var list = (IList)Get(registry, "items");
         foreach (var e in list)
-            if (Get(e, "item") as Object == item)
-                return;
+        {
+            if (Get(e, "item") as Object != item)
+                continue;
+            // Строки, созданные до появления перевода, дополняем, не трогая заполненное
+            if (string.IsNullOrEmpty(Get(e, "nameRu") as string) && spec.NameRu != null)
+            {
+                Set(e, "nameRu", spec.NameRu);
+                if (!(Get(e, "toolTipsRu") is string[] tips) || tips.Length == 0)
+                    Set(e, "toolTipsRu", spec.ToolTipsRu);
+                EditorUtility.SetDirty(registry);
+            }
+            return;
+        }
         var entry = Activator.CreateInstance(list.GetType().GetGenericArguments()[0]);
         Set(entry, "item", item);
         Set(entry, "rarity", spec.Rarity);
         Set(entry, "inShop", spec.InShop);
         Set(entry, "price", spec.Price);
+        Set(entry, "nameRu", spec.NameRu);
+        Set(entry, "toolTipsRu", spec.ToolTipsRu);
         list.Add(entry);
         EditorUtility.SetDirty(registry);
     }

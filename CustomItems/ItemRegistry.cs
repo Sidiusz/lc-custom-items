@@ -32,6 +32,13 @@ namespace CustomItems
 
             [Tooltip("Цена в магазине")]
             public int price = 25;
+
+            [Tooltip("Название по-русски (скан, подсказки, инвентарь). Пусто = как в Item. " +
+                     "У магазинных предметов название в терминале остаётся английским, чтобы его можно было набрать в buy")]
+            public string nameRu;
+
+            [Tooltip("Подсказки по-русски вместо Tool Tips из Item. Пусто = как в Item")]
+            public string[] toolTipsRu = new string[0];
         }
     }
 }

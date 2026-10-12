@@ -32,13 +32,13 @@ lc-custom-items/
 │   ├── Plugins/                  DLL игры и мода для редактора (создаётся сама, в .gitignore)
 │   └── Settings/                 настройки HDRP (путь задан в ProjectSettings, не переносить)
 ├── Packages/, ProjectSettings/   Unity
-├── Bundles/                      собранный AssetBundle `customitems` (коммитится)
+├── Bundles/                      собранный AssetBundle `sidiuszcustomitems` (коммитится)
 ├── CustomItems/                  C#-проект мода (вне Assets/, Unity его не видит)
 │   ├── CustomItems.csproj        ссылки на BepInEx, LethalLib, библиотеки игры (NuGet)
-│   ├── CustomItems.csproj        плагин BepInEx (CustomItems.dll)
+│   ├── CustomItems.csproj        плагин BepInEx (SidiuszCustomItems.dll)
 │   ├── Plugin.cs                 грузит бандл и регистрирует предметы из ItemRegistry
 │   ├── translations/             перевод для русификатора LethalRussian
-│   └── Items/                    CustomItems.Items.dll: без BepInEx и LethalLib, её грузит и Unity
+│   └── Items/                    SidiuszCustomItems.Items.dll: без BepInEx и LethalLib, её грузит и Unity
 │       ├── ItemRegistry.cs       тип ассета ItemRegistry
 │       ├── CustomGrabbable.cs    база: анимации/звуки из ванили, шейдеры HDRP
 │       └── <Предмет>Item.cs      поведение предметов (вешается на префаб)
@@ -46,7 +46,7 @@ lc-custom-items/
 └── thunderstore/manifest.json    для публикации на Thunderstore
 ```
 
-Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `CustomItems.Items.dll` копируется в `Assets/Plugins/CustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/GameStubs/`: только поля, без логики. Папка лежит вне `Scripts/` (там asmdef) и без своего asmdef, поэтому заглушки компилируются в `Assembly-CSharp` проекта, поэтому в бандле записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
+Код мода лежит вне `Assets/` и собирается `dotnet build`. Чтобы Unity знал скрипты предметов, готовая `SidiuszCustomItems.Items.dll` копируется в `Assets/Plugins/SidiuszCustomItems/` (сама, см. раздел 2), а в `Assets/Plugins/Game/` — `Unity.Netcode.Runtime.dll` из папки игры со всем, на что она и мод ссылаются. Сами типы игры, которые хранятся в ассетах (`Item`, `GrabbableObject`, `ScanNodeProperties`, `ItemGroup`), объявлены заглушками в `Assets/Sources/GameStubs/`: только поля, без логики. Папка лежит вне `Scripts/` (там asmdef) и без своего asmdef, поэтому заглушки компилируются в `Assembly-CSharp` проекта, поэтому в бандле записаны как `Assembly-CSharp::Item` и в игре находят настоящие классы. Класть в Unity `Assembly-CSharp.dll` игры нельзя: для DLL с этим именем Unity не создаёт скрипты, и ассеты сохраняются с «missing script». Скрипты предметов вынесены в отдельную сборку без BepInEx и LethalLib, чтобы Unity мог её загрузить. Остальные скрипты Unity-проекта лежат в asmdef'ах.
 
 ## 1. Что нужно установить
 
@@ -60,13 +60,13 @@ lc-custom-items/
 
 1. Соберите мод: `cd CustomItems && dotnet build -c Release` (раздел 3).
 2. Откройте корень репозитория в Unity Hub (Add → Add project from disk).
-3. При первом открытии Unity попросит папку игры (где лежит `Lethal Company.exe`) и скопирует из неё нужные DLL в `Assets/Plugins/Game/`. Если окно не появилось или папка поменялась: меню **Lethal Company → Setup → Import Game DLLs**. `CustomItems.Items.dll` подтягивается сама, когда вы возвращаетесь в Unity после `dotnet build` (или **Lethal Company → Setup → Update CustomItems.Items.dll**).
-4. После этого Unity сам создаст недостающие ассеты: `Data/Items/<Предмет>.asset`, `Prefabs/<Предмет>.prefab` и `Data/ItemRegistry.asset`, и пометит их бандлом `customitems`. Вручную: **Lethal Company → Create Missing Item Assets**. Уже существующие ассеты не перезаписываются, так что правки в инспекторе не пропадут. Ассеты, сохранённые без скрипта (когда DLL не загрузились), пересоздаются.
+3. При первом открытии Unity попросит папку игры (где лежит `Lethal Company.exe`) и скопирует из неё нужные DLL в `Assets/Plugins/Game/`. Если окно не появилось или папка поменялась: меню **Lethal Company → Setup → Import Game DLLs**. `SidiuszCustomItems.Items.dll` подтягивается сама, когда вы возвращаетесь в Unity после `dotnet build` (или **Lethal Company → Setup → Update SidiuszCustomItems.Items.dll**).
+4. После этого Unity сам создаст недостающие ассеты: `Data/Items/<Предмет>.asset`, `Prefabs/<Предмет>.prefab` и `Data/ItemRegistry.asset`, и пометит их бандлом `sidiuszcustomitems`. Вручную: **Lethal Company → Create Missing Item Assets**. Уже существующие ассеты не перезаписываются, так что правки в инспекторе не пропадут. Ассеты, сохранённые без скрипта (когда DLL не загрузились), пересоздаются.
 5. Настраивайте в инспекторе:
    - **ассет Item** (`Data/Items`): Item Name, Is Scrap, Min/Max Value (игра умножает на 0.4), Weight (1.05 = 5 фунтов), Two Handed, Tool Tips, Item Icon, Position/Rotation Offset (в руке), Resting Rotation (на полу), Vertical Offset и всё остальное, что есть у ванильных предметов. Пустые анимации и звуки подбора/броска берутся у ванильного предмета из `Template Item Name` на префабе;
    - **префаб** (`Prefabs`): модель, коллайдер, скан-нода, на скрипте предмета звуки (`Voice Clip`, `Shot Clip`...) и `Template Item Name`;
    - **ItemRegistry** (`Data`): какие предметы попадают в мод, редкость скрапа, продажа в магазине и цена.
-6. Меню **Lethal Company → Build AssetBundles**. Бандл окажется в `Bundles/customitems`, откуда его заберёт сборка мода.
+6. Меню **Lethal Company → Build AssetBundles**. Бандл окажется в `Bundles/sidiuszcustomitems`, откуда его заберёт сборка мода.
 
 Язык: в ассетах всё по-английски, перевод даёт русификатор **LethalRussian** по файлу `CustomItems/translations/Sidiusz-CustomItems.txt` (мод передаёт его через API LethalRussian, если тот установлен). Строки `@item English=Именительный|винительный|род` (род m/f/n/p) для названий, `English=Русский` для подсказок и сообщений. Меняете английское название или подсказку в Item — поправьте ключ и в этом файле.
 
@@ -100,7 +100,7 @@ cd CustomItems
 dotnet build -c Release
 ```
 
-Пакеты BepInEx и Unity берутся из фида `nuget.bepinex.dev`, он уже прописан в `.csproj`. Результат: `bin/Release/netstandard2.1/CustomItems.dll`, `CustomItems.Items.dll`, папка `translations` и `customitems`. Бандл берётся из `Bundles/`, поэтому после изменений в Unity сначала **Build AssetBundles**, потом `dotnet build`.
+Пакеты BepInEx и Unity берутся из фида `nuget.bepinex.dev`, он уже прописан в `.csproj`. Результат: `bin/Release/netstandard2.1/SidiuszCustomItems.dll`, `SidiuszCustomItems.Items.dll`, папка `translations` и `sidiuszcustomitems`. Бандл берётся из `Bundles/`, поэтому после изменений в Unity сначала **Build AssetBundles**, потом `dotnet build`.
 
 Чтобы после каждой сборки файлы сами копировались в профиль r2modman:
 
@@ -112,7 +112,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 4. Проверка в игре
 
-1. В папке профиля должно быть `BepInEx/plugins/CustomItems/`: `CustomItems.dll`, `CustomItems.Items.dll`, `customitems` и `translations/`.
+1. В папке профиля должно быть `BepInEx/plugins/SidiuszCustomItems/`: `SidiuszCustomItems.dll`, `SidiuszCustomItems.Items.dll`, `sidiuszcustomitems` и `translations/`.
 2. В `BepInEx/config/BepInEx.cfg` включите консоль: `[Logging.Console] Enabled = true`.
 3. Запустите игру через r2modman. В консоли должно быть `CustomItems 0.1.0 загружен` и никаких ошибок про AssetBundle или модель.
 4. Быстрый тест без поиска по карте: поставьте `InShop = true` в `BepInEx/config/sidiusz.customitems.cfg` (секция с названием предмета, например `[Winston plush]`), купите его в терминале (`buy winston plush`, с LethalRussian и по-русски). Либо поставьте Imperium и заспавните предмет через его меню.
@@ -123,7 +123,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 1. Файлы в `Assets/Sources/Art/{Models,Textures,Materials,Audio}/<Предмет>/`. Генератор модели, если есть, в `Tools/<Предмет>/`.
 2. Класс поведения `MyItem : CustomGrabbable` в `CustomItems/Items/`. Переопределяйте `ItemActivate` (ЛКМ), `Update`, `EquipItem`, `PocketItem`, `DiscardItem` и т.п. Если делать ничего не нужно, пустой класс. Звуки делайте публичными полями `AudioClip`: они появятся в инспекторе префаба. Соберите мод и вернитесь в Unity.
-3. Ассеты, вариант А (руками, как в любом моде): Create → Item (ассет в `Data/Items`), префаб в `Prefabs` с моделью, `NetworkObject`, `BoxCollider`, `Rigidbody` (Is Kinematic), `AudioSource`, дочерним `ScanNode` (`BoxCollider` Is Trigger + `ScanNodeProperties`) и вашим `MyItem` (в Item Properties ваш Item). В Item укажите Spawn Prefab. Добавьте строку в `ItemRegistry`. Item и префаб пометьте бандлом `customitems`.
+3. Ассеты, вариант А (руками, как в любом моде): Create → Item (ассет в `Data/Items`), префаб в `Prefabs` с моделью, `NetworkObject`, `BoxCollider`, `Rigidbody` (Is Kinematic), `AudioSource`, дочерним `ScanNode` (`BoxCollider` Is Trigger + `ScanNodeProperties`) и вашим `MyItem` (в Item Properties ваш Item). В Item укажите Spawn Prefab. Добавьте строку в `ItemRegistry`. Item и префаб пометьте бандлом `sidiuszcustomitems`.
 4. Вариант Б: добавьте описание в таблицу `Specs` в `Assets/Sources/Scripts/Editor/ItemAssets.cs` и нажмите **Lethal Company → Create Missing Item Assets**, он сделает всё из пункта 3.
 5. **Build AssetBundles**, потом `dotnet build`.
 
@@ -133,4 +133,4 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/CustomItems/` с обеими DLL, бандлом и `translations/`. Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с обеими DLL, бандлом и `translations/`. Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.

@@ -1,18 +1,18 @@
 // Кладёт в Assets/Plugins библиотеки, без которых Unity не знает типы предметов:
 //   Game/        Unity.Netcode.Runtime.dll из папки игры (NetworkObject) и всё, на что ссылаются
-//                она и CustomItems.Items.dll, кроме того, что в Unity уже есть.
+//                она и SidiuszCustomItems.Items.dll, кроме того, что в Unity уже есть.
 //                Assembly-CSharp.dll игры сюда НЕ кладётся: для DLL с этим именем Unity не создаёт
 //                скрипты, и Item/ScanNodeProperties в ассетах оказываются «missing script».
 //                Вместо неё нужные типы игры объявлены заглушками в Assets/Sources/GameStubs
 //                (компилируются в Assembly-CSharp проекта, а в игре находят настоящие классы);
-//   CustomItems/ CustomItems.Items.dll из CustomItems/bin после dotnet build (скрипты
+//   SidiuszCustomItems/ SidiuszCustomItems.Items.dll из CustomItems/bin после dotnet build (скрипты
 //                предметов и ItemRegistry; BepInEx и LethalLib ей не нужны).
 // Без полного набора зависимостей Unity выгружает DLL («Unloading broken assembly»),
 // и префабы сохраняются без скриптов.
 // Папка Assets/Plugins в .gitignore: файлы игры в репозиторий не кладём.
 //
 // DLL игры копируются один раз (меню Lethal Company → Setup → Import Game DLLs),
-// CustomItems.Items.dll обновляется сама, когда вы возвращаетесь в Unity после dotnet build.
+// SidiuszCustomItems.Items.dll обновляется сама, когда вы возвращаетесь в Unity после dotnet build.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,13 +28,13 @@ public static class GameLibraries
 {
     private const string PluginsDir = "Assets/Plugins";
     private const string GameDir = PluginsDir + "/Game";
-    private const string ModDir = PluginsDir + "/CustomItems";
+    private const string ModDir = PluginsDir + "/SidiuszCustomItems";
     private const string FolderPref = "CustomItems.GameFolder";
     private const string AskedKey = "CustomItems.AskedForGameFolder";
 
     // С этих DLL начинается обход ссылок
     private static readonly string[] GameRoots = { "Unity.Netcode.Runtime" };
-    private const string ModDll = "CustomItems.Items.dll";
+    private const string ModDll = "SidiuszCustomItems.Items.dll";
     private static readonly string[] ModBuilds =
     {
         "CustomItems/bin/Release/netstandard2.1/" + ModDll,
@@ -44,7 +44,8 @@ public static class GameLibraries
     // и Assembly-CSharp игры, которую заменили заглушки
     private static readonly string[] Obsolete =
     {
-        ModDir + "/CustomItems.dll",
+        PluginsDir + "/CustomItems/CustomItems.dll",
+        PluginsDir + "/CustomItems/CustomItems.Items.dll",
         GameDir + "/Assembly-CSharp.dll",
     };
 
@@ -83,7 +84,7 @@ public static class GameLibraries
             AssetDatabase.Refresh();
     }
 
-    [MenuItem("Lethal Company/Setup/Update CustomItems.Items.dll")]
+    [MenuItem("Lethal Company/Setup/Update SidiuszCustomItems.Items.dll")]
     private static void SyncModMenu()
     {
         if (SyncMod(force: true))
@@ -132,7 +133,7 @@ public static class GameLibraries
         return true;
     }
 
-    // Обходит ссылки от GameRoots и CustomItems.Items.dll. Берёт из Managed всё, чего нет в самом Unity.
+    // Обходит ссылки от GameRoots и SidiuszCustomItems.Items.dll. Берёт из Managed всё, чего нет в самом Unity.
     private static List<string> Closure(string managed, out List<string> missing)
     {
         var provided = ProvidedByUnity();

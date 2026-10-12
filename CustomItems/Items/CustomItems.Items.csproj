@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Скрипты предметов и ItemRegistry. Отдельная сборка без BepInEx и LethalLib:
-       её DLL кладётся в Unity (Assets/Plugins/CustomItems), и Unity должен суметь её
+       её DLL кладётся в Unity (Assets/Plugins/SidiuszCustomItems), и Unity должен суметь её
        загрузить, имея только библиотеки игры. Префабы и ассеты в бандле ссылаются
        на классы именно этой сборки. -->
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <AssemblyName>CustomItems.Items</AssemblyName>
+    <AssemblyName>SidiuszCustomItems.Items</AssemblyName>
     <RootNamespace>CustomItems</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>

@@ -16,11 +16,11 @@ namespace CustomItems
     public class Plugin : BaseUnityPlugin
     {
         public const string PluginGuid = ModInfo.Guid;
-        public const string PluginName = "CustomItems";
+        public const string PluginName = "SidiuszCustomItems";
         public const string PluginVersion = "0.1.0";
 
         // Имя файла AssetBundle, который собирается в Unity
-        private const string BundleName = "customitems";
+        private const string BundleName = "sidiuszcustomitems";
 
         internal static ManualLogSource Log;
 

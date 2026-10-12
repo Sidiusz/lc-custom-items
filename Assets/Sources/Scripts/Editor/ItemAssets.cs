@@ -3,7 +3,7 @@
 //   Assets/Sources/Prefabs/<Предмет>.prefab     префаб: модель, NetworkObject, коллайдер, Rigidbody,
 //                                               AudioSource, скан-нода и скрипт поведения со звуками
 //   Assets/Sources/Data/ItemRegistry.asset      список предметов мода: редкость, магазин, цена
-// и помечает их бандлом customitems.
+// и помечает их бандлом sidiuszcustomitems.
 //
 // Запускается сам после импорта DLL (Lethal Company → Setup) и создаёт только то, чего ещё нет:
 // всё, что вы поменяли в инспекторе, не трогается. Значения ниже нужны только для первого
@@ -28,13 +28,13 @@ public static class ItemAssets
     private const string ItemsDir = "Assets/Sources/Data/Items";
     private const string PrefabsDir = "Assets/Sources/Prefabs";
     private const string RegistryPath = "Assets/Sources/Data/ItemRegistry.asset";
-    private const string Bundle = "customitems";
+    private const string Bundle = "sidiuszcustomitems";
 
     private class Spec
     {
         public string Name;          // имя файлов ассета и префаба, папки в Art/*/<Name>
         public string ItemName;      // название в игре (и секция конфига BepInEx)
-        public string Behaviour;     // класс поведения из CustomItems.Items.dll
+        public string Behaviour;     // класс поведения из SidiuszCustomItems.Items.dll
         public string Template = "Rubber Ducky"; // ванильный предмет-шаблон
         public bool Scrap = true;
         public int MinValue, MaxValue;
@@ -447,7 +447,7 @@ public static class ItemAssets
             .Where(n => FindType(n) == null).ToArray();
         if (missing.Length > 0 && log)
             Debug.LogError("Нет типов " + string.Join(", ", missing) + ". DLL игры: Lethal Company → Setup → Import Game DLLs; " +
-                           "CustomItems.Items.dll: соберите мод (dotnet build) и вернитесь в Unity.");
+                           "SidiuszCustomItems.Items.dll: соберите мод (dotnet build) и вернитесь в Unity.");
         return missing.Length == 0;
     }
 
@@ -461,7 +461,7 @@ public static class ItemAssets
         foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
         {
             var name = asm.GetName().Name;
-            if (name != "Assembly-CSharp" && name != "CustomItems.Items" && name != "Unity.Netcode.Runtime")
+            if (name != "Assembly-CSharp" && name != "SidiuszCustomItems.Items" && name != "Unity.Netcode.Runtime")
                 continue;
             found = asm.GetType(fullName);
             if (found != null)

@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <AssemblyName>CustomItems</AssemblyName>
+    <AssemblyName>SidiuszCustomItems</AssemblyName>
     <RootNamespace>CustomItems</RootNamespace>
     <Version>0.1.0</Version>
     <LangVersion>latest</LangVersion>
@@ -30,7 +30,7 @@
     <PackageReference Include="Evaisa.LethalLib" Version="1.2.0" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Скрипты предметов собираются отдельной сборкой CustomItems.Items (см. Items/) -->
+  <!-- Скрипты предметов собираются отдельной сборкой SidiuszCustomItems.Items (см. Items/) -->
   <ItemGroup>
     <Compile Remove="Items/**" />
     <None Remove="Items/**" />
@@ -44,14 +44,14 @@
 
   <!-- AssetBundle из Unity кладётся в Bundles/ в корне репозитория -->
   <ItemGroup>
-    <None Include="..\Bundles\customitems" Condition="Exists('..\Bundles\customitems')" CopyToOutputDirectory="PreserveNewest" Link="customitems" />
+    <None Include="..\Bundles\sidiuszcustomitems" Condition="Exists('..\Bundles\sidiuszcustomitems')" CopyToOutputDirectory="PreserveNewest" Link="sidiuszcustomitems" />
   </ItemGroup>
 
   <Target Name="CopyToPluginDir" AfterTargets="Build" Condition="'$(PluginDir)' != ''">
     <MakeDir Directories="$(PluginDir)\$(AssemblyName)" />
-    <Copy SourceFiles="$(TargetPath);$(TargetDir)CustomItems.Items.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)SidiuszCustomItems.Items.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
     <Copy SourceFiles="@(None->WithMetadataValue('Extension', '.txt'))" DestinationFolder="$(PluginDir)\$(AssemblyName)\translations" />
-    <Copy SourceFiles="..\Bundles\customitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\customitems')" />
+    <Copy SourceFiles="..\Bundles\sidiuszcustomitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\sidiuszcustomitems')" />
   </Target>
 
 </Project>

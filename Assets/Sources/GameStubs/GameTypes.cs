@@ -24,3 +24,7 @@ public class RoundManager : NetworkBehaviour { }
 public class SoundManager : NetworkBehaviour { }
 public class StartOfRound : NetworkBehaviour { }
 public class WalkieTalkie : GrabbableObject { }
+public class TimeOfDay : NetworkBehaviour { }
+public class AutoParentToShip : NetworkBehaviour { }
+public class PlaceableShipObject : MonoBehaviour { }
+public class InteractTrigger : NetworkBehaviour { }

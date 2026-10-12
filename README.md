@@ -4,7 +4,7 @@
 
 Схема обычная для модов на LethalLib: у каждого предмета есть ассет `Item` игры (название, стоимость, вес, хват, оффсеты) в `Assets/Sources/Data/Items/` и префаб в `Assets/Sources/Prefabs/` (модель, NetworkObject, коллайдер, скан-нода, скрипт поведения со звуками). Всё настраивается в инспекторе Unity. Мод берёт из бандла `ItemRegistry` (список предметов с редкостью и ценой) и регистрирует перечисленные там предметы.
 
-Предметы: Егермейстер, энергетик Adrenaline Game Fuel, монитор 27", игрушечный пистолет (скрап, стреляет пульками из магазина; пачки пулек продаются в терминале), плюшевый Уинстон, Яндекс Колонка (часы с внутриигровым временем, по ЛКМ говорит случайную фразу и показывает мордочку).
+Предметы: Егермейстер, энергетик Adrenaline Game Fuel, монитор 27", игрушечный пистолет (скрап, стреляет пульками из магазина; пачки пулек продаются в терминале), плюшевый Уинстон. Мебель корабля: Яндекс Колонка четырёх цветов (раздел Decor терминала, ставится через B): часы с внутриигровым временем, отвечает на «Алиса, …» голосом и показывает мордочку.
 
 Образец, с которого удобно начинать новый предмет, — монитор: у него нет своего поведения (`Monitor27Item` пустой), всё задаётся в `Data/Items/Monitor27.asset` и `Prefabs/Monitor27.prefab`.
 
@@ -80,9 +80,29 @@ lc-custom-items/
 
 Если материал модели на другом шейдере (например, Standard из импортированной модели), код при появлении предмета переведёт его на HDRP/Lit с той же текстурой и цветом.
 
-### Фразы Яндекс Колонки
+### Яндекс Колонка: мебель и голосовые команды
 
-Колонка говорит случайную фразу из папки `Assets/Sources/Art/Audio/YandexStation/Phrases/`: туда можно положить любые `.wav` (лучше моно, 44.1 кГц, тихое начало без щелчка). Список фраз на префабе обновляется сам при открытии проекта, по **Lethal Company → Create Missing Item Assets** и перед **Build AssetBundles**, так что достаточно положить файлы и пересобрать бандл. Сейчас там три временные фразы `Placeholder*.wav` от синтезатора речи (`Tools/YandexStation/phrases.sh`), их можно удалить. Все игроки слышат одну и ту же фразу; у всех должен стоять один и тот же бандл.
+Колонка не предмет, а мебель корабля: четыре цвета (`Grey Yandex`, `Blue Yandex`, `Pink Yandex`, `Black Yandex`) продаются в разделе Decor терминала (`buy pink`), ставятся и переставляются в режиме строительства (B), убираются на склад (X). Префабы `Prefabs/YandexStation<Цвет>.prefab` и строки в списке `furniture` ассета ItemRegistry создаёт тот же **Create Missing Item Assets**, цвета корпуса заданы в таблице `Furniture` в `ItemAssets.cs`. Компоненты мебели игры (AutoParentToShip, PlaceableShipObject, InteractTrigger) мод добавляет к префабу при загрузке, в Unity они не нужны. Цена и продажа меняются в конфиге (секция с названием цвета).
+
+Голос: «Алиса» и вопрос, например «Алиса, какая погода сейчас?». После одного «Алиса» колонка отвечает «Да?» и несколько секунд ждёт вопрос. Распознавание офлайн и только на компьютере того, кто говорит (Vosk с маленькой русской моделью, звук берётся у голосового чата игры), и только пока колонка ближе 8 м. Остальные игроки получают по сети лишь выбранную фразу. По E колонка говорит случайную фразу. Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `UseGrammar`, `ExtraPhrases`.
+
+Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабах обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас везде временные `Placeholder*.wav` от синтезатора (`Tools/YandexStation/phrases.sh`), их можно удалить.
+
+| Папка | Когда |
+|---|---|
+| `Random` | E, и если нужной темы нет вообще |
+| `Listen` | одно «Алиса» без вопроса |
+| `Unknown` | вопрос не понят или для темы нет фраз |
+| `Weather/Clear`, `DustClouds`, `Rainy`, `Stormy`, `Foggy`, `Flooded`, `Eclipsed` | «какая погода», погода текущей луны |
+| `QuotaDone`, `QuotaNotDone` | «что с квотой»: собрана ли квота |
+| `Deadline0` … `Deadline3` | «сколько дней до сдачи»: дней до дедлайна |
+| `Time` | «который час» (во время ответа на экране остаётся время) |
+| `Greeting`, `Thanks`, `HowAreYou`, `Joke`, `Music` | «привет», «спасибо», «как дела», «расскажи анекдот», «включи музыку» |
+| своя папка с русским названием, например `расскажи про компанию` | когда эта фраза есть в вопросе |
+
+«Стоп», «хватит», «замолчи» обрывают ответ.
+
+Распознавание лежит рядом с DLL мода: `Vosk.dll` и папка `vosk/` (нативные библиотеки Windows x64 и модель `model-ru`). `dotnet build` скачивает модель один раз в `CustomItems/obj/vosk` и кладёт всё это в папку сборки и в `PluginDir`.
 
 ## 2.1. Как предмет держится в руке: превью в Unity
 
@@ -138,7 +158,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 4. Проверка в игре
 
-1. В папке профиля должно быть `BepInEx/plugins/SidiuszCustomItems/`: `SidiuszCustomItems.dll`, `SidiuszCustomItems.Items.dll`, `sidiuszcustomitems` и `translations/`.
+1. В папке профиля должно быть `BepInEx/plugins/SidiuszCustomItems/`: `SidiuszCustomItems.dll`, `SidiuszCustomItems.Items.dll`, `Vosk.dll`, `sidiuszcustomitems`, `translations/` и `vosk/`.
 2. В `BepInEx/config/BepInEx.cfg` включите консоль: `[Logging.Console] Enabled = true`.
 3. Запустите игру через r2modman. В консоли должно быть `CustomItems 0.1.0 загружен` и никаких ошибок про AssetBundle или модель.
 4. Быстрый тест без поиска по карте: поставьте `InShop = true` в `BepInEx/config/sidiusz.customitems.cfg` (секция с названием предмета, например `[Winston plush]`), купите его в терминале (`buy winston plush`, с LethalRussian и по-русски). Либо поставьте Imperium и заспавните предмет через его меню.
@@ -159,8 +179,9 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с обеими DLL, бандлом и `translations/`. Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/` и `vosk/` (около 130 МБ из-за модели распознавания). Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
 
 ## Благодарности
 
 - Звук Егермейстера: Sound effects by BudgetPixel (CC BY 4.0).
+- Распознавание речи: [Vosk](https://alphacephei.com/vosk/) и модель vosk-model-small-ru-0.22 (Apache 2.0).

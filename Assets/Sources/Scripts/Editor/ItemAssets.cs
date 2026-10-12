@@ -52,7 +52,6 @@ public static class ItemAssets
         public string Icon;                                          // путь к спрайту, необязательно
         public string Texture;                                       // текстура на все меши (HDRP/Lit), необязательно
         public (string field, string path)[] Clips = new (string, string)[0];
-        public (string field, string folder)[] ClipFolders = new (string, string)[0]; // массив AudioClip из всех звуков папки
         public Action<GameObject> Customize;                         // доп. настройка префаба
         public string[] HiddenChildren = new string[0];              // объекты модели, выключенные в префабе
     }
@@ -126,17 +125,37 @@ public static class ItemAssets
             ToolTips = new[] { "Talk : [LMB]" },
             Clips = new[] { ("voiceClip", Art + "/Audio/Winston/WinstonVoice.wav") },
         },
-        new Spec
-        {
-            Name = "YandexStation", ItemName = "Yandex Station", Behaviour = "CustomItems.Items.YandexStationItem",
-            MinValue = 60, MaxValue = 150, Rarity = 25, Weight = 1.04f,
-            VerticalOffset = 0.045f, // половина высоты колонки 9 см
-            ToolTips = new[] { "Talk : [LMB]" },
-            // Свои фразы: любые .wav в эту папку, список на префабе обновится сам
-            ClipFolders = new[] { ("phrases", YandexPhrases) },
-            Customize = SetupYandexStation,
-        },
     };
+
+    // ---------------- мебель корабля: Decor в терминале, ставится через B
+
+    private class FurnitureSpec
+    {
+        public string Name;          // имя префаба (Prefabs/<Name>.prefab)
+        public string Title;         // название в магазине: buy <первое слово>
+        public string Model;         // папка модели в Art/Models
+        public string Behaviour;
+        public int Price = 120;
+        public Color Body, Trim;     // цвет корпуса и ножки
+    }
+
+    // Цвета как у Станции Мини 2 с часами (серый опал, графит) плюс голубая и розовая
+    private static readonly FurnitureSpec[] Furniture =
+    {
+        new FurnitureSpec { Name = "YandexStationGrey", Title = "Grey Yandex", Model = "YandexStation", Behaviour = YandexBehaviour,
+            Body = new Color(0.30f, 0.31f, 0.34f), Trim = new Color(0.10f, 0.10f, 0.11f) },
+        new FurnitureSpec { Name = "YandexStationBlue", Title = "Blue Yandex", Model = "YandexStation", Behaviour = YandexBehaviour,
+            Body = new Color(0.36f, 0.53f, 0.72f), Trim = new Color(0.12f, 0.18f, 0.26f) },
+        new FurnitureSpec { Name = "YandexStationPink", Title = "Pink Yandex", Model = "YandexStation", Behaviour = YandexBehaviour,
+            Body = new Color(0.78f, 0.47f, 0.55f), Trim = new Color(0.36f, 0.20f, 0.25f) },
+        new FurnitureSpec { Name = "YandexStationBlack", Title = "Black Yandex", Model = "YandexStation", Behaviour = YandexBehaviour,
+            Body = new Color(0.045f, 0.045f, 0.05f), Trim = new Color(0.02f, 0.02f, 0.022f) },
+    };
+
+    private const string YandexBehaviour = "CustomItems.Items.YandexStationItem";
+
+    // Колонка была скрапом (Data/Items/YandexStation): если эти ассеты успели создаться, убираем
+    private static readonly string[] Obsolete = { ItemsDir + "/YandexStation.asset", PrefabsDir + "/YandexStation.prefab" };
 
     static ItemAssets()
     {
@@ -217,12 +236,13 @@ public static class ItemAssets
                 EditorUtility.SetDirty(item);
             }
 
-            SyncClipFolders(spec, prefab);
             AddToRegistry(registry, item, spec);
             MarkBundle(itemPath);
             MarkBundle(prefabPath);
         }
 
+        rebuildingPrefabs = rebuildPrefabs;
+        CreateFurniture(registry, created);
         MarkBundle(RegistryPath);
         AssetDatabase.SaveAssets();
         var icons = ItemIcons.RenderMissing();
@@ -321,8 +341,6 @@ public static class ItemAssets
                     Debug.LogWarning($"{spec.ItemName}: нет звука {clipPath}");
                 Set(behaviour, field, clip);
             }
-            foreach (var (field, folder) in spec.ClipFolders)
-                Set(behaviour, field, ClipsIn(folder));
 
             EnsureFolder(PrefabsDir);
             return PrefabUtility.SaveAsPrefabAsset(root, path);
@@ -368,40 +386,159 @@ public static class ItemAssets
         EditorUtility.SetDirty(registry);
     }
 
-    // ---------------- папки со звуками (Spec.ClipFolders)
+    // ---------------- мебель
 
-    private static AudioClip[] ClipsIn(string folder)
+    private static void CreateFurniture(ScriptableObject registry, List<string> created)
     {
-        if (!AssetDatabase.IsValidFolder(folder))
-            return new AudioClip[0];
-        return AssetDatabase.FindAssets("t:AudioClip", new[] { folder })
-            .Select(AssetDatabase.GUIDToAssetPath).Distinct().OrderBy(p => p, StringComparer.Ordinal)
-            .Select(AssetDatabase.LoadAssetAtPath<AudioClip>).Where(c => c != null).ToArray();
+        foreach (var path in Obsolete)
+        {
+            if (!File.Exists(path))
+                continue;
+            AssetDatabase.DeleteAsset(path);
+            created.Add("удалён устаревший " + path);
+        }
+        RemoveEmptyEntries(registry);
+
+        foreach (var spec in Furniture)
+        {
+            var model = FindModel(spec.Model, readable: true);
+            if (model == null)
+            {
+                Debug.LogWarning($"{spec.Title}: нет модели в {Art}/Models/{spec.Model}/");
+                continue;
+            }
+            var prefabPath = $"{PrefabsDir}/{spec.Name}.prefab";
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null || HasMissingScripts(prefab) || prefab.GetComponent(T(spec.Behaviour)) == null || rebuildingPrefabs)
+            {
+                prefab = BuildFurniture(spec, model, prefabPath);
+                created.Add(prefabPath);
+            }
+            SyncPhrases(prefab, spec);
+            AddFurnitureToRegistry(registry, prefab, spec);
+            MarkBundle(prefabPath);
+        }
     }
 
-    // Звуки добавили или удалили: обновляем массив на уже готовом префабе (остальное в нём не трогаем)
-    private static void SyncClipFolders(Spec spec, GameObject prefab)
+    private static bool rebuildingPrefabs;
+
+    private static GameObject BuildFurniture(FurnitureSpec spec, GameObject model, string path)
     {
-        if (spec.ClipFolders.Length == 0)
-            return;
-        var behaviour = prefab.GetComponent(T(spec.Behaviour));
-        if (behaviour == null)
-            return;
-        var changed = false;
-        foreach (var (field, folder) in spec.ClipFolders)
+        var root = new GameObject(spec.Name);
+        try
         {
-            var clips = ClipsIn(folder);
-            var current = Get(behaviour, field) as AudioClip[];
-            if (current != null && current.SequenceEqual(clips))
-                continue;
-            Set(behaviour, field, clips);
-            changed = true;
-            Debug.Log($"{spec.ItemName}: {field} из {folder}: {clips.Length} шт.");
+            var visual = (GameObject)PrefabUtility.InstantiatePrefab(model, root.transform);
+            visual.name = "Model";
+            visual.transform.localPosition = Vector3.zero;
+            SetupYandexStation(root, spec);
+
+            var bounds = ModelBounds(root);
+            // За PlacementCollider хватается режим строительства, за InteractTrigger — E.
+            // Слои, теги и компоненты игры на них навешивает мод при загрузке.
+            foreach (var (name, pad) in new[] { ("PlacementCollider", 0f), ("InteractTrigger", 0.02f) })
+            {
+                var child = new GameObject(name);
+                child.transform.SetParent(root.transform, false);
+                var box = child.AddComponent<BoxCollider>();
+                box.isTrigger = true;
+                box.center = bounds.center;
+                box.size = bounds.size + Vector3.one * pad;
+            }
+
+            var audio = root.AddComponent<AudioSource>();
+            audio.playOnAwake = false;
+            audio.spatialBlend = 1f;
+            audio.rolloffMode = AudioRolloffMode.Linear;
+            audio.minDistance = 2f;
+            audio.maxDistance = 25f;
+
+            root.AddComponent(T("Unity.Netcode.NetworkObject"));
+            var behaviour = root.AddComponent(T(spec.Behaviour));
+            Set(behaviour, "phraseSets", PhraseSets(behaviour));
+
+            EnsureFolder(PrefabsDir);
+            return PrefabUtility.SaveAsPrefabAsset(root, path);
         }
-        if (!changed)
+        finally
+        {
+            Object.DestroyImmediate(root);
+        }
+    }
+
+    private static void AddFurnitureToRegistry(ScriptableObject registry, GameObject prefab, FurnitureSpec spec)
+    {
+        var list = (IList)Get(registry, "furniture");
+        if (list == null)
             return;
+        foreach (var e in list)
+            if (Get(e, "prefab") as Object == prefab)
+                return;
+        var entry = Activator.CreateInstance(list.GetType().GetGenericArguments()[0]);
+        Set(entry, "name", spec.Title);
+        Set(entry, "prefab", prefab);
+        Set(entry, "price", spec.Price);
+        list.Add(entry);
+        EditorUtility.SetDirty(registry);
+    }
+
+    // ---------------- фразы колонки по темам: подпапки Phrases → PhraseSet[]
+
+    private const string YandexPhrases = Art + "/Audio/YandexStation/Phrases";
+
+    private static AudioClip[] ClipsIn(string folder) =>
+        Directory.GetFiles(folder)
+            .Select(p => p.Replace('\\', '/'))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .Select(AssetDatabase.LoadAssetAtPath<AudioClip>).Where(c => c != null).ToArray();
+
+    // Тема = путь подпапки от Phrases (Weather/Rainy); звуки прямо в Phrases — тема Random
+    private static Array PhraseSets(Component behaviour)
+    {
+        var field = Field(behaviour, "phraseSets");
+        var setType = field.FieldType.GetElementType();
+        var sets = new List<object>();
+        if (AssetDatabase.IsValidFolder(YandexPhrases))
+        {
+            var folders = new[] { YandexPhrases }.Concat(Directory.GetDirectories(YandexPhrases, "*", SearchOption.AllDirectories)
+                .Select(d => d.Replace('\\', '/')).OrderBy(d => d, StringComparer.Ordinal));
+            foreach (var folder in folders)
+            {
+                var clips = ClipsIn(folder);
+                if (clips.Length == 0)
+                    continue;
+                var name = folder == YandexPhrases ? "Random" : folder.Substring(YandexPhrases.Length + 1);
+                var existing = sets.FirstOrDefault(x => (string)Get(x, "name") == name);
+                if (existing != null)
+                {
+                    Set(existing, "clips", ((AudioClip[])Get(existing, "clips")).Concat(clips).ToArray());
+                    continue;
+                }
+                var set = Activator.CreateInstance(setType);
+                Set(set, "name", name);
+                Set(set, "clips", clips);
+                sets.Add(set);
+            }
+        }
+        var array = Array.CreateInstance(setType, sets.Count);
+        for (var i = 0; i < sets.Count; i++)
+            array.SetValue(sets[i], i);
+        return array;
+    }
+
+    // Фразы добавили или удалили: обновляем список на готовом префабе (остальное в нём не трогаем)
+    private static void SyncPhrases(GameObject prefab, FurnitureSpec spec)
+    {
+        var behaviour = prefab.GetComponent(T(spec.Behaviour));
+        var fresh = PhraseSets(behaviour);
+        var current = Get(behaviour, "phraseSets") as Array;
+        string Key(Array a) => a == null ? "" : string.Join("|", a.Cast<object>().Select(x =>
+            Get(x, "name") + ":" + string.Join(",", ((AudioClip[])Get(x, "clips") ?? new AudioClip[0]).Select(c => c != null ? c.name : "-"))));
+        if (Key(current) == Key(fresh))
+            return;
+        Set(behaviour, "phraseSets", fresh);
         EditorUtility.SetDirty(behaviour);
         PrefabUtility.SavePrefabAsset(prefab);
+        Debug.Log($"{spec.Title}: фразы обновлены, тем: {fresh.Length}");
     }
 
     // ---------------- текстура из Spec.Texture: материал HDRP/Lit в Art/Materials/<Name>/
@@ -478,13 +615,12 @@ public static class ItemAssets
 
     // ---------------- Яндекс Станция: материалы по объектам модели, экран «12:35»
 
-    private const string YandexPhrases = Art + "/Audio/YandexStation/Phrases";
     private const string YandexMaterials = Art + "/Materials/YandexStation/";
 
     // Модель (Tools/YandexStation/model.py): Body, Trim, Marks, Ring и светящиеся
     // Seg<0-3><a-g>, ColonTop/ColonBottom, Mouth*. Какие из них горят, решает
-    // YandexStationItem; в префабе включены «12:35», чтобы так выглядели иконка и превью.
-    private static void SetupYandexStation(GameObject root)
+    // YandexStationItem; в префабе включены «12:35», так колонка выглядит в превью.
+    private static void SetupYandexStation(GameObject root, FurnitureSpec spec)
     {
         Material Mat(string name, Color color, float smoothness, Color emission)
         {
@@ -495,12 +631,13 @@ public static class ItemAssets
             return m;
         }
 
+        var color = spec.Name.Substring("YandexStation".Length);
         var display = new Color(1f, 0.84f, 0.62f);
         var ring = new Color(0.58f, 0.36f, 1f);
         var mats = new Dictionary<string, Material>
         {
-            { "Body", Mat("YandexStationBody", new Color(0.105f, 0.105f, 0.12f), 0.15f, Color.black) },
-            { "Trim", Mat("YandexStationTrim", new Color(0.035f, 0.035f, 0.04f), 0.3f, Color.black) },
+            { "Body", Mat("YandexStationBody" + color, spec.Body, 0.15f, Color.black) },
+            { "Trim", Mat("YandexStationTrim" + color, spec.Trim, 0.3f, Color.black) },
             { "Marks", Mat("YandexStationMarks", new Color(0.55f, 0.55f, 0.58f), 0.2f, Color.black) },
             { "Ring", Mat("YandexStationRing", ring, 0.5f, ring * 3f) },
             { "Display", Mat("YandexStationDisplay", display, 0.5f, display * 12f) },
@@ -523,7 +660,7 @@ public static class ItemAssets
             if (glowing)
                 r.gameObject.SetActive(shown.Contains(r.name));
         }
-        // Корпус первым: его берёт mainObjectRenderer
+        // Корпус первым: его меш показывает призрак в режиме строительства
         model.Find("Body")?.SetAsFirstSibling();
     }
 
@@ -610,7 +747,7 @@ public static class ItemAssets
     private static bool ScriptsReady(bool log)
     {
         var needed = new[] { "Item", "ScanNodeProperties", "Unity.Netcode.NetworkObject", "CustomItems.ItemRegistry" }
-            .Concat(Specs.Select(s => s.Behaviour))
+            .Concat(Specs.Select(s => s.Behaviour)).Concat(Furniture.Select(f => f.Behaviour))
             .Select(FindType).Where(t => t != null).ToArray();
 
         string[] Missing()
@@ -662,14 +799,22 @@ public static class ItemAssets
     private static Type T(string fullName) =>
         FindType(fullName) ?? throw new InvalidOperationException("Не найден тип " + fullName);
 
-    private static GameObject FindModel(string name)
+    private static GameObject FindModel(string name, bool readable = false)
     {
         var folder = $"{Art}/Models/{name}";
         if (!AssetDatabase.IsValidFolder(folder))
             return null;
-        return AssetDatabase.FindAssets("t:Model", new[] { folder })
-            .Select(g => AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath(g)))
-            .FirstOrDefault(m => m != null);
+        var path = AssetDatabase.FindAssets("t:Model", new[] { folder })
+            .Select(AssetDatabase.GUIDToAssetPath).FirstOrDefault();
+        if (path == null)
+            return null;
+        // Мебели нужен читаемый меш: режим строительства копирует его в призрак
+        if (readable && AssetImporter.GetAtPath(path) is ModelImporter importer && !importer.isReadable)
+        {
+            importer.isReadable = true;
+            importer.SaveAndReimport();
+        }
+        return AssetDatabase.LoadAssetAtPath<GameObject>(path);
     }
 
     private static ScriptableObject LoadOrCreate(string path, Type type, List<string> created)

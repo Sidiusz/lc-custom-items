@@ -339,6 +339,11 @@ def show_pattern(objs, patterns, colon, mouth=None):
 
 
 def render_preview(objs, path, face=False, back=False):
+    # Цвет корпуса для превью вариантов: BODY="0.78,0.47,0.55" (sRGB, как в ItemAssets.cs)
+    if os.environ.get("BODY"):
+        rgb = [float(c) ** 2.2 for c in os.environ["BODY"].split(",")]
+        bsdf = bpy.data.materials["BodyMat"].node_tree.nodes["Principled BSDF"]
+        bsdf.inputs["Base Color"].default_value = (*rgb, 1)
     if face:
         show_pattern(objs, FACE, False, os.environ.get("MOUTH", FACE_MOUTH))
     else:

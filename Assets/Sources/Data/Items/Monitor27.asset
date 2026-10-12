@@ -43,7 +43,7 @@ MonoBehaviour:
   throwAnim: 
   grabAnimationTime: 0
   grabSFX: {fileID: 0}
-  dropSFX: {fileID: 0}
+  dropSFX: {fileID: 8300000, guid: bc481eda4f724b85943001647d847ba5, type: 3}
   pocketSFX: {fileID: 0}
   throwSFX: {fileID: 0}
   syncGrabFunction: 0

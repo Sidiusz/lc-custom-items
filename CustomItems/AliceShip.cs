@@ -12,7 +12,8 @@ namespace CustomItems
     {
         public const string Takeoff = "Launch/Takeoff", Land = "Launch/Land", LaunchBusy = "Launch/Busy",
             DoorsClosed = "Doors/Closed", DoorsOpened = "Doors/Opened", DoorsLocked = "Doors/Locked",
-            Bought = "Buy/Done", BuyNoMoney = "Buy/NoMoney", BuyFull = "Buy/Full";
+            Bought = "Buy/Done", BuyNoMoney = "Buy/NoMoney", BuyFull = "Buy/Full",
+            LightsOn = "Lights/On", LightsOff = "Lights/Off";
 
         // Сколько предметов везёт дропшип за раз (как в терминале)
         private const int DropshipLimit = 12;
@@ -23,6 +24,7 @@ namespace CustomItems
             YandexStationItem.Launch = Launch;
             YandexStationItem.Doors = Doors;
             YandexStationItem.Buy = Buy;
+            YandexStationItem.Lights = Lights;
         }
 
         private static string[] Busy => new[] { LaunchBusy, AliceRoute.Busy, "Refuse" };
@@ -74,6 +76,18 @@ namespace CustomItems
             door.PlayDoorAnimation(close);
             Plugin.Log.LogInfo("Алиса: двери " + (close ? "закрыты" : "открыты"));
             return close ? new[] { DoorsClosed, "Ok" } : new[] { DoorsOpened, "Ok" };
+        }
+
+        // Как выключатель на стене: игра сама рассылает всем
+        private static string[] Lights(bool on)
+        {
+            var lights = Object.FindObjectOfType<ShipLights>();
+            if (lights == null)
+                return new[] { "Refuse" };
+            if (lights.areLightsOn != on)
+                lights.SetShipLightsServerRpc(on);
+            Plugin.Log.LogInfo("Алиса: свет " + (on ? "включён" : "выключен"));
+            return on ? new[] { LightsOn, "Ok" } : new[] { LightsOff, "Ok" };
         }
 
         // Как терминал: по цене со скидкой, кредиты списываются, доставка дропшипом

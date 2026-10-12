@@ -221,3 +221,12 @@ Agree|Буду!
 Off|Отключаюсь!
 Events/LeftBehind|А можно с вами?
 Events/Idle|Я хочу пиццы.
+
+# «Алиса, кто я?» — роль друга по той же таблице ников (без папки — имя из Names)
+Roles/Daniil|Вы разработчик!
+Roles/Andrey|Вы 3D-художник!
+Roles/Arseniy|Вы аниматор!
+Roles/Pavel|Вы тестировщик!
+ItsMe|Это я!
+ItsYou|Это вы!
+Color/Purple|Фиолетовый!

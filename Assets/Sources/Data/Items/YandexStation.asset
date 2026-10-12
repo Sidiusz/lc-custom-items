@@ -55,12 +55,12 @@ MonoBehaviour:
   toolTips:
   - 'Turn on/off : [LMB]'
   - 'Talk : [E]'
-  verticalOffset: 0
+  verticalOffset: -0.045
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1
   restingRotation: {x: 0, y: 0, z: 0}
-  rotationOffset: {x: 0, y: 0, z: 0}
-  positionOffset: {x: 0, y: -0.045, z: 0}
+  rotationOffset: {x: 40, y: 150, z: 60}
+  positionOffset: {x: -0.062, y: 0.0955, z: -0.0639}
   meshOffset: 0
   meshVariants: []
   materialVariants: []

@@ -55,12 +55,12 @@ MonoBehaviour:
   toolTips:
   - 'Shoot : [LMB]'
   - 'Reload : [R]'
-  verticalOffset: 0.029999994
+  verticalOffset: 0.065
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1
   restingRotation: {x: 0, y: 0, z: 90}
-  rotationOffset: {x: 0, y: 90, z: 0}
-  positionOffset: {x: 0, y: -0.1072, z: 0}
+  rotationOffset: {x: -95, y: -70, z: -5}
+  positionOffset: {x: -0.1447, y: 0.134, z: 0.0514}
   meshOffset: 0
   meshVariants: []
   materialVariants: []

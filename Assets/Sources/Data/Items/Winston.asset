@@ -54,12 +54,12 @@ MonoBehaviour:
   isDefensiveWeapon: 0
   toolTips:
   - 'Talk : [LMB]'
-  verticalOffset: 0
+  verticalOffset: -0.025
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1
   restingRotation: {x: 0, y: 0, z: 0}
-  rotationOffset: {x: 0, y: 0, z: 0}
-  positionOffset: {x: 0, y: -0.13, z: 0}
+  rotationOffset: {x: -165, y: -5, z: -75}
+  positionOffset: {x: -0.2146, y: -0.0287, z: 0.0243}
   meshOffset: 0
   meshVariants: []
   materialVariants: []

@@ -128,3 +128,6 @@ InitTestScene*.unity*
 /Assets/Plugins.meta
 /CustomItems/**/bin/
 /CustomItems/**/obj/
+
+# Python
+__pycache__/

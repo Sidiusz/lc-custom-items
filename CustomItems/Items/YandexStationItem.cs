@@ -594,6 +594,8 @@ namespace CustomItems.Items
                 return "Love";
             if (Has("заряд", "батаре"))
                 return TopicBattery;
+            if (Has("полетим", "летим", "лететь"))
+                return "Moon";
             if (Has("куда", "как пройти", "дорог", "маршрут"))
                 return "Navigation";
             if (Has("скоро", "долго"))
@@ -1411,7 +1413,12 @@ namespace CustomItems.Items
             if (IdleSeconds > 0f && Time.time > nextIdle)
             {
                 if (nextIdle > 0f && PlayerNear(this, 8f))
+                {
+                    // На орбите иногда «Давайте полетим на Титан!»
+                    if (round.inShipPhase && Random.value < 0.4f)
+                        reasons.Add("Moon");
                     Reason("Idle");
+                }
                 nextIdle = Time.time + IdleSeconds * Random.Range(0.7f, 1.3f);
             }
         }

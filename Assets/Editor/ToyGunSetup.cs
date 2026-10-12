@@ -1,5 +1,5 @@
 // Собирает префаб игрушечного пистолета из сгенерированных ассетов
-// (Tools/generate_toy_gun.py → Assets/Items/ToyGun/) и помечает его и звук
+// (Tools/toy_gun_blender.py → Assets/Items/ToyGun/) и помечает его и звук
 // бандлом customitems. Срабатывает сам при импорте этих файлов, если префаба
 // ещё нет; пересобрать вручную: Lethal Company → Rebuild Toy Gun Prefab.
 using System.IO;
@@ -16,18 +16,8 @@ public class ToyGunSetup : AssetPostprocessor
     private const string PrefabPath = Dir + "/ToyGun.prefab";
     private const string Bundle = "customitems";
 
-    // Дуло в координатах модели (см. MUZZLE в Tools/generate_toy_gun.py)
-    private static readonly Vector3 MuzzlePosition = new Vector3(0f, 0.067f, 0.185f);
-
-    private void OnPreprocessTexture()
-    {
-        if (assetPath != TexturePath)
-            return;
-        // Текстура это палитра из цветных ячеек: без мипмапов цвета не смешиваются
-        var importer = (TextureImporter)assetImporter;
-        importer.mipmapEnabled = false;
-        importer.filterMode = FilterMode.Point;
-    }
+    // Дуло в координатах модели (скрипт Tools/toy_gun_blender.py печатает её при запуске)
+    private static readonly Vector3 MuzzlePosition = new Vector3(0f, 0.084f, 0.125f);
 
     private static void OnPostprocessAllAssets(string[] imported, string[] deleted, string[] moved, string[] movedFrom)
     {
@@ -53,7 +43,7 @@ public class ToyGunSetup : AssetPostprocessor
         var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(TexturePath);
         if (model == null || texture == null)
         {
-            Debug.LogWarning("Toy gun: нет модели или текстуры в " + Dir + ", запустите Tools/generate_toy_gun.py");
+            Debug.LogWarning("Toy gun: нет модели или текстуры в " + Dir + ", запустите Tools/toy_gun_blender.py");
             return;
         }
 

@@ -215,6 +215,9 @@ namespace CustomItems
 
             if (heard.Partial)
             {
+                // «Алиса» уже прозвучала — колонка просыпается, не дожидаясь конца фразы
+                if (!answered.Contains(heard.Player))
+                    YandexStationItem.OnPartial(player, heard.Text);
                 // Ответить можно уже по куску: «алиса какая погода» дважды подряд — дальше не ждём
                 lastPartial.TryGetValue(heard.Player, out var before);
                 lastPartial[heard.Player] = heard.Text;

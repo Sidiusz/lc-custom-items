@@ -77,6 +77,8 @@ namespace CustomItems.Items
         public static string WakeWord = "алиса";
         public static float HearingRadius = 8f;
         public static float ListenSilence = 3f, ListenMax = 12f;
+        /// <summary>Сколько секунд после её вопроса («Вы уверены?») ждёт ответ без «Алиса».</summary>
+        public static float AnswerSeconds = 6f;
         /// <summary>Сколько длится пробуждение (сигнал и глаза), прежде чем она начнёт «думать».</summary>
         public static float WakeSeconds = 0.8f;
         /// <summary>Можно ли задать новый вопрос, пока колонка ещё отвечает.</summary>
@@ -516,7 +518,13 @@ namespace CustomItems.Items
 
             if (topic == null)
             {
-                // «Алиса» без вопроса: сигнал, иногда «Слушаю!» и потом слушает
+                // «Алиса» без вопроса: сигнал, иногда «Слушаю!» и потом слушает.
+                // Уже проснулась на «Алиса» в куске фразы — сигнал прозвучал, просто слушает дальше
+                if (listening)
+                {
+                    station.listenUntil = Mathf.Max(station.listenUntil, Time.time + ListenSilence);
+                    return;
+                }
                 if (station.FindSet(TopicListenVoice) != null && Random.value < ListenVoiceChance)
                 {
                     station.Say(TopicListenVoice);
@@ -549,6 +557,25 @@ namespace CustomItems.Items
                 Answer(station, speaker, topic, known);
             else
                 station.Think(() => Answer(station, speaker, topic, known), wake: !listening);
+        }
+
+        /// <summary>
+        /// Кусок фразы, пока игрок ещё говорит: на «Алиса» колонка просыпается сразу (сигнал, слушает),
+        /// не дожидаясь паузы. Думает она потом, перед ответом.
+        /// </summary>
+        public static void OnPartial(GameNetcodeStuff.PlayerControllerB speaker, string text)
+        {
+            text = (text ?? "").ToLowerInvariant().Replace('ё', 'е');
+            if (speaker == null || speaker.isPlayerDead || text.IndexOf(WakeWord, StringComparison.Ordinal) < 0)
+                return;
+            var station = NearestTo(speaker.transform.position, HearingRadius);
+            if (station == null || station.IsJammed)
+                return;
+            // Ждёт ответ на свой вопрос, уже слушает, говорит или думает — будить не надо
+            if (station.asking != null && Time.time < station.askUntil || Time.time < station.listenUntil
+                || station.IsTalking || station.pendingAnswer != null || Time.time < station.thinkUntil)
+                return;
+            station.Say(SoundListen);
         }
 
         private static void Answer(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
@@ -723,7 +750,7 @@ namespace CustomItems.Items
             asking = AskFollow;
             askingItem = topic;
             askStartedAt = Mathf.Max(Time.time, talkUntil);
-            askUntil = askStartedAt + ListenSilence;
+            askUntil = askStartedAt + AnswerSeconds;
         }
 
         private static bool IsAction(string topic) =>
@@ -750,7 +777,7 @@ namespace CustomItems.Items
                 listenUntil = 0f;
             }
             askStartedAt = Mathf.Max(Time.time, talkUntil);
-            askUntil = askStartedAt + ListenSilence;
+            askUntil = askStartedAt + AnswerSeconds;
         }
 
         // Ответили на вопрос (или промолчали: reply == null)
@@ -1484,6 +1511,9 @@ namespace CustomItems.Items
             WalkieTalkie.TransmitOneShotAudio(audioSource, clip);
         }
 
+        // Задала вопрос и ждёт ответ: смотрит и светится, как после «Алиса»
+        private bool AwaitingAnswer => asking != null && askUntil < float.MaxValue && Time.time >= askStartedAt && Time.time < askUntil;
+
         private bool IsTalking => Time.time < talkUntil && audioSource != null && audioSource.isPlaying;
 
         private void Speak(string topic, int index)
@@ -2170,7 +2200,7 @@ namespace CustomItems.Items
                 mask = ThinkMask();
             else if (talking && !clockWhileTalking)
                 mask = FaceMask();
-            else if (Time.time < listenUntil)
+            else if (Time.time < listenUntil || AwaitingAnswer)
                 mask = Eyes(ListenFace);
             else
                 mask = ClockMask();
@@ -2255,7 +2285,7 @@ namespace CustomItems.Items
             var glow = !IsOn ? 0f
                 : IsJammed ? (Random.value < 0.3f ? ringTalkGlow : 0f)
                 : talking ? Mathf.Lerp(ringIdleGlow * 2f, ringTalkGlow, level)
-                : Time.time < listenUntil ? ringListenGlow * (0.8f + 0.2f * Mathf.Sin(Time.time * 6f))
+                : Time.time < listenUntil || AwaitingAnswer ? ringListenGlow * (0.8f + 0.2f * Mathf.Sin(Time.time * 6f))
                 : ringIdleGlow;
             ringMaterial.SetColor("_EmissiveColor", ringColor * glow);
         }

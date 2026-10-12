@@ -57,7 +57,7 @@ namespace CustomItems
             var lever = Object.FindObjectOfType<StartMatchLever>();
             var land = round.inShipPhase;
             lever.leverHasBeenPulled = land;
-            lever.PullLeverAnim(land);
+            GamePrivate.Call(lever, "PullLeverAnim", land); // private в игре
             lever.PlayLeverPullEffectsServerRpc(land);
             lever.PullLever();
             Plugin.Log.LogInfo("Алиса: рычаг, " + (land ? "посадка" : "взлёт"));

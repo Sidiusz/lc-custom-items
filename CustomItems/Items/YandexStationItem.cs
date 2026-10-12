@@ -112,6 +112,20 @@ namespace CustomItems.Items
         /// <summary>Как друзей называют вслух: папка → начала слов («Andrey=андрей,андрюха;…»), для «где Андрей?».</summary>
         public static readonly Dictionary<string, string[]> SpokenNames = new Dictionary<string, string[]>();
 
+        /// <summary>Папка друга, если в тексте есть его имя в любой форме (по началу слова: «паш» — Пашей, Пашка).</summary>
+        public static string FriendNamed(string command)
+        {
+            foreach (var token in command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                foreach (var pair in SpokenNames)
+                {
+                    if (pair.Value.Any(stem => token.StartsWith(stem, StringComparison.Ordinal)))
+                        return pair.Key;
+                }
+            }
+            return null;
+        }
+
         public static void SetSpokenNames(string table)
         {
             SpokenNames.Clear();
@@ -505,6 +519,9 @@ namespace CustomItems.Items
                 return false;
             var end = text.IndexOf(' ', wake);
             var command = end < 0 ? "" : text.Substring(end + 1).Replace("[unk]", " ").Trim();
+            // «Алиса, куда…» / «где…» — ждём продолжения: «куда идти» и «куда летим» — разное
+            if (command == "куда" || command == "где")
+                return false;
             return command.Length > 0 && Topic(command) != TopicUnknown;
         }
 
@@ -553,7 +570,8 @@ namespace CustomItems.Items
                 return TopicSorry;
             if (Has("дура", "дурак", "тупая", "тупой", "глупая", "идиот", "бесполезн"))
                 return TopicInsult;
-            if (Has("где"))
+            // «Где Паша», «чё с Пашей», «Пашка умер?», «все живы?»
+            if (Has("где") || FriendNamed(command) != null || Has("живы", "умер", "погиб") || tokens.Contains("жив"))
                 return TopicWhereIs;
             if (Has("погод", "дожд", "туман", "гроз"))
                 return "Weather/" + (WeatherName() ?? "Other");
@@ -594,10 +612,10 @@ namespace CustomItems.Items
                 return "Love";
             if (Has("заряд", "батаре"))
                 return TopicBattery;
-            if (Has("полетим", "летим", "лететь"))
-                return "Moon";
-            if (Has("куда", "как пройти", "дорог", "маршрут"))
+            if (Has("идти", "пройти", "дорог", "маршрут"))
                 return "Navigation";
+            if (Has("куда", "полетим", "летим", "лететь"))
+                return "Moon";
             if (Has("скоро", "долго"))
                 return "Almost";
             if (Has("любим") && Has("цвет"))
@@ -834,12 +852,7 @@ namespace CustomItems.Items
 
             // Названный по имени друг
             var tokens = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            string named = null;
-            foreach (var pair in SpokenNames)
-            {
-                if (pair.Value.Any(stem => tokens.Any(t => t.StartsWith(stem, StringComparison.Ordinal))))
-                    named = pair.Key;
-            }
+            var named = FriendNamed(command);
 
             var others = round.allPlayerScripts
                 .Where(p => p != null && p != speaker && (p.isPlayerControlled || p.isPlayerDead)).ToList();
@@ -849,6 +862,25 @@ namespace CustomItems.Items
                 asked = others.Where(p => NameFolder(p.playerUsername) == named).ToList();
                 if (asked.Count == 0)
                     return FindSet(EventsFolder + "Missing/" + named) != null ? EventsFolder + "Missing/" + named : folder + "Lost/One";
+                // Погиб — «Его съела собака» или его личное PlayerDied
+                if (asked.All(p => p.isPlayerDead))
+                {
+                    var options = new List<string>();
+                    if (FindSet(EventsFolder + "PlayerDied/" + named) != null)
+                        options.Add(EventsFolder + "PlayerDied/" + named);
+                    if (DeathCauses.TryGetValue(asked[0].playerClientId, out var cause))
+                    {
+                        var c = EventsFolder + "DeathCause/" + cause;
+                        if (FindSet(c + "/One") != null)
+                            options.Add(c + "/One");
+                        else if (FindSet(c) != null)
+                            options.Add(c);
+                    }
+                    if (options.Count == 0 && FindSet(EventsFolder + "PlayerDied") != null)
+                        options.Add(EventsFolder + "PlayerDied");
+                    if (options.Count > 0)
+                        return options[Random.Range(0, options.Count)];
+                }
             }
             else if (tokens.Contains("все") || tokens.Contains("остальные"))
                 asked = others;
@@ -1113,6 +1145,8 @@ namespace CustomItems.Items
         private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
         private readonly List<string> reasons = new List<string>();
         private readonly List<string> pendingDeaths = new List<string>();
+        /// <summary>Кто от чего погиб в этот день (для «чё с Пашей?»).</summary>
+        private static readonly Dictionary<ulong, string> DeathCauses = new Dictionary<ulong, string>();
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
         private bool joinedSeeded, wasShipPhase = true, dropshipLanded, dropshipOpened, junkTold;
         private float deathsFlushAt;
@@ -1252,7 +1286,9 @@ namespace CustomItems.Items
                         Reason("PlayerDied/" + folder);
                     Reason("PlayerDied");
                     // Причину копим пару секунд: погибли разом несколько — «их», один — «его»
-                    pendingDeaths.Add(DeathCause(p));
+                    var cause = DeathCause(p);
+                    DeathCauses[p.playerClientId] = cause;
+                    pendingDeaths.Add(cause);
                     deathsFlushAt = Time.time + 3f;
                 }
             }

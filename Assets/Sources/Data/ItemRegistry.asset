@@ -33,3 +33,7 @@ MonoBehaviour:
     rarity: 30
     inShop: 0
     price: 25
+  - item: {fileID: 11400000, guid: fa3855a895b120245b03612139d51db8, type: 2}
+    rarity: 0
+    inShop: 1
+    price: 15

@@ -224,6 +224,7 @@ MonoBehaviour:
   grabbableToEnemies: 1
   rotateObject: 0
   templateItemName: Perfume bottle
+  drinkClip: {fileID: 8300000, guid: 1094ad11dc8d491d810404bdce85e1e5, type: 3}
 --- !u!1 &6741424729314995137
 GameObject:
   m_ObjectHideFlags: 0

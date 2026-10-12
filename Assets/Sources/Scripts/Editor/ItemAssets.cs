@@ -155,7 +155,8 @@ public static class ItemAssets
     {
         if (!TypesReady(log: true))
             return;
-        if (EditorUtility.DisplayDialog("Пересобрать префабы",
+        // В batchmode (-executeMethod ItemAssets.RebuildMenu) диалог не показать, пересобираем сразу
+        if (Application.isBatchMode || EditorUtility.DisplayDialog("Пересобрать префабы",
                 "Префабы всех предметов будут созданы заново из моделей (ассеты Item и ItemRegistry не меняются). " +
                 "Ручные правки префабов пропадут.", "Пересобрать", "Отмена"))
             CreateMissing(rebuildPrefabs: true);
@@ -289,6 +290,8 @@ public static class ItemAssets
 
             root.AddComponent(T("Unity.Netcode.NetworkObject"));
             var behaviour = root.AddComponent(T(spec.Behaviour));
+            if (behaviour == null)
+                throw new InvalidOperationException($"{spec.Name}: не удалось добавить {spec.Behaviour} (нет MonoScript для класса?)");
             Set(behaviour, "itemProperties", item);
             Set(behaviour, "grabbable", true);
             Set(behaviour, "grabbableToEnemies", true);

@@ -623,7 +623,7 @@ namespace CustomItems.Items
             station.lastAsked = asked;
             station.lastAskedAt = Time.time;
 
-            if (station.AnswerMore(speaker, topic, known) || station.AnswerTalk(speaker, topic))
+            if (station.AnswerMore(speaker, topic, known) || station.AnswerTalk(speaker, topic, known))
                 return;
             // Анекдот ещё раз — «А вот ещё…» и следующий
             if (topic == TopicJoke && station.lastSaidTopic != null && station.lastSaidTopic.Contains(TopicJoke)
@@ -1011,6 +1011,8 @@ namespace CustomItems.Items
                 why = "код " + string.Join(",", codes);
                 return TopicCode;
             }
+            // «Взлетай взлетай взлетай» — то же, что «взлетай»: повторы слов не сбивают похожесть
+            command = string.Join(" ", command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct());
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out var score, out var example);
             why = example != null

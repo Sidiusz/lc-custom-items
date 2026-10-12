@@ -12,7 +12,9 @@ namespace CustomItems.Items
     /// </summary>
     public partial class YandexStationItem
     {
-        private const string TopicWhereAmI = "#whereami", TopicNotYou = "#notyou", TopicDunno = "#dunno", TopicHere = "#here";
+        private const string TopicWhereAmI = "#whereami", TopicNotYou = "#notyou", TopicDunno = "#dunno", TopicHere = "#here",
+            TopicHurt = "#hurt", TopicEarned = "#earned", TopicBestEarner = "#bestearner", TopicMoonAbout = "#moonabout",
+            TopicCredits = "#credits", TopicHello = "#hello", TopicCallName = "#callname";
         private const string AskWake = "wake", AskOthers = "others", AskMissing = "missing";
 
         /// <summary>
@@ -63,7 +65,7 @@ namespace CustomItems.Items
         }
 
         /// <summary>Темы разговора. false — тема не отсюда.</summary>
-        private bool AnswerTalk(PlayerControllerB speaker, string topic)
+        private bool AnswerTalk(PlayerControllerB speaker, string topic, string known)
         {
             switch (topic)
             {
@@ -82,8 +84,179 @@ namespace CustomItems.Items
                 case TopicWhereAmI:
                     SayWhereAmI(speaker);
                     return true;
+                case "Insult":
+                    lastInsultAt = Time.time; // «Ты обиделась?» — «Немножко»
+                    return false;
+                case TopicHurt:
+                    SayFirst(Time.time - lastInsultAt < 180f ? "Hurt/Yes" : "Hurt/No", "Sorry", "Ok");
+                    return true;
+                case TopicEarned:
+                    SayEarned(speaker);
+                    return true;
+                case TopicBestEarner:
+                    SayBestEarner();
+                    return true;
+                case TopicMoonAbout:
+                    SayMoonAbout();
+                    return true;
+                case TopicCredits:
+                    SayCredits();
+                    return true;
+                case TopicHello:
+                case TopicCallName:
+                    SayToFriend(known, topic == TopicHello);
+                    return true;
             }
             return false;
+        }
+
+        private float lastInsultAt = -1000f;
+
+        // ---- Кто сколько принёс ----
+
+        // Последний, кто держал предмет; кредиты за лут, занесённый на корабль за этот день
+        private readonly Dictionary<GrabbableObject, PlayerControllerB> lastHolder = new Dictionary<GrabbableObject, PlayerControllerB>();
+        private readonly HashSet<GrabbableObject> countedLoot = new HashSet<GrabbableObject>();
+        private readonly Dictionary<ulong, int> earned = new Dictionary<ulong, int>();
+        private bool lootSeeded, wasLandedForLoot;
+
+        private void CollectLoot(StartOfRound round)
+        {
+            var landed = round.shipHasLanded && !round.inShipPhase;
+            if (landed && !wasLandedForLoot)
+            {
+                earned.Clear(); // новый день — считаем заново
+                lootSeeded = false;
+            }
+            wasLandedForLoot = landed;
+            foreach (var item in FindObjectsOfType<GrabbableObject>())
+            {
+                if (item == null || item.itemProperties == null || !item.itemProperties.isScrap || item.scrapValue <= 0)
+                    continue;
+                if (item.playerHeldBy != null)
+                    lastHolder[item] = item.playerHeldBy;
+                if (!item.isInShipRoom || !countedLoot.Add(item))
+                    continue;
+                // Что уже лежало на корабле до посадки — не считаем
+                if (!lootSeeded || !landed || !lastHolder.TryGetValue(item, out var who) || who == null)
+                    continue;
+                earned.TryGetValue(who.playerClientId, out var sum);
+                earned[who.playerClientId] = sum + item.scrapValue;
+            }
+            lootSeeded = true;
+            lastHolder.Keys.Where(k => k == null).ToList().ForEach(k => lastHolder.Remove(k));
+            countedLoot.RemoveWhere(k => k == null);
+        }
+
+        // «Сколько я принёс?» — «Вы принесли на» + сумма; ничего — «Вы пока ничего не принесли»; больше всех — «Вы молодец!»
+        private void SayEarned(PlayerControllerB speaker)
+        {
+            earned.TryGetValue(speaker.playerClientId, out var sum);
+            if (sum <= 0)
+            {
+                SayFirst("Earned/None", "Loot/Low", TopicUnknown);
+                return;
+            }
+            var topics = Existing("Earned/Intro");
+            if (topics.Count == 0 || !AddNumber(topics, sum))
+            {
+                SayFirst("Loot/High", "Ok");
+                return;
+            }
+            if (earned.Count > 1 && earned.OrderByDescending(e => e.Value).First().Key == speaker.playerClientId && FindSet("Earned/Best") != null)
+                topics.Add("Earned/Best");
+            SaySequence(topics);
+        }
+
+        // «Кто больше всех принёс?» — «Больше всех принёс» + имя
+        private void SayBestEarner()
+        {
+            var round = StartOfRound.Instance;
+            var best = earned.Where(e => e.Value > 0).OrderByDescending(e => e.Value).Select(e => e.Key).FirstOrDefault();
+            var player = round?.allPlayerScripts.FirstOrDefault(p => p != null && p.playerClientId == best && earned.ContainsKey(best));
+            var name = player != null ? NameFolder(player.playerUsername) : null;
+            if (name == null || FindSet(TopicCall + name) == null)
+            {
+                SayFirst("Earned/Nobody", "Loot/Low", TopicUnknown);
+                return;
+            }
+            SaySequence(Existing("Earned/BestIs", TopicCall + name));
+        }
+
+        // «Сколько у нас денег?» — «На счету» + число кредитов
+        private void SayCredits()
+        {
+            var terminal = FindObjectOfType<Terminal>();
+            var topics = Existing("Credits/Intro");
+            if (terminal == null || topics.Count == 0 || !AddNumber(topics, terminal.groupCredits))
+            {
+                SayFirst(terminal != null && terminal.groupCredits < 50 ? "Buy/NoMoney" : "Credits", TopicUnknown);
+                return;
+            }
+            SaySequence(topics);
+        }
+
+        // «Расскажи про луну» — Moon/About/<Луна> (название как в терминале без номера: Experimentation)
+        private void SayMoonAbout()
+        {
+            var level = StartOfRound.Instance?.currentLevel;
+            var name = level != null ? level.PlanetName ?? "" : "";
+            var space = name.IndexOf(' ');
+            if (space >= 0 && name.Take(space).All(char.IsDigit))
+                name = name.Substring(space + 1);
+            name = name.Replace(" ", "");
+            SayFirst("Moon/About/" + name, "Moon/About", TopicUnknown);
+        }
+
+        // «Скажи привет Паше» — «Паша! Привет»; «позови Пашу» — «Паша!» погромче
+        private void SayToFriend(string command, bool hello)
+        {
+            var name = FriendNamed(command);
+            if (name == null || FindSet(TopicCall + name) == null)
+            {
+                SayFirst("Names/Unknown", TopicUnknown);
+                return;
+            }
+            var topics = new List<string> { TopicCall + name };
+            if (hello)
+                topics.AddRange(Existing("Hello", "Greeting").Take(1));
+            else
+            {
+                noiseRange = EventNoiseRange * 2f; // зовёт громко — слышно дальше
+                topics.AddRange(Existing("CallName").Take(1));
+            }
+            SaySequence(topics);
+        }
+
+        // ---- Поминки ----
+
+        private readonly Dictionary<ulong, float> diedAt = new Dictionary<ulong, float>();
+        private readonly HashSet<ulong> mourned = new HashSet<ulong>();
+
+        // Через минуту после смерти иногда «Помянем Андрея» (Events/Memorial/<Имя> или Events/Memorial)
+        private void CollectMemorial(StartOfRound round)
+        {
+            foreach (var p in round.allPlayerScripts)
+            {
+                if (p == null)
+                    continue;
+                var id = p.playerClientId;
+                if (!p.isPlayerDead)
+                {
+                    diedAt.Remove(id);
+                    mourned.Remove(id);
+                    continue;
+                }
+                if (!diedAt.ContainsKey(id))
+                    diedAt[id] = Time.time;
+                if (mourned.Contains(id) || Time.time - diedAt[id] < 60f)
+                    continue;
+                mourned.Add(id);
+                var name = NameFolder(p.playerUsername);
+                if (name != null)
+                    Reason("Memorial/" + name);
+                Reason("Memorial");
+            }
         }
 
         // «Где я?»: на корабле, в комплексе, снаружи. Вне корабля без своей записи — «Вы заблудились?» и ведёт
@@ -105,7 +278,7 @@ namespace CustomItems.Items
         }
 
         // Команду на взлёт повторили в одной фразе: «взлетай взлетай», «погнали погнали»
-        private static readonly string[] LaunchStems = { "взлет", "взлёт", "погнал", "полетел", "поехал", "запуск", "запуст", "улета" };
+        private static readonly string[] LaunchStems = { "взлет", "взлёт", "погнал", "полетел", "поехал", "запуск", "запуст", "улета", "лет", "сади", "приземл", "дёрн", "дерн", "валим", "гони" };
 
         private static bool Hurried(string command)
         {
@@ -127,6 +300,8 @@ namespace CustomItems.Items
         // Кто зашёл на корабль после прогулки (только на луне, колонка сама на корабле)
         private void CollectArrivals(StartOfRound round)
         {
+            CollectLoot(round);
+            CollectMemorial(round);
             var landed = round.shipHasLanded && !round.shipIsLeaving && !round.inShipPhase;
             foreach (var p in round.allPlayerScripts)
             {

@@ -48,7 +48,7 @@ namespace CustomItems
             if (duck != null)
                 duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
 
-            Register<JagermeisterItem>(bundle, new CustomItemDef
+            var jager = Register<JagermeisterItem>(bundle, new CustomItemDef
             {
                 Name = "Jagermeister",
                 ModelAsset = "Jagermeister",
@@ -58,7 +58,10 @@ namespace CustomItems
                 DefaultRarity = 30,
                 Weight = 1.03f,
                 VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
+                ToolTips = new[] { "Drink : [LMB]" },
             });
+            if (jager != null)
+                jager.itemProperties.saveItemVariable = true; // сохранять оставшиеся глотки
 
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }

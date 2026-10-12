@@ -109,22 +109,11 @@ namespace CustomItems.Items
         /// <summary>Столько секунд после «замолчи» колонка не болтает сама.</summary>
         public static float ShushSeconds = 60f;
 
-        /// <summary>Как друзей называют вслух: папка → начала слов («Andrey=андрей,андрюха;…»), для «где Андрей?».</summary>
+        /// <summary>Как друзей называют вслух: папка → имена («Andrey=андрей,андрюха;…»), падежи добавляются сами.</summary>
         public static readonly Dictionary<string, string[]> SpokenNames = new Dictionary<string, string[]>();
 
-        /// <summary>Папка друга, если в тексте есть его имя в любой форме (по началу слова: «паш» — Пашей, Пашка).</summary>
-        public static string FriendNamed(string command)
-        {
-            foreach (var token in command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                foreach (var pair in SpokenNames)
-                {
-                    if (pair.Value.Any(stem => token.StartsWith(stem, StringComparison.Ordinal)))
-                        return pair.Key;
-                }
-            }
-            return null;
-        }
+        /// <summary>Папка друга, если в тексте есть его имя в любой форме (Пашей, Пашка, Павел).</summary>
+        public static string FriendNamed(string command) => AliceIntents.NameIn(command);
 
         public static void SetSpokenNames(string table)
         {
@@ -137,6 +126,7 @@ namespace CustomItems.Items
                 SpokenNames[parts[0].Trim()] = parts[1].Split(',').Select(w => w.Trim().ToLowerInvariant().Replace('ё', 'е'))
                     .Where(w => w.Length > 0).ToArray();
             }
+            AliceIntents.SetNames(SpokenNames);
         }
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
@@ -519,10 +509,11 @@ namespace CustomItems.Items
                 return false;
             var end = text.IndexOf(' ', wake);
             var command = end < 0 ? "" : text.Substring(end + 1).Replace("[unk]", " ").Trim();
-            // «Алиса, куда…» / «где…» — ждём продолжения: «куда идти» и «куда летим» — разное
-            if (command == "куда" || command == "где")
+            // Одно слово («куда…», «где…») — ждём продолжения, кроме «стоп» и «замолчи»
+            var intent = AliceIntents.Match(command, out var score);
+            if (intent == null || score < 0.85f)
                 return false;
-            return command.Length > 0 && Topic(command) != TopicUnknown;
+            return intent == TopicStop || intent == "#shush" || AliceIntents.Tokens(command).Length >= 2;
         }
 
         private static YandexStationItem NearestTo(Vector3 pos, float radius)
@@ -559,149 +550,27 @@ namespace CustomItems.Items
         /// <summary>Тема ответа по тексту вопроса и состоянию игры.</summary>
         public static string Topic(string command)
         {
-            var tokens = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            bool Has(params string[] words) => words.Any(w => command.Contains(w) || FuzzyHas(tokens, w));
-
-            if (Has("замолчи", "тихо", "заткнись", "помолчи"))
-                return TopicShush;
-            if (Has("стоп", "хватит", "выключ"))
-                return TopicStop;
-            if (Has("извин", "прощени"))
-                return TopicSorry;
-            if (Has("дура", "дурак", "тупая", "тупой", "глупая", "идиот", "бесполезн"))
-                return TopicInsult;
-            // «Где Паша», «чё с Пашей», «Пашка умер?», «все живы?»
-            if (Has("где") || FriendNamed(command) != null || Has("живы", "умер", "погиб") || tokens.Contains("жив"))
-                return TopicWhereIs;
-            if (Has("погод", "дожд", "туман", "гроз"))
-                return "Weather/" + (WeatherName() ?? "Other");
-            // Дедлайн раньше квоты: «сколько дней до сдачи квоты» — про дни
-            if (Has("дедлайн", "срок", "сколько дней", "дней остал", "до сдачи"))
+            // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
+            var intent = AliceIntents.Match(command, out _);
+            switch (intent)
             {
-                var days = TimeOfDay.Instance != null ? TimeOfDay.Instance.daysUntilDeadline : 3;
-                return "Deadline" + Mathf.Clamp(days, 0, 3);
+                case null:
+                    return TopicUnknown;
+                case "#shush":
+                    return TopicShush;
+                case "#time":
+                    return TopicTime;
+                case "Weather":
+                    return "Weather/" + (WeatherName() ?? "Other");
+                case "Deadline":
+                    var days = TimeOfDay.Instance != null ? TimeOfDay.Instance.daysUntilDeadline : 3;
+                    return "Deadline" + Mathf.Clamp(days, 0, 3);
+                case "Quota":
+                    var tod = TimeOfDay.Instance;
+                    return tod != null && tod.quotaFulfilled >= tod.profitQuota ? "QuotaDone" : "QuotaNotDone";
+                default:
+                    return intent;
             }
-            if (Has("квот"))
-            {
-                var tod = TimeOfDay.Instance;
-                return tod != null && tod.quotaFulfilled >= tod.profitQuota ? "QuotaDone" : "QuotaNotDone";
-            }
-            if (Has("врем", "который час", "сколько час"))
-                return TopicTime;
-            if (Has("кто я", "чем я занимаюсь", "моя роль", "кем я работаю"))
-                return TopicMyRole;
-            if (Has("как меня зовут", "мое имя", "знаешь меня"))
-                return TopicMyName;
-            if (Has("кто ты", "ты кто"))
-                return TopicWhoAreYou;
-            if (Has("умеешь", "что ты можешь"))
-                return "Skills";
-            if (Has("кто тут", "кто здесь", "кто там", "кто говорит"))
-                return "ItsMe";
-            if (Has("кто это", "кто виноват", "кто сделал"))
-                return "ItsYou";
-            if (Has("сколько нас", "нас сколько", "сколько игроков"))
-                return TopicCount;
-            if (Has("враг", "опасно", "монстр"))
-                return TopicEnemies;
-            if (Has("скучно"))
-                return TopicBored;
-            if (Has("поиграем", "сыграем", "поиграть", "сыграть", "игру"))
-                return TopicGameAsk;
-            if (Has("любишь", "люблю", "нравлюсь", "нравится"))
-                return "Love";
-            if (Has("заряд", "батаре"))
-                return TopicBattery;
-            if (Has("идти", "пройти", "дорог", "маршрут"))
-                return "Navigation";
-            if (Has("куда", "полетим", "летим", "лететь"))
-                return "Moon";
-            if (Has("скоро", "долго"))
-                return "Almost";
-            if (Has("любим") && Has("цвет"))
-                return TopicFavoriteColor;
-            if (Has("цвет"))
-                return TopicColor;
-            if (Has("выгляжу", "костюм", "мне идет"))
-                return EventsFolder + "Suit";
-            if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай", "хочешь", "будешь"))
-                return TopicRefuse;
-            if (Has("хорошо", "ладно", "понятно", "ясно", "окей") || Regex.IsMatch(command, @"^(я|мы|мне|нам)\s"))
-                return "Ok";
-            if (Has("до свидания", "до встречи", "прощай", "увидимся") || Regex.IsMatch(command, @"(^|\s)пока(\s|$)"))
-                return TopicGoodbye;
-            if (Has("привет", "здравств", "хай", "добр"))
-                return "Greeting";
-            if (Has("шутк", "пошути", "анекдот", "рассмеши"))
-                return "Joke";
-            if (Has("музык", "песн", "спой", "включи"))
-                return "Music";
-            if (Has("спасибо", "благодар", "молодец", "умница"))
-                return "Thanks";
-            if (Has("как дела", "как ты", "как жизнь"))
-                return "HowAreYou";
-            return TopicUnknown;
-        }
-
-        /// <summary>
-        /// Нечёткое совпадение, когда точного нет: слова ключа идут по порядку (между ними можно
-        /// одно лишнее слово), каждое — начало слова фразы, с одной ошибкой от 5 букв. Слова до 3 букв
-        /// только целиком, а 4-буквенные без ошибок: иначе «кот» стал бы «квотой».
-        /// </summary>
-        private static bool FuzzyHas(string[] tokens, string key)
-        {
-            var words = key.Split(' ');
-            for (var start = 0; start < tokens.Length; start++)
-            {
-                int t = start, w = 0, gap = 0;
-                while (t < tokens.Length && w < words.Length)
-                {
-                    if (WordLike(tokens[t], words[w]))
-                    {
-                        w++;
-                        gap = 0;
-                    }
-                    else if (w == 0 || ++gap > 1)
-                        break;
-                    t++;
-                }
-                if (w == words.Length)
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool WordLike(string token, string stem)
-        {
-            if (stem.Length <= 3)
-                return token == stem;
-            if (token.StartsWith(stem, StringComparison.Ordinal))
-                return true;
-            if (stem.Length < 5 || token.Length < stem.Length - 1)
-                return false;
-            // Начало слова той же длины, что ключ (или на букву длиннее/короче)
-            for (var len = stem.Length - 1; len <= stem.Length + 1; len++)
-            {
-                if (len <= token.Length && Levenshtein(token.Substring(0, len), stem) <= 1)
-                    return true;
-            }
-            return false;
-        }
-
-        private static int Levenshtein(string a, string b)
-        {
-            var prev = new int[b.Length + 1];
-            var cur = new int[b.Length + 1];
-            for (var j = 0; j <= b.Length; j++)
-                prev[j] = j;
-            for (var i = 1; i <= a.Length; i++)
-            {
-                cur[0] = i;
-                for (var j = 1; j <= b.Length; j++)
-                    cur[j] = Math.Min(Math.Min(cur[j - 1], prev[j]) + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
-                (prev, cur) = (cur, prev);
-            }
-            return prev[b.Length];
         }
 
         /// <summary>
@@ -1148,6 +1017,8 @@ namespace CustomItems.Items
         /// <summary>Кто от чего погиб в этот день (для «чё с Пашей?»).</summary>
         private static readonly Dictionary<ulong, string> DeathCauses = new Dictionary<ulong, string>();
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
+        private readonly HashSet<string> missingTold = new HashSet<string>();
+        private float lastJoinAt;
         private bool joinedSeeded, wasShipPhase = true, dropshipLanded, dropshipOpened, junkTold;
         private float deathsFlushAt;
 
@@ -1208,9 +1079,13 @@ namespace CustomItems.Items
                 if (topicFreeAt.TryGetValue(topic, out var free) && Time.time < free)
                     continue;
                 var set = FindSet(topic);
-                if (set == null || Random.value > EventChance)
+                // Кто пришёл и кого нет — говорит всегда, остальное изредка
+                var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined");
+                if (set == null || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
+                if (topic.StartsWith(EventsFolder + "Missing/"))
+                    missingTold.Add(topic.Substring((EventsFolder + "Missing/").Length));
                 eventFreeAt = Time.time + EventCooldown;
                 anyEventFreeAt = Time.time + 3f;
                 noiseRange = EventNoiseRange;
@@ -1231,20 +1106,14 @@ namespace CustomItems.Items
             if (round == null)
                 return;
 
-            // Дёрнули рычаг: корабль садится на луну — «Не забудьте зарядить фонарики!», кого из друзей нет
+            // Дёрнули рычаг: корабль садится на луну — «Не забудьте зарядить фонарики!»
             if (!round.inShipPhase && wasShipPhase)
-            {
                 Reason("Flashlight");
-                foreach (var folder in FriendNames.Values.Distinct())
-                {
-                    if (!round.allPlayerScripts.Any(p => p != null && (p.isPlayerControlled || p.isPlayerDead) && NameFolder(p.playerUsername) == folder))
-                        Reason("Missing/" + folder);
-                }
-            }
             wasShipPhase = round.inShipPhase;
             if (round.shipHasLanded && !wasLanded)
             {
                 Reason("Landed");
+                missingTold.Clear(); // после посадки ещё раз: кого нет
                 if (Shop() is { } shop && (shop.numberOfItemsInDropship > 0 || shop.orderedItemsFromTerminal != null && shop.orderedItemsFromTerminal.Count > 0))
                     Reason("Delivery");
             }
@@ -1315,12 +1184,19 @@ namespace CustomItems.Items
                     continue;
                 var id = p.playerClientId;
                 var here = p.isPlayerControlled || p.isPlayerDead;
-                if (here && joined.Add(id) && joinedSeeded)
+                if (here && joined.Add(id))
                 {
+                    // Пришёл: «А, вот он пришёл!», сначала его личное Joined/<Имя>
                     var folder = NameFolder(p.playerUsername);
                     if (folder != null)
-                        Reason("Joined/" + folder);
-                    Reason("Joined");
+                        missingTold.Remove(folder);
+                    if (joinedSeeded)
+                    {
+                        if (folder != null)
+                            Reason("Joined/" + folder);
+                        Reason("Joined");
+                    }
+                    lastJoinAt = Time.time;
                 }
                 else if (!here)
                     joined.Remove(id); // отключился
@@ -1346,6 +1222,20 @@ namespace CustomItems.Items
                     bodiesSeen.Remove(id);
             }
             joinedSeeded = true;
+
+            // Все или часть зашли и 20 секунд никто не приходит — «Сегодня без Андрея?» про каждого, кого нет
+            // (пока не скажет про каждого: повод держится, отмечается сказанным, когда прозвучал)
+            if (Time.time > lastJoinAt + 20f && (round.inShipPhase || round.shipHasLanded))
+            {
+                var present = round.allPlayerScripts
+                    .Where(p => p != null && (p.isPlayerControlled || p.isPlayerDead))
+                    .Select(p => NameFolder(p.playerUsername)).Where(f => f != null).ToList();
+                foreach (var folder in FriendNames.Values.Distinct())
+                {
+                    if (!present.Contains(folder) && !missingTold.Contains(folder))
+                        Reason("Missing/" + folder);
+                }
+            }
 
             var tod = TimeOfDay.Instance;
             var night = tod != null && !round.inShipPhase && tod.normalizedTimeOfDay > 0.75f;
@@ -1775,7 +1665,8 @@ namespace CustomItems.Items
                 if (set != null && IsCustom(set.name))
                 {
                     lock (CustomTopics)
-                        CustomTopics.Add(set.name.ToLowerInvariant());
+                        if (CustomTopics.Add(set.name.ToLowerInvariant()))
+                            AliceIntents.Load(set.name + ": " + set.name); // своя тема по-русски — сама себе пример
                 }
             }
         }

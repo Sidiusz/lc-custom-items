@@ -43,6 +43,7 @@
   <!-- Перевод для русификатора LethalRussian -->
   <ItemGroup>
     <None Include="translations\*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="intents.txt" LogicalName="SidiuszCustomItems.intents.txt" />
   </ItemGroup>
 
   <!-- AssetBundle из Unity кладётся в Bundles/ в корне репозитория -->

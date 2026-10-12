@@ -309,3 +309,8 @@ Events/DeliveryMissed|Вы опять забыли забрать?
 Events/Takeoff|Пристегните ремни, мы взлетаем!
 Events/LowHealth|Что-то вы неважно себя чувствуете!
 Events/Flashlight|Не забудьте зарядить фонарики!
+
+# «Какой твой любимый цвет» — случайная фраза из FavoriteColor и всех Color/*; рожок/горн рядом; «как я выгляжу»
+FavoriteColor|Жёлтый.
+Events/Horn|Дудка... трубник.
+Events/Suit|По тебе шили, вам идёт.

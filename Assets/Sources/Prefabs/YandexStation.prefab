@@ -896,6 +896,9 @@ MonoBehaviour:
   - name: AllClear
     clips:
     - {fileID: 8300000, guid: 469f4ebbc9e831946b8539c47e9aaaf3, type: 3}
+  - name: Almost
+    clips:
+    - {fileID: 8300000, guid: a315f9dde51572a489e6fe2c20338240, type: 3}
   - name: Battery/0
     clips:
     - {fileID: 8300000, guid: eb10bd1a54c609242ba19560996c9143, type: 3}
@@ -1042,6 +1045,13 @@ MonoBehaviour:
   - name: Events/DeathCause/Unknown
     clips:
     - {fileID: 8300000, guid: 7763d4345809da746b878f038cda5367, type: 3}
+  - name: Events/Delivery
+    clips:
+    - {fileID: 8300000, guid: 9fb8401b81640ad46b0b83bc9e253521, type: 3}
+    - {fileID: 8300000, guid: dd7f2fe7e210b074f89f75887e72c06c, type: 3}
+  - name: Events/DeliveryMissed
+    clips:
+    - {fileID: 8300000, guid: 907f525656027e248a82b05f0b210b82, type: 3}
   - name: Events/Drink
     clips:
     - {fileID: 8300000, guid: 2c7d6d9f279739d42a8a2dd1f6afb1ca, type: 3}
@@ -1117,14 +1127,41 @@ MonoBehaviour:
   - name: Events/Enemy/Tulip Snake
     clips:
     - {fileID: 8300000, guid: 7f7a25f2d8035ad4786e6492c5bfbcc5, type: 3}
+  - name: Events/Flashlight
+    clips:
+    - {fileID: 8300000, guid: c81523bd63f5864419979f6f3c628b52, type: 3}
   - name: Events/ForgotSomeone
     clips:
     - {fileID: 8300000, guid: 1054c84071595ce4ea7038a124b3b224, type: 3}
     - {fileID: 8300000, guid: dd96713fdb0d5f54dac849baf7b93b6d, type: 3}
+  - name: Events/Gore
+    clips:
+    - {fileID: 8300000, guid: 617701da6bed27c449e054c982c723ad, type: 3}
+  - name: Events/Horn
+    clips:
+    - {fileID: 8300000, guid: 48229ae90c4706d469d90a5c3c0919ee, type: 3}
   - name: Events/Idle
     clips:
     - {fileID: 8300000, guid: ce39715f3ebe6d342888f0b47ac9bdff, type: 3}
     - {fileID: 8300000, guid: 230a17984d91fc840890cd7604c650ff, type: 3}
+  - name: Events/Joined
+    clips:
+    - {fileID: 8300000, guid: 2b09e1b3b6286bd4385d988903a3a734, type: 3}
+    - {fileID: 8300000, guid: 20442ae5caf2a9d4da8171a58f5ea2b1, type: 3}
+    - {fileID: 8300000, guid: 92a76dd17ce9d1d41998c98b885252b4, type: 3}
+  - name: Events/Joined/Andrey
+    clips:
+    - {fileID: 8300000, guid: 85911110c2d6db640bcdd1388422c502, type: 3}
+  - name: Events/Joined/Arseniy
+    clips:
+    - {fileID: 8300000, guid: 00d04890f92cda4449893b67be8398a6, type: 3}
+    - {fileID: 8300000, guid: db0409abb109cbc4db82779ef1de34a6, type: 3}
+  - name: Events/Joined/Daniil
+    clips:
+    - {fileID: 8300000, guid: 01a00f350fef3394b8910bb5143ca053, type: 3}
+  - name: Events/Junk
+    clips:
+    - {fileID: 8300000, guid: eaa8cd91f5b5bf9408027803d96a2fdb, type: 3}
   - name: Events/Landed
     clips:
     - {fileID: 8300000, guid: c58be9862f919fa40976ff2dc33c9786, type: 3}
@@ -1154,9 +1191,21 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: 226135aa29955f445bc90d021a730082, type: 3}
     - {fileID: 8300000, guid: 80732119797c33b4fad20cafd199230c, type: 3}
+  - name: Events/LowHealth
+    clips:
+    - {fileID: 8300000, guid: 93745055f0f9eaf4a8770b9f4babafa9, type: 3}
   - name: Events/ManyItems
     clips:
     - {fileID: 8300000, guid: 15b4f20a796e8014eac88352e6295ce1, type: 3}
+  - name: Events/Missing/Andrey
+    clips:
+    - {fileID: 8300000, guid: f9b33b25ab95d1e429b6c8791be0c3a8, type: 3}
+  - name: Events/Missing/Arseniy
+    clips:
+    - {fileID: 8300000, guid: 791b6de5691d57542b386eba09f92523, type: 3}
+  - name: Events/Missing/Pavel
+    clips:
+    - {fileID: 8300000, guid: f1a04ed9458d7224d8a31e732a880145, type: 3}
   - name: Events/Money
     clips:
     - {fileID: 8300000, guid: 8823dfd48ba11f04982fd8b52da6c6ab, type: 3}
@@ -1169,6 +1218,9 @@ MonoBehaviour:
   - name: Events/Night
     clips:
     - {fileID: 8300000, guid: daa853a39bb7f2049b13c4084c0bc477, type: 3}
+  - name: Events/Panic
+    clips:
+    - {fileID: 8300000, guid: 32e2f226540876c42b869a8fa6c4caaa, type: 3}
   - name: Events/PickedUp
     clips:
     - {fileID: 8300000, guid: 3dcf488e989e4ce419665c9c861a0e3b, type: 3}
@@ -1196,12 +1248,19 @@ MonoBehaviour:
   - name: Events/PlayerDied/Pavel
     clips:
     - {fileID: 8300000, guid: 6d1c7001acdecf247a000b4f0bebf6d4, type: 3}
+  - name: Events/Purchase
+    clips:
+    - {fileID: 8300000, guid: 5f16b559b8eea624f859c840092be049, type: 3}
+    - {fileID: 8300000, guid: b40f1938e85a716428e96587bbfc8829, type: 3}
   - name: Events/Suit
     clips:
     - {fileID: 8300000, guid: ceba040fbec73cc4f874f4e767191a9e, type: 3}
     - {fileID: 8300000, guid: b0c8c6db77470e84ead06d82b7d39c31, type: 3}
     - {fileID: 8300000, guid: d04620798f082484c96f083575e3d688, type: 3}
     - {fileID: 8300000, guid: 0b5d88f0a5bb7db428707787c6ff2392, type: 3}
+  - name: Events/Takeoff
+    clips:
+    - {fileID: 8300000, guid: 61e2cbbf3f5146b419a28ccdf48ba4e6, type: 3}
   - name: Events/Walkie
     clips:
     - {fileID: 8300000, guid: 1534e574775d9254eae49c701622f5c6, type: 3}
@@ -1216,12 +1275,23 @@ MonoBehaviour:
     - {fileID: 8300000, guid: b3063a339e1626d45b53203eb324dbdf, type: 3}
     - {fileID: 8300000, guid: 55bd120a3406be847a472ecda386fc36, type: 3}
     - {fileID: 8300000, guid: d05476324c1e3d848b49a6210a988835, type: 3}
+  - name: FavoriteColor
+    clips:
+    - {fileID: 8300000, guid: af588eed500b168409ad4ca2226f712c, type: 3}
   - name: Game/Ask
     clips:
     - {fileID: 8300000, guid: 0aa67cd9ee93e7146bcc2df33c3bdfa5, type: 3}
   - name: Game/Bored
     clips:
     - {fileID: 8300000, guid: cfaa37ee39736c941992f633d7a71de7, type: 3}
+  - name: Game/Cancel
+    clips:
+    - {fileID: 8300000, guid: 66b111478843cfe48ae6c61f3299ea63, type: 3}
+    - {fileID: 8300000, guid: 1cd66f11b022e54429cd00418da79dfd, type: 3}
+    - {fileID: 8300000, guid: 1d0b3deaffa77054e8cb3ed7f33c2b54, type: 3}
+  - name: Game/Rend
+    clips:
+    - {fileID: 8300000, guid: 72c97c66771218d4f98cd93b6bd52653, type: 3}
   - name: Game/Unknown
     clips:
     - {fileID: 8300000, guid: 3380bd605e551504b940de3ef598cf4e, type: 3}
@@ -1246,6 +1316,16 @@ MonoBehaviour:
     - {fileID: 8300000, guid: cdeddecd6b3f416469c93526fc95d8f0, type: 3}
     - {fileID: 8300000, guid: 77956f45024418b41a1bb8078733d7d6, type: 3}
     - {fileID: 8300000, guid: f6bbc7ed3734c324db69c6fe4ae4c377, type: 3}
+    - {fileID: 8300000, guid: e647c5eed5145f74a931ceb9d9593b53, type: 3}
+  - name: Insult
+    clips:
+    - {fileID: 8300000, guid: 0e38af77ccbb8044d84d0d5aa77118fa, type: 3}
+    - {fileID: 8300000, guid: d2547ddea7300a04db93746c2f9d9e3a, type: 3}
+    - {fileID: 8300000, guid: 36f2b651ea7e1a8439f8fe41d85b0a0e, type: 3}
+    - {fileID: 8300000, guid: d5e292e96c265ed4d929e06a6028cbdb, type: 3}
+    - {fileID: 8300000, guid: d3a5681ab399cd3479d9d3beb773fdeb, type: 3}
+    - {fileID: 8300000, guid: 439fa2ea24ed10e4dbc228ea7376226f, type: 3}
+    - {fileID: 8300000, guid: bc7b61763d4237846b61cee241870631, type: 3}
   - name: ItsMe
     clips:
     - {fileID: 8300000, guid: b2b3873a86e1a064fa17f371d1a6bd2d, type: 3}
@@ -1258,10 +1338,14 @@ MonoBehaviour:
     - {fileID: 8300000, guid: b368d2ba57a685044a7df4c0bd6663fd, type: 3}
     - {fileID: 8300000, guid: edcc8eb2f7d3a6740ad4a1c18765db42, type: 3}
     - {fileID: 8300000, guid: 5056f93caaa50d94aa83cf29ca3882cb, type: 3}
+    - {fileID: 8300000, guid: 2563e33209d4399458a9b7112663c3ea, type: 3}
   - name: Love
     clips:
     - {fileID: 8300000, guid: 02e0823a522b6a8408fdec46f8376118, type: 3}
     - {fileID: 8300000, guid: 40f07055068535e4bb8ee6300d615c40, type: 3}
+  - name: Mumble
+    clips:
+    - {fileID: 8300000, guid: 0cb20fd8ea029834396fe2aeb6071989, type: 3}
   - name: Music
     clips:
     - {fileID: 8300000, guid: 3acc58d7a6e285e4881042585ef9f679, type: 3}
@@ -1281,6 +1365,10 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: e8409509e6f906b46a3c2a5c23140b4b, type: 3}
     - {fileID: 8300000, guid: e52c347f69c09194db09ceb651c22713, type: 3}
+  - name: Navigation
+    clips:
+    - {fileID: 8300000, guid: e177b0aac4e3ba649b418e8f4d69311e, type: 3}
+    - {fileID: 8300000, guid: a42afc035be967c4990e1828b7c241a8, type: 3}
   - name: Numbers/0
     clips:
     - {fileID: 8300000, guid: 460e166cad8a5cf44979fd3b9c9caf16, type: 3}
@@ -1359,6 +1447,20 @@ MonoBehaviour:
   - name: Roles/Pavel
     clips:
     - {fileID: 8300000, guid: 20e7b3ae848323f42a0b172ae1ef46d0, type: 3}
+  - name: Shush
+    clips:
+    - {fileID: 8300000, guid: bbf6d5aa277bddb40bf2f579ad6deec2, type: 3}
+    - {fileID: 8300000, guid: 223a0a4ee95480f40a3a4b8bba23116d, type: 3}
+    - {fileID: 8300000, guid: 74ef984c62d9bde4191c9b75186bc92c, type: 3}
+  - name: Skills
+    clips:
+    - {fileID: 8300000, guid: b1f850deafac4be43bb37b23fbb676c0, type: 3}
+    - {fileID: 8300000, guid: 006d92322a40a624492283fafde4fd1a, type: 3}
+  - name: Sorry
+    clips:
+    - {fileID: 8300000, guid: a2fa57a1f3224284ab05b9098e3fd471, type: 3}
+    - {fileID: 8300000, guid: a904c25f8039f1f4ab1851e86f36dbd4, type: 3}
+    - {fileID: 8300000, guid: 69d19db9647c1f14c8fcfce5a640260b, type: 3}
   - name: Thanks
     clips:
     - {fileID: 8300000, guid: a7ad239847ee75a45b03782f1ebae75f, type: 3}
@@ -1475,6 +1577,7 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: f0369df1bbfe87d47b2174384a9302da, type: 3}
     - {fileID: 8300000, guid: 446e3bd611d7c4f46b2006cdeede62f7, type: 3}
+    - {fileID: 8300000, guid: 27008c66a23be7940ad019809e96e99a, type: 3}
   - name: Weather/Snowfall
     clips:
     - {fileID: 8300000, guid: 8409ca9b68433d94986d4b4b8168d4a8, type: 3}
@@ -1489,6 +1592,31 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: 8238cc0b29e10eb408679ef5f8ebfb66, type: 3}
     - {fileID: 8300000, guid: 9957e63004dbf7946b6c52fc3e43a9a8, type: 3}
+  - name: WhereIs/AFK
+    clips:
+    - {fileID: 8300000, guid: 95ede9f47a5c6e74fa46888941d6631d, type: 3}
+    - {fileID: 8300000, guid: f4be17ceef410264aa02bce92d1843e7, type: 3}
+    - {fileID: 8300000, guid: dac9a38cb78a8924d94e606f512f9bdf, type: 3}
+  - name: WhereIs/AllAlive
+    clips:
+    - {fileID: 8300000, guid: 110ff1b1e3db89b47bf6676fb60d3a2e, type: 3}
+  - name: WhereIs/Inside/Many
+    clips:
+    - {fileID: 8300000, guid: 84772d1746d544c4a8c33bc6e012756f, type: 3}
+  - name: WhereIs/Inside/One
+    clips:
+    - {fileID: 8300000, guid: cafb90c8564a79e47b8c401b63e1c5f7, type: 3}
+  - name: WhereIs/Lost/Many
+    clips:
+    - {fileID: 8300000, guid: 07fe6c5d82dc5784286af79cdc2ba012, type: 3}
+  - name: WhereIs/Lost/One
+    clips:
+    - {fileID: 8300000, guid: c04bcb1497fbc3f44a5bc7a870e2715c, type: 3}
+  - name: WhoAreYou
+    clips:
+    - {fileID: 8300000, guid: d59aa131773cf194187e5d5f21812ebf, type: 3}
+    - {fileID: 8300000, guid: bf1c63717be17b741ba5c0c304200932, type: 3}
+    - {fileID: 8300000, guid: 320104f40943d5a44873d0b6e7e3e22b, type: 3}
   listenClip: {fileID: 8300000, guid: f27a434bceeab9a46ac55f9bc84e5115, type: 3}
   listenTimeoutClip: {fileID: 8300000, guid: f20e535986309cf4aa4e1c216440f4bd, type: 3}
   turnOnClip: {fileID: 8300000, guid: 81c1cf98cd585fb499a683974c73547d, type: 3}

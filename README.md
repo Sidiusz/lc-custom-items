@@ -156,3 +156,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 ## 6. Публикация (когда будет готово)
 
 Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с обеими DLL, бандлом и `translations/`. Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
+
+## Благодарности
+
+- Звук Егермейстера: Sound effects by BudgetPixel (CC BY 4.0).

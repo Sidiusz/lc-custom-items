@@ -122,7 +122,7 @@ namespace CustomItems.Items
         {
             var all = Tokens(text).Where(t => !t.StartsWith("алис")).ToArray();
             var fuzzy = IsRoute(all);
-            var tokens = all.Where(t => !RouteVerbs.Contains(Stem(t)) && t != "на").ToArray();
+            var tokens = all.Where(t => !RouteVerbs.Contains(Stem(t)) && t != "на" && t != "до").ToArray();
             string best = null;
             var bestGain = 0;
             foreach (var t in tokens)
@@ -144,7 +144,7 @@ namespace CustomItems.Items
                 for (var j = i; j < tokens.Length && j < i + 3; j++)
                 {
                     glued += tokens[j];
-                    if (glued.Length < 5)
+                    if (glued.Length < 3)
                         continue;
                     foreach (var pair in MoonSounds)
                     {
@@ -167,7 +167,17 @@ namespace CustomItems.Items
         public static int Count => Examples.Count;
 
         /// <summary>Примеры целиком (без {name}) — тоже в грамматику, чтобы связные фразы узнавались лучше.</summary>
-        public static IEnumerable<string> Phrases => Examples.Where(e => !e.Text.Contains("{")).Select(e => e.Text).Distinct();
+        /// Примеры с {moon} — с каждым звучанием каждой луны («поставь асу ранс»): так распознавание
+        /// охотнее собирает название из кусков словаря, а не подставляет похожее слово.
+        public static IEnumerable<string> Phrases =>
+            Examples.Where(e => !e.Text.Contains("{")).Select(e => e.Text)
+                .Concat(Examples.Where(e => e.Text.Contains(MoonSlot) && !e.Text.Replace(MoonSlot, "").Contains("{"))
+                    .SelectMany(e => MoonPhrases.Select(m => e.Text.Replace(MoonSlot, m))))
+                .Concat(MoonPhrases)
+                .Distinct();
+
+        // Звучания лун как написаны (куски через пробел, с «ё»)
+        private static readonly List<string> MoonPhrases = new List<string>();
 
         public static void Clear()
         {
@@ -220,6 +230,7 @@ namespace CustomItems.Items
                             continue;
                         foreach (var w in parts)
                             Words.Add(w);
+                        MoonPhrases.Add(string.Join(" ", parts));
                         if (parts.Length == 1)
                             MoonStems[Stem(parts[0])] = moon;
                         MoonSounds[Normalize(string.Concat(parts))] = moon;

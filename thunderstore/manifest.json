@@ -1,0 +1,10 @@
+{
+  "name": "CustomItems",
+  "version_number": "0.1.0",
+  "website_url": "",
+  "description": "Custom items for Lethal Company",
+  "dependencies": [
+    "BepInEx-BepInExPack-5.4.2100",
+    "Evaisa-LethalLib-1.2.0"
+  ]
+}

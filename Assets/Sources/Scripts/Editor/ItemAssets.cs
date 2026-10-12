@@ -209,6 +209,9 @@ public static class ItemAssets
 
         MarkBundle(RegistryPath);
         AssetDatabase.SaveAssets();
+        var icons = ItemIcons.RenderMissing();
+        if (icons > 0)
+            created.Add($"иконки: {icons}");
         if (created.Count > 0)
             Debug.Log("Предметы: созданы\n" + string.Join("\n", created));
     }

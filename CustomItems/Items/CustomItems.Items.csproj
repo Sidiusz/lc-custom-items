@@ -29,4 +29,9 @@
     <EmbeddedResource Include="Sounds\*.wav" LogicalName="SidiuszCustomItems.Items.%(Filename).wav" />
   </ItemGroup>
 
+  <!-- Звуки, которые грузит EmbeddedAudio: лежат с остальным аудио в Art/Audio, встраиваются в DLL -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\Assets\Sources\Art\Audio\Adrenaline\*.wav" LogicalName="SidiuszCustomItems.Sounds.%(Filename).wav" />
+  </ItemGroup>
+
 </Project>

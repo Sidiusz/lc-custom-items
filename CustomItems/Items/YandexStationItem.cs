@@ -1,8 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using GameNetcodeStuff;
+using System.Reflection;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
@@ -11,25 +10,28 @@ using Random = UnityEngine.Random;
 namespace CustomItems.Items
 {
     /// <summary>
-    /// Умная колонка с часами (Яндекс Станция Мини). Это мебель корабля: покупается
-    /// в разделе Decor терминала и ставится через режим строительства (B). Компоненты
-    /// мебели игры (AutoParentToShip, PlaceableShipObject, InteractTrigger) мод
-    /// навешивает на префаб при загрузке (Plugin.PrepareFurniture).
+    /// Умная колонка с часами (Яндекс Станция Мини). Продаётся в магазине терминала,
+    /// носится в руке и ставится куда угодно (просто положить). ЛКМ включает и
+    /// выключает, E меняет цвет корпуса. Работает от батареи (полного заряда хватает
+    /// на 30 минут работы, задаётся Battery Usage в Item), заряжается на зарядке корабля.
     ///
-    /// На сегментном экране спереди горит внутриигровое время (24 часа), на орбите
-    /// прочерки. Колонка отвечает фразами из <see cref="phraseSets"/>: на голос
-    /// («Алиса, какая погода?», распознаёт плагин, см. AliceListener) и на E (случайная
-    /// фраза). Пока говорит, на экране мордочка, кольцо Алисы пульсирует в такт.
+    /// Включённая колонка показывает внутриигровое время (24 часа, на орбите прочерки)
+    /// и отвечает на голос из голосового чата: «Алиса, какая погода?» (распознаёт
+    /// плагин, см. AliceListener). Пока говорит, на экране глаза: моргает, щурится,
+    /// подмигивает, смотрит по сторонам. Пока не договорит, новых вопросов не слушает
+    /// (<see cref="AllowInterrupt"/>). При погоде из <see cref="JammingWeathers"/>
+    /// (солнечная вспышка) на луне колонка сбоит: экран мигает мусором, вместо ответа ошибка.
     ///
     /// Фразы лежат по темам в подпапках Assets/Sources/Art/Audio/YandexStation/Phrases
     /// (Weather/Rainy, QuotaDone, Unknown...), список на префабе обновляется сам
-    /// (Editor/ItemAssets.cs). Тему ответа выбирает <see cref="Topic"/> по тексту команды
-    /// и состоянию игры (погода текущей луны, квота, дни до дедлайна).
+    /// (Editor/ItemAssets.cs). Тему выбирает <see cref="Topic"/> по тексту вопроса и
+    /// состоянию игры. Погода модов берётся у WeatherRegistry, если он стоит.
     ///
-    /// Сеть: тему и номер фразы выбирает тот, кто спросил, и рассылает через хост
-    /// именованными сообщениями Netcode. NetcodePatcher не нужен.
+    /// Сеть: вкл/выкл и цвет синхронизирует игра (Sync Use / Sync Interact LR), а
+    /// фразу выбирает тот, кто спросил, и рассылает через хост именованными сообщениями
+    /// Netcode. Опоздавшим хост присылает цвет и состояние. NetcodePatcher не нужен.
     /// </summary>
-    public class YandexStationItem : NetworkBehaviour
+    public class YandexStationItem : CustomGrabbable
     {
         [Serializable]
         public class PhraseSet
@@ -42,40 +44,62 @@ namespace CustomItems.Items
         [Tooltip("Фразы по темам. Заполняется сам из подпапок Art/Audio/YandexStation/Phrases")]
         public PhraseSet[] phraseSets = new PhraseSet[0];
 
-        [Tooltip("Цвет цифр и мордочки")]
+        [Header("Звуки Алисы (Art/Audio/YandexStation/Sounds)")]
+        public AudioClip listenClip;
+        public AudioClip listenTimeoutClip;
+        public AudioClip errorClip;
+        public AudioClip turnOnClip;
+        public AudioClip turnOffClip;
+
+        [Header("Экран и цвет")]
+        [Tooltip("Цвет цифр и глаз")]
         public Color displayColor = new Color(1f, 0.84f, 0.62f);
         [Tooltip("Яркость свечения цифр (множитель цвета свечения HDRP)")]
         public float displayGlow = 12f;
         [Tooltip("Цвет кольца Алисы")]
         public Color ringColor = new Color(0.58f, 0.36f, 1f);
-        [Tooltip("Яркость кольца: молчит, слушает, говорит громче всего")]
+        [Tooltip("Яркость кольца: включена, слушает, говорит громче всего")]
         public float ringIdleGlow = 3f, ringListenGlow = 12f, ringTalkGlow = 25f;
+        [Tooltip("Цвета корпуса по E: серая, голубая, розовая, чёрная")]
+        public Color[] bodyColors =
+        {
+            new Color(0.30f, 0.31f, 0.34f), new Color(0.36f, 0.53f, 0.72f),
+            new Color(0.78f, 0.47f, 0.55f), new Color(0.045f, 0.045f, 0.05f),
+        };
+        [Tooltip("Цвета ножки, по одному на цвет корпуса")]
+        public Color[] trimColors =
+        {
+            new Color(0.10f, 0.10f, 0.11f), new Color(0.12f, 0.18f, 0.26f),
+            new Color(0.36f, 0.20f, 0.25f), new Color(0.02f, 0.02f, 0.022f),
+        };
 
         // ---- Настройки из конфига (Plugin) ----
-        /// <summary>Слово, на которое колонка откликается.</summary>
         public static string WakeWord = "алиса";
-        /// <summary>Как далеко от колонки игрок может к ней обращаться, м.</summary>
         public static float HearingRadius = 8f;
-        /// <summary>Сколько секунд колонка ждёт команду после одного «Алиса».</summary>
-        public static float ListenSeconds = 7f;
-        public static string InteractTip = "Talk to Alice : [E]";
+        public static float ListenSeconds = 6f;
+        /// <summary>Можно ли задать новый вопрос, пока колонка ещё отвечает.</summary>
+        public static bool AllowInterrupt;
+        /// <summary>Погоды (названия как у игры или WeatherRegistry), при которых колонка сбоит.</summary>
+        public static string[] JammingWeathers = { "Solar Flare" };
+        public static string OnOffTip = "Turn on/off : [LMB]";
+        public static string ColorTip = "Color : [E]";
 
-        /// <summary>Все колонки в мире: по ним плагин решает, слушать ли микрофон.</summary>
+        /// <summary>Все колонки в мире: по ним плагин решает, слушать ли голос.</summary>
         public static readonly List<YandexStationItem> All = new List<YandexStationItem>();
 
-        // Темы фраз. Свои темы просто добавляются папками, эти выбирает код.
-        public const string TopicRandom = "Random", TopicListen = "Listen", TopicUnknown = "Unknown",
-            TopicTime = "Time", TopicStop = "";
+        public const string TopicRandom = "Random", TopicUnknown = "Unknown", TopicError = "Error",
+            TopicTime = "Time", TopicStop = "#stop", SoundListen = "#listen", SoundTimeout = "#timeout";
 
         private const string SpeakMessage = ModInfo.Guid + ".yandexstation.speak";
+        private const string StateMessage = ModInfo.Guid + ".yandexstation.state";
+        private const string RequestMessage = ModInfo.Guid + ".yandexstation.request";
         private const float NoiseRange = 12f;
         private const float NoiseLoudness = 0.5f;
 
         // Сегменты: 4 цифры по 7 (a верх, b верх-право, c низ-право, d низ, e низ-лево,
-        // f верх-лево, g середина), затем двоеточие, затем рты
+        // f верх-лево, g середина), затем двоеточие
         private const string SegmentNames = "abcdefg";
         private const int Colon = 28;
-        private const int MouthSmile = 30, MouthHalf = 31, MouthOpen = 32;
         private static readonly string[] Names = BuildNames();
 
         private static readonly int[] DigitMasks =
@@ -83,65 +107,155 @@ namespace CustomItems.Items
             Mask("abcdef"), Mask("bc"), Mask("abdeg"), Mask("abcdg"), Mask("bcfg"),
             Mask("acdfg"), Mask("acdefg"), Mask("abc"), Mask("abcdefg"), Mask("abcdfg"),
         };
-        private static readonly int EyeOpen = Mask("abfg");
-        private static readonly int EyeClosed = Mask("g");
         private static readonly int Dash = Mask("g");
         private const long ColonBits = (1L << Colon) | (1L << (Colon + 1));
 
+        // Глаза из сегментов цифр: (позиция левого глаза, правого, левый, правый)
+        private static readonly int Open = Mask("abfg"), Closed = Mask("g"), Happy = Mask("abf"),
+            Squint = Mask("ag"), Wide = Mask("abcdef"), Low = Mask("cdeg");
+        private static readonly (int left, int right, int l, int r)[] Expressions =
+        {
+            (0, 3, Open, Open),     // смотрит
+            (0, 3, Open, Open),
+            (0, 3, Happy, Happy),   // улыбается глазами ^ ^
+            (0, 3, Squint, Squint), // щурится
+            (0, 3, Open, Closed),   // подмигивает
+            (0, 3, Closed, Open),
+            (0, 2, Open, Open),     // смотрит влево
+            (1, 3, Open, Open),     // смотрит вправо
+            (0, 3, Low, Low),       // смотрит вниз
+            (0, 3, Wide, Wide),     // удивляется
+        };
+        private const int HappyFace = 2, WideFace = 9;
+        private static readonly (int left, int right, int l, int r) ListenFace = (0, 3, Wide, Wide);
+
         private static CustomMessagingManager registeredOn;
         private static Material displayMaterial;
-        private static AudioClip placeSfx;
-        private static Sprite hoverIcon;
+        private static MethodInfo weatherRegistryGet;
+        private static bool weatherRegistryChecked;
 
-        private AudioSource audioSource;
         private GameObject[] segments;
         private Renderer[] segmentRenderers;
-        private Material ringMaterial;
+        private Material ringMaterial, bodyMaterial, trimMaterial;
         private long shownMask = -1;
+        private bool shownPocketed;
 
+        private bool isOn;
+        private int colorIndex = -1; // -1: ещё не знаем (клиент ждёт хоста)
         private float talkUntil;
         private bool clockWhileTalking;
         private float listenUntil;
-        private float answerListenAt;
         private string lastTopic;
         private int lastIndex = -1;
-        private float nextBlink;
-        private float blinkUntil;
+        private int expression;
+        private float nextExpression, blinkUntil, nextBlink;
         private float level;
+        private bool askedLocally;
         private readonly float[] samples = new float[256];
 
-        private void Awake()
+        public bool IsOn => isOn && (insertedBattery == null || !insertedBattery.empty);
+
+        public override void Start()
         {
-            audioSource = GetComponent<AudioSource>();
+            base.Start();
+            useCooldown = 0.4f;
+            RegisterMessages();
             FindSegments();
+            SetupMaterials();
+            if (IsServer)
+                EnsureColor();
+            else if (NetworkManager != null && NetworkManager.IsConnectedClient)
+                RequestState();
+            ApplyColor();
         }
 
         private void OnEnable() => All.Add(this);
 
         private void OnDisable() => All.Remove(this);
 
-        private void Start()
+        // Цвет и «включена» в одном числе: сохраняются вместе с кораблём
+        public override int GetItemDataToSave()
         {
-            foreach (var set in phraseSets ?? new PhraseSet[0])
+            EnsureColor();
+            return colorIndex | (isOn ? 16 : 0);
+        }
+
+        public override void LoadItemSaveData(int saveData)
+        {
+            colorIndex = Mathf.Clamp(saveData & 15, 0, bodyColors.Length - 1);
+            isOn = (saveData & 16) != 0;
+            isBeingUsed = isOn;
+            ApplyColor();
+        }
+
+        public override void SetControlTipsForItem()
+        {
+            HUDManager.Instance.ChangeControlTipMultiple(new[] { OnOffTip, ColorTip }, holdingItem: true, itemProperties);
+        }
+
+        // ЛКМ. Item.automaticallySetUsingPower: игра сама переключает isBeingUsed и не даёт
+        // включить с пустой батареей, а сюда у всех приходит новое состояние в used.
+        public override void ItemActivate(bool used, bool buttonDown = true)
+        {
+            base.ItemActivate(used, buttonDown);
+            SwitchOn(used);
+        }
+
+        private void SwitchOn(bool on)
+        {
+            isBeingUsed = on;
+            if (on == isOn)
+                return;
+            isOn = on;
+            listenUntil = 0f;
+            if (!on && audioSource != null)
             {
-                if (set != null && IsCustom(set.name))
-                {
-                    lock (CustomTopics)
-                        CustomTopics.Add(set.name.ToLowerInvariant());
-                }
+                audioSource.Stop();
+                talkUntil = 0f;
             }
-            RegisterMessages();
-            SetupMaterials();
-            SetupAudio();
-            SetupFurniture();
-            nextBlink = Time.time + Random.Range(2f, 4f);
+            PlaySound(on ? turnOnClip : turnOffClip);
+        }
+
+        // Батарея села: гаснет
+        public override void UseUpBatteries()
+        {
+            base.UseUpBatteries();
+            SwitchOn(false);
+        }
+
+        // E: следующий цвет (Sync Interact LR, у всех одинаково)
+        public override void ItemInteractLeftRight(bool right)
+        {
+            base.ItemInteractLeftRight(right);
+            if (!right)
+                return;
+            EnsureColor();
+            colorIndex = (colorIndex + 1) % bodyColors.Length;
+            ApplyColor();
+        }
+
+        private void EnsureColor()
+        {
+            if (colorIndex < 0)
+                colorIndex = Random.Range(0, bodyColors.Length);
+        }
+
+        private void ApplyColor()
+        {
+            if (colorIndex < 0 || bodyMaterial == null)
+                return;
+            var i = colorIndex % bodyColors.Length;
+            bodyMaterial.SetColor("_BaseColor", bodyColors[i]);
+            if (trimMaterial != null && i < trimColors.Length)
+                trimMaterial.SetColor("_BaseColor", trimColors[i]);
         }
 
         // ---- Голос ----
 
         /// <summary>
-        /// Распознанная фраза локального игрока (с главного потока). Колонка, к которой
-        /// ближе всего, откликается на «Алиса, …», а после одного «Алиса» ждёт команду.
+        /// Распознанная фраза локального игрока из голосового чата (с главного потока).
+        /// Отвечает ближайшая включённая колонка: на «Алиса, …» сразу, после одного
+        /// «Алиса» — сигнал и несколько секунд ждёт вопрос.
         /// </summary>
         public static void OnLocalSpeech(string text)
         {
@@ -156,7 +270,6 @@ namespace CustomItems.Items
             string command;
             if (wake >= 0)
             {
-                // «Алиса», «алисы», «алисонька»: пропускаем слово целиком
                 var end = text.IndexOf(' ', wake);
                 command = end < 0 ? "" : text.Substring(end + 1).Trim();
             }
@@ -169,25 +282,27 @@ namespace CustomItems.Items
                 return; // говорят не с колонкой
             }
 
-            if (command.Length == 0)
+            // [unk] — распознавание не разобрало слово: вопрос есть, но непонятный
+            var known = command.Replace("[unk]", " ").Trim();
+            var topic = command.Length == 0 ? null : known.Length == 0 ? TopicUnknown : Topic(known);
+
+            // Пока отвечает, других не слушает (кроме «стоп»)
+            if (station.IsTalking && !AllowInterrupt && topic != TopicStop)
+                return;
+
+            if (topic == null)
             {
-                // Часто «Алиса, …» приходит двумя кусками: после имени пауза. Отзываемся
-                // «Да?» не сразу, а если за секунду не пришла сама команда.
-                station.listenUntil = Time.time + ListenSeconds;
-                station.answerListenAt = Time.time + 1.2f;
+                station.Say(SoundListen);
                 return;
             }
-            station.listenUntil = 0f;
-            station.answerListenAt = 0f;
-            // [unk] — распознавание не разобрало слово: это вопрос, который колонка не поняла
-            var known = command.Replace("[unk]", " ").Trim();
-            var topic = known.Length == 0 ? TopicUnknown : Topic(known);
             if (topic == TopicUnknown)
                 topic = station.CustomTopic(known) ?? topic;
+            if (station.IsJammed && topic != TopicStop)
+                topic = TopicError;
             station.Say(topic);
         }
 
-        /// <summary>Есть ли колонка рядом с локальным игроком (тогда плагин слушает микрофон).</summary>
+        /// <summary>Есть ли рядом с локальным игроком включённая колонка (тогда плагин слушает голос).</summary>
         public static bool AnyNearLocalPlayer() => Nearest(HearingRadius) != null;
 
         private static YandexStationItem Nearest(float radius)
@@ -200,7 +315,7 @@ namespace CustomItems.Items
             var bestDist = radius * radius;
             foreach (var s in All)
             {
-                if (s == null || !s.isActiveAndEnabled)
+                if (s == null || !s.IsOn)
                     continue;
                 var d = (s.transform.position - pos).sqrMagnitude;
                 if (d <= bestDist)
@@ -214,7 +329,7 @@ namespace CustomItems.Items
 
         /// <summary>
         /// Свои темы: подпапка Phrases, названная по-русски самой фразой («расскажи про компанию»),
-        /// срабатывает, когда эта фраза есть в команде. Такие названия плагин добавляет в распознавание.
+        /// срабатывает, когда эта фраза есть в вопросе. Такие названия плагин добавляет в распознавание.
         /// </summary>
         public static readonly HashSet<string> CustomTopics = new HashSet<string>();
 
@@ -223,7 +338,7 @@ namespace CustomItems.Items
 
         private static bool IsCustom(string name) => name != null && name.Any(c => c >= 'а' && c <= 'я' || c >= 'А' && c <= 'Я');
 
-        /// <summary>Тема ответа по тексту команды и состоянию игры.</summary>
+        /// <summary>Тема ответа по тексту вопроса и состоянию игры.</summary>
         public static string Topic(string command)
         {
             bool Has(params string[] words) => words.Any(w => command.Contains(w));
@@ -231,7 +346,7 @@ namespace CustomItems.Items
             if (Has("стоп", "хватит", "замолчи", "тихо", "выключ"))
                 return TopicStop;
             if (Has("погод", "дожд", "туман", "гроз"))
-                return "Weather/" + WeatherName();
+                return "Weather/" + (WeatherName() ?? "Other");
             // Дедлайн раньше квоты: «сколько дней до сдачи квоты» — про дни
             if (Has("дедлайн", "срок", "сколько дней", "дней остал", "до сдачи"))
             {
@@ -258,28 +373,77 @@ namespace CustomItems.Items
             return TopicUnknown;
         }
 
-        // Погода луны, на которой (или к которой) летит корабль: None → Clear
-        private static string WeatherName()
+        /// <summary>
+        /// Погода луны, на которой (или к которой летит) корабль: название из WeatherRegistry,
+        /// если он стоит (так видна и погода модов), иначе ванильное. Ясно → Clear, null — не знаем.
+        /// </summary>
+        public static string WeatherName()
         {
             var level = StartOfRound.Instance != null ? StartOfRound.Instance.currentLevel : null;
-            var weather = level != null ? level.currentWeather : LevelWeatherType.None;
-            return weather == LevelWeatherType.None ? "Clear" : weather.ToString();
+            if (level == null)
+                return null;
+            var name = WeatherRegistryName(level);
+            if (string.IsNullOrEmpty(name))
+            {
+                var weather = level.currentWeather;
+                name = Enum.IsDefined(typeof(LevelWeatherType), weather) ? weather.ToString() : null;
+            }
+            return name == "None" ? "Clear" : name;
+        }
+
+        private static string WeatherRegistryName(SelectableLevel level)
+        {
+            if (!weatherRegistryChecked)
+            {
+                weatherRegistryChecked = true;
+                var type = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetType("WeatherRegistry.WeatherManager", false)).FirstOrDefault(t => t != null);
+                weatherRegistryGet = type?.GetMethod("GetCurrentWeather", BindingFlags.Public | BindingFlags.Static,
+                    null, new[] { typeof(SelectableLevel) }, null);
+            }
+            if (weatherRegistryGet == null)
+                return null;
+            try
+            {
+                var weather = weatherRegistryGet.Invoke(null, new object[] { level });
+                return weather?.GetType().GetProperty("Name")?.GetValue(weather) as string;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Корабль сел на луну с «глушащей» погодой (солнечная вспышка): колонка сбоит.</summary>
+        public bool IsJammed
+        {
+            get
+            {
+                var round = StartOfRound.Instance;
+                if (round == null || round.inShipPhase || JammingWeathers.Length == 0)
+                    return false;
+                var name = WeatherName();
+                return name != null && JammingWeathers.Any(w => string.Equals(w.Trim(), name, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         // ---- Речь ----
 
-        /// <summary>Сказать фразу на тему (с подменой отсутствующей темы на «не поняла») и разослать всем.</summary>
+        /// <summary>Сказать фразу на тему (с подменой отсутствующей темы) и разослать всем.</summary>
         public void Say(string topic)
         {
             askedLocally = true;
-            if (topic == TopicStop)
+            if (topic.StartsWith("#"))
             {
-                Speak(TopicStop, -1);
-                SendSpeak(TopicStop, -1);
+                Speak(topic, 0);
+                SendSpeak(topic, 0);
                 return;
             }
 
-            var set = FindSet(topic) ?? FindSet(TopicUnknown) ?? FindSet(TopicRandom);
+            var set = FindSet(topic)
+                      ?? (topic.StartsWith("Weather/") ? FindSet("Weather/Other") : null)
+                      ?? FindSet(topic == TopicError ? TopicError : TopicUnknown)
+                      ?? FindSet(TopicRandom);
             if (set == null || set.clips.Length == 0)
                 return;
             var index = Random.Range(0, set.clips.Length);
@@ -306,60 +470,89 @@ namespace CustomItems.Items
 
         private void Speak(string topic, int index)
         {
-            if (audioSource == null)
+            if (audioSource == null || !IsOn)
                 return;
-            if (topic == TopicStop)
+            switch (topic)
             {
-                audioSource.Stop();
-                talkUntil = 0f;
-                return;
+                case TopicStop:
+                    audioSource.Stop();
+                    talkUntil = 0f;
+                    return;
+                case SoundListen:
+                    listenUntil = Time.time + ListenSeconds;
+                    PlaySound(listenClip);
+                    return;
+                case SoundTimeout:
+                    listenUntil = 0f;
+                    PlaySound(listenTimeoutClip);
+                    return;
             }
+
             var set = FindSet(topic);
             if (set == null || index < 0 || index >= set.clips.Length || set.clips[index] == null)
                 return;
-
             var clip = set.clips[index];
             lastTopic = set.name;
             lastIndex = index;
+            listenUntil = 0f;
             clockWhileTalking = set.name == TopicTime;
+
+            // Ошибка: сначала сигнал сбоя, потом фраза
+            var delay = set.name == TopicError && errorClip != null ? errorClip.length : 0f;
             audioSource.Stop();
+            if (delay > 0f)
+                audioSource.PlayOneShot(errorClip);
             audioSource.clip = clip;
-            audioSource.Play();
+            audioSource.PlayDelayed(delay);
             WalkieTalkie.TransmitOneShotAudio(audioSource, clip);
-            talkUntil = Time.time + clip.length;
+            talkUntil = Time.time + delay + clip.length;
+            nextExpression = 0f;
 
             // Шум слышат монстры; считаем его только у того, кто спросил, чтобы не дублировать
             if (askedLocally)
             {
                 RoundManager.Instance?.PlayAudibleNoise(transform.position, NoiseRange, NoiseLoudness, 0,
-                    StartOfRound.Instance != null && StartOfRound.Instance.hangarDoorsClosed);
+                    isInElevator && StartOfRound.Instance.hangarDoorsClosed);
             }
         }
 
-        private bool askedLocally;
-
-        private void OnInteract(PlayerControllerB player)
+        private void PlaySound(AudioClip clip)
         {
-            if (player != null && player == GameNetworkManager.Instance?.localPlayerController && !IsTalking)
-                Say(TopicRandom);
+            if (audioSource != null && clip != null)
+                audioSource.PlayOneShot(clip);
         }
 
         // ---- Экран ----
 
-        private void Update()
+        public override void Update()
         {
+            base.Update();
             if (segments == null)
                 return;
-            if (answerListenAt > 0f && Time.time > answerListenAt)
+
+            // Позвали «Алиса» и замолчали: сигнал конца прослушивания (решает тот, кто звал)
+            if (listenUntil > 0f && Time.time > listenUntil)
             {
-                answerListenAt = 0f;
-                if (!IsTalking)
-                    Say(TopicListen);
+                listenUntil = 0f;
+                if (askedLocally && IsOn)
+                    Say(SoundTimeout);
             }
+
             var talking = IsTalking;
             UpdateLevel(talking);
             UpdateRing(talking);
-            ShowMask(talking && !clockWhileTalking ? FaceMask() : ClockMask());
+            long mask;
+            if (!IsOn)
+                mask = 0;
+            else if (IsJammed)
+                mask = GlitchMask();
+            else if (talking && !clockWhileTalking)
+                mask = FaceMask();
+            else if (Time.time < listenUntil)
+                mask = Eyes(ListenFace);
+            else
+                mask = ClockMask();
+            ShowMask(mask);
         }
 
         private long ClockMask()
@@ -380,19 +573,45 @@ namespace CustomItems.Items
             return mask | (colonOn ? ColonBits : 0);
         }
 
+        // Пока говорит: каждые полсекунды-секунду новое выражение глаз, плюс моргание
         private long FaceMask()
         {
+            if (Time.time > nextExpression)
+            {
+                // На громких местах чаще довольные или широко открытые глаза
+                expression = level > 0.4f && Random.value < 0.5f
+                    ? (Random.value < 0.5f ? HappyFace : WideFace)
+                    : Random.Range(0, Expressions.Length);
+                nextExpression = Time.time + Random.Range(0.5f, 1.2f);
+            }
             if (Time.time > nextBlink)
             {
-                blinkUntil = Time.time + 0.15f;
-                nextBlink = Time.time + Random.Range(2f, 5f);
+                blinkUntil = Time.time + 0.13f;
+                nextBlink = Time.time + Random.Range(2f, 4.5f);
             }
-            var eye = Time.time < blinkUntil ? EyeClosed : EyeOpen;
-            var mouth = level > 0.35f ? MouthOpen : level > 0.12f ? MouthHalf : MouthSmile;
-            return Digit(0, eye) | Digit(3, eye) | (1L << mouth);
+            var e = Expressions[expression];
+            return Time.time < blinkUntil ? Eyes((e.left, e.right, Closed, Closed)) : Eyes(e);
         }
 
-        // Громкость голоса 0..1, сглаженная: по ней открывается рот и светится кольцо
+        private static long Eyes((int left, int right, int l, int r) e) => Digit(e.left, e.l) | Digit(e.right, e.r);
+
+        // Солнечная вспышка: «Err» вперемешку со случайными сегментами
+        private long GlitchMask()
+        {
+            if (shownMask >= 0 && Random.value < 0.9f)
+                return shownMask;
+            if (Random.value < 0.5f)
+                return Digit(0, Mask("adefg")) | Digit(1, Mask("eg")) | Digit(2, Mask("eg"));
+            long mask = 0;
+            for (var i = 0; i < Colon + 2; i++)
+            {
+                if (Random.value < 0.3f)
+                    mask |= 1L << i;
+            }
+            return mask;
+        }
+
+        // Громкость голоса 0..1, сглаженная: по ней выбираются глаза и светится кольцо
         private void UpdateLevel(bool talking)
         {
             var target = 0f;
@@ -411,7 +630,9 @@ namespace CustomItems.Items
         {
             if (ringMaterial == null)
                 return;
-            var glow = talking ? Mathf.Lerp(ringIdleGlow * 2f, ringTalkGlow, level)
+            var glow = !IsOn ? 0f
+                : IsJammed ? (Random.value < 0.3f ? ringTalkGlow : 0f)
+                : talking ? Mathf.Lerp(ringIdleGlow * 2f, ringTalkGlow, level)
                 : Time.time < listenUntil ? ringListenGlow * (0.8f + 0.2f * Mathf.Sin(Time.time * 6f))
                 : ringIdleGlow;
             ringMaterial.SetColor("_EmissiveColor", ringColor * glow);
@@ -427,29 +648,39 @@ namespace CustomItems.Items
             return m;
         }
 
+        // Прячем через SetActive, как жидкость у Егермейстера: игра включает все
+        // рендереры при доставании из кармана, а неактивные объекты не трогает.
+        // В кармане рендереры выключены игрой, и экран не трогаем совсем.
         private void ShowMask(long mask)
         {
-            if (mask == shownMask)
+            if (isPocketed)
+            {
+                shownPocketed = true;
+                return;
+            }
+            if (mask == shownMask && !shownPocketed)
                 return;
             for (var i = 0; i < segments.Length; i++)
             {
-                if (segments[i] != null)
-                    segments[i].SetActive((mask & (1L << i)) != 0);
+                if (segments[i] == null)
+                    continue;
+                var on = (mask & (1L << i)) != 0;
+                segments[i].SetActive(on);
+                if (on && segmentRenderers[i] != null)
+                    segmentRenderers[i].enabled = true;
             }
             shownMask = mask;
+            shownPocketed = false;
         }
 
         private static string[] BuildNames()
         {
-            var names = new string[33];
+            var names = new string[30];
             for (var d = 0; d < 4; d++)
                 for (var s = 0; s < 7; s++)
                     names[d * 7 + s] = "Seg" + d + SegmentNames[s];
             names[Colon] = "ColonTop";
             names[Colon + 1] = "ColonBottom";
-            names[MouthSmile] = "MouthSmile";
-            names[MouthHalf] = "MouthHalf";
-            names[MouthOpen] = "MouthOpen";
             return names;
         }
 
@@ -484,72 +715,35 @@ namespace CustomItems.Items
                 r.sharedMaterial = displayMaterial;
             }
 
+            // Свои экземпляры: кольцо пульсирует и цвет корпуса у каждой колонки свой
             foreach (var r in GetComponentsInChildren<Renderer>(true))
             {
-                if (r.name != "Ring")
-                    continue;
-                ringMaterial = r.material; // свой экземпляр: кольцо пульсирует у каждой колонки отдельно
-                ringMaterial.SetColor("_BaseColor", ringColor);
+                switch (r.name)
+                {
+                    case "Ring":
+                        ringMaterial = r.material;
+                        ringMaterial.SetColor("_BaseColor", ringColor);
+                        break;
+                    case "Body":
+                        bodyMaterial = r.material;
+                        break;
+                    case "Trim":
+                        trimMaterial = r.material;
+                        break;
+                }
             }
-        }
 
-        // Звук через тот же микшер, что у предметов игры (громкость из настроек, эффекты)
-        private void SetupAudio()
-        {
-            if (audioSource == null)
-                return;
-            var items = StartOfRound.Instance?.allItemsList?.itemsList;
-            var source = items?.Select(i => i != null && i.spawnPrefab != null ? i.spawnPrefab.GetComponent<AudioSource>() : null)
-                .FirstOrDefault(a => a != null && a.outputAudioMixerGroup != null);
-            if (source != null)
-                audioSource.outputAudioMixerGroup = source.outputAudioMixerGroup;
-        }
-
-        // Мебель: иконка и подсказка E, звук установки, место по умолчанию на полу корабля
-        private void SetupFurniture()
-        {
-            var trigger = GetComponentInChildren<InteractTrigger>(true);
-            if (trigger != null)
+            foreach (var set in phraseSets ?? new PhraseSet[0])
             {
-                if (hoverIcon == null)
-                    hoverIcon = FindObjectsOfType<InteractTrigger>().Select(t => t.hoverIcon).FirstOrDefault(i => i != null);
-                trigger.hoverIcon = hoverIcon;
-                trigger.hoverTip = InteractTip;
-                trigger.onInteract.AddListener(OnInteract);
+                if (set != null && IsCustom(set.name))
+                {
+                    lock (CustomTopics)
+                        CustomTopics.Add(set.name.ToLowerInvariant());
+                }
             }
-
-            var placeable = GetComponentInChildren<PlaceableShipObject>(true);
-            var parent = GetComponent<AutoParentToShip>();
-            if (placeable != null)
-            {
-                if (placeSfx == null)
-                    placeSfx = FindObjectsOfType<PlaceableShipObject>().Select(p => p.placeObjectSFX).FirstOrDefault(c => c != null);
-                placeable.placeObjectSFX = placeSfx;
-                if (parent != null)
-                    parent.unlockableID = placeable.unlockableID;
-            }
-            if (parent != null)
-                StartCoroutine(DefaultSpot(parent));
         }
 
-        // Купленная, но ещё не поставленная колонка: кладём на пол посреди корабля, а не в начало координат
-        private IEnumerator DefaultSpot(AutoParentToShip parent)
-        {
-            yield return new WaitForSeconds(1f);
-            var ship = StartOfRound.Instance != null ? StartOfRound.Instance.elevatorTransform : null;
-            if (ship == null || parent.positionOffset != Vector3.zero)
-                yield break;
-            var from = ship.position + ship.up * 1.5f;
-            var mask = LayerMask.GetMask("Room", "Colliders");
-            var floor = Physics.Raycast(from, -ship.up, out var hit, 5f, mask, QueryTriggerInteraction.Ignore)
-                ? hit.point
-                : ship.position;
-            var placeable = GetComponentInChildren<PlaceableShipObject>(true);
-            var lift = placeable != null ? placeable.yOffset : 0.05f;
-            parent.positionOffset = ship.InverseTransformPoint(floor + ship.up * lift);
-        }
-
-        // ---- Синхронизация фразы: спросивший → хост → остальные ----
+        // ---- Сеть ----
 
         private static void RegisterMessages()
         {
@@ -557,21 +751,24 @@ namespace CustomItems.Items
             if (messaging == null || messaging == registeredOn)
                 return;
             messaging.RegisterNamedMessageHandler(SpeakMessage, OnSpeakMessage);
+            messaging.RegisterNamedMessageHandler(StateMessage, OnStateMessage);
+            messaging.RegisterNamedMessageHandler(RequestMessage, OnRequestMessage);
             registeredOn = messaging;
         }
 
+        // Фраза: спросивший → хост → остальные
         private void SendSpeak(string topic, int index)
         {
             var nm = NetworkManager;
             if (nm == null || !nm.IsListening)
                 return;
             if (IsServer)
-                Broadcast(topic, index, except: nm.LocalClientId);
+                BroadcastSpeak(topic, index, except: nm.LocalClientId);
             else
-                Send(topic, index, NetworkManager.ServerClientId);
+                SendSpeakTo(topic, index, NetworkManager.ServerClientId);
         }
 
-        private void Send(string topic, int index, ulong clientId)
+        private void SendSpeakTo(string topic, int index, ulong clientId)
         {
             using var writer = new FastBufferWriter(sizeof(ulong) + sizeof(int) + 8 + topic.Length * 2, Allocator.Temp);
             writer.WriteValueSafe(NetworkObjectId);
@@ -580,17 +777,15 @@ namespace CustomItems.Items
             NetworkManager.CustomMessagingManager.SendNamedMessage(SpeakMessage, clientId, writer, NetworkDelivery.Reliable);
         }
 
-        private void Broadcast(string topic, int index, ulong except)
+        private void BroadcastSpeak(string topic, int index, ulong except)
         {
             foreach (var clientId in NetworkManager.ConnectedClientsIds)
             {
                 if (clientId != NetworkManager.ServerClientId && clientId != except)
-                    Send(topic, index, clientId);
+                    SendSpeakTo(topic, index, clientId);
             }
         }
 
-        // Хост получает фразу от спросившего, играет её и пересылает остальным;
-        // клиенты получают её от хоста и просто играют.
         private static void OnSpeakMessage(ulong sender, FastBufferReader reader)
         {
             reader.ReadValueSafe(out ulong objectId);
@@ -602,7 +797,37 @@ namespace CustomItems.Items
             station.askedLocally = false;
             station.Speak(topic, index);
             if (station.IsServer && sender != NetworkManager.ServerClientId)
-                station.Broadcast(topic, index, except: sender);
+                station.BroadcastSpeak(topic, index, except: sender);
+        }
+
+        // Тот, кто только что увидел колонку, спрашивает у хоста цвет и «включена»
+        private void RequestState()
+        {
+            using var writer = new FastBufferWriter(sizeof(ulong), Allocator.Temp);
+            writer.WriteValueSafe(NetworkObjectId);
+            NetworkManager.CustomMessagingManager.SendNamedMessage(RequestMessage, NetworkManager.ServerClientId, writer,
+                NetworkDelivery.Reliable);
+        }
+
+        private static void OnRequestMessage(ulong sender, FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out ulong objectId);
+            var station = Find(objectId);
+            if (station == null || !station.IsServer)
+                return;
+            using var writer = new FastBufferWriter(sizeof(ulong) + sizeof(int), Allocator.Temp);
+            writer.WriteValueSafe(objectId);
+            writer.WriteValueSafe(station.GetItemDataToSave());
+            station.NetworkManager.CustomMessagingManager.SendNamedMessage(StateMessage, sender, writer, NetworkDelivery.Reliable);
+        }
+
+        private static void OnStateMessage(ulong sender, FastBufferReader reader)
+        {
+            reader.ReadValueSafe(out ulong objectId);
+            reader.ReadValueSafe(out int state);
+            var station = Find(objectId);
+            if (station != null && sender == NetworkManager.ServerClientId)
+                station.LoadItemSaveData(state);
         }
 
         private static YandexStationItem Find(ulong objectId)

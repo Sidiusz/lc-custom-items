@@ -25,17 +25,16 @@ MonoBehaviour:
   holdButtonUse: 0
   itemSpawnsOnGround: 1
   isConductiveMetal: 0
-  isScrap: 1
-  creditsWorth: 0
+  isScrap: 0
+  creditsWorth: 100
   lockedInDemo: 0
-  highestSalePercentage: 0
-  maxValue: 150
-  minValue: 60
-  spawnPrefab: {fileID: 2628207323262805617, guid: b3d3876221ec7af46bd6d167ca3213e3,
-    type: 3}
-  requiresBattery: 0
-  batteryUsage: 0
-  automaticallySetUsingPower: 0
+  highestSalePercentage: 80
+  maxValue: 0
+  minValue: 0
+  spawnPrefab: {fileID: 0}
+  requiresBattery: 1
+  batteryUsage: 1800
+  automaticallySetUsingPower: 1
   itemIcon: {fileID: 21300000, guid: 38a8ef7cfc22c8447a06ab9e44409d61, type: 3}
   grabAnim: 
   useAnim: 
@@ -49,11 +48,12 @@ MonoBehaviour:
   syncGrabFunction: 0
   syncUseFunction: 1
   syncDiscardFunction: 0
-  syncInteractLRFunction: 0
-  saveItemVariable: 0
+  syncInteractLRFunction: 1
+  saveItemVariable: 1
   isDefensiveWeapon: 0
   toolTips:
-  - 'Talk : [LMB]'
+  - 'Turn on/off : [LMB]'
+  - 'Color : [E]'
   verticalOffset: 0.045
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1

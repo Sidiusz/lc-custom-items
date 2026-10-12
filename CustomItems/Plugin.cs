@@ -50,8 +50,6 @@ namespace CustomItems
 
             foreach (var entry in registry.items)
                 Register(entry);
-            foreach (var entry in registry.furniture)
-                RegisterFurniture(entry);
 
             SetupItemTuner();
 
@@ -107,109 +105,6 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterItem(item);
         }
 
-        // ---- Мебель: покупается в Decor терминала, ставится через режим строительства (B) ----
-
-        private void RegisterFurniture(ItemRegistry.FurnitureEntry entry)
-        {
-            var prefab = entry.prefab;
-            if (prefab == null || prefab.GetComponent<NetworkObject>() == null || string.IsNullOrEmpty(entry.name))
-            {
-                Log.LogError($"Пропускаю мебель '{entry.name}' в ItemRegistry: нет префаба с NetworkObject или названия");
-                return;
-            }
-
-            var inShop = Config.Bind(entry.name, "InShop", true, "Продавать в разделе Decor терминала").Value;
-            var price = Config.Bind(entry.name, "Price", entry.price, "Цена в магазине").Value;
-            if (!inShop)
-                return;
-
-            PrepareFurniture(prefab);
-            LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(prefab);
-            var unlockable = new UnlockableItem
-            {
-                unlockableName = entry.name,
-                prefabObject = prefab,
-                unlockableType = 1, // предмет корабля, а не костюм
-                IsPlaceable = true,
-                spawnPrefab = true,
-                alwaysInStock = true, // в Decor не по ротации, а всегда
-                canBeStored = true,
-                maxNumber = 1,
-            };
-            LethalLib.Modules.Unlockables.RegisterUnlockable(unlockable, StoreType.Decor, null, null, null, price);
-        }
-
-        // Компоненты мебели игры навешиваем здесь, а не в Unity: так в проекте не нужны их
-        // заглушки с полями. В префабе из Unity есть дочерние PlacementCollider (за него
-        // хватает режим строительства) и InteractTrigger (E), оба с BoxCollider.
-        private static void PrepareFurniture(GameObject prefab)
-        {
-            var networkObject = prefab.GetComponent<NetworkObject>();
-            GlobalObjectIdHash?.SetValue(networkObject, StableHash(PluginGuid + "/" + prefab.name));
-
-            var parent = prefab.GetComponent<AutoParentToShip>() ?? prefab.AddComponent<AutoParentToShip>();
-
-            var placement = prefab.transform.Find("PlacementCollider");
-            var body = prefab.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(m => m.name == "Body")
-                       ?? prefab.GetComponentInChildren<MeshFilter>(true);
-            if (placement != null)
-            {
-                placement.gameObject.layer = Layer("PlaceableShipObjects", 26);
-                var placeable = placement.GetComponent<PlaceableShipObject>() ?? placement.gameObject.AddComponent<PlaceableShipObject>();
-                placeable.parentObject = parent;
-                placeable.mainMesh = body;
-                placeable.mainTransform = prefab.transform;
-                placeable.placeObjectCollider = placement.GetComponent<Collider>();
-                placeable.yOffset = HeightAboveFloor(prefab);
-                placeable.AllowPlacementOnCounters = true;
-            }
-            else
-            {
-                Log.LogError($"{prefab.name}: нет дочернего PlacementCollider, поставить через B не получится");
-            }
-
-            var interact = prefab.transform.Find("InteractTrigger");
-            if (interact != null)
-            {
-                interact.gameObject.layer = Layer("InteractableObject", 9);
-                interact.gameObject.tag = "InteractTrigger";
-                var trigger = interact.GetComponent<InteractTrigger>() ?? interact.gameObject.AddComponent<InteractTrigger>();
-                trigger.hoverTip = YandexStationItem.InteractTip;
-                trigger.interactable = true;
-                trigger.oneHandedItemAllowed = true;
-                trigger.twoHandedItemAllowed = true;
-                trigger.interactCooldown = true;
-                trigger.cooldownTime = 1f;
-                trigger.holdingInteractEvent = new InteractEventFloat();
-                trigger.onInteract = new InteractEvent();
-                trigger.onInteractEarly = new InteractEvent();
-                trigger.onInteractEarlyOtherClients = new InteractEvent();
-                trigger.onStopInteract = new InteractEvent();
-                trigger.onCancelAnimation = new InteractEvent();
-            }
-        }
-
-        // Режим строительства ставит центр префаба на высоту yOffset над полом
-        private static float HeightAboveFloor(GameObject prefab)
-        {
-            var min = float.MaxValue;
-            foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (mf.sharedMesh == null)
-                    continue;
-                var b = mf.sharedMesh.bounds;
-                var p = prefab.transform.InverseTransformPoint(mf.transform.TransformPoint(b.min));
-                min = Mathf.Min(min, p.y);
-            }
-            return min == float.MaxValue ? 0.05f : -min;
-        }
-
-        private static int Layer(string name, int fallback)
-        {
-            var layer = LayerMask.NameToLayer(name);
-            return layer >= 0 ? layer : fallback;
-        }
-
         private void SetupYandexStation(string dir)
         {
             const string section = "Yandex Station";
@@ -217,9 +112,14 @@ namespace CustomItems
                 "Слово, на которое колонка откликается (как его пишет распознавание, строчными)").Value.Trim().ToLowerInvariant();
             YandexStationItem.HearingRadius = Config.Bind(section, "HearingRadius", 8f,
                 "С какого расстояния (м) к колонке можно обращаться голосом").Value;
+            YandexStationItem.AllowInterrupt = Config.Bind(section, "AllowInterrupt", false,
+                "Можно задать новый вопрос, пока колонка ещё отвечает. По умолчанию она дослушивает себя и только потом слушает других").Value;
+            YandexStationItem.JammingWeathers = Config.Bind(section, "JammingWeathers", "Solar Flare",
+                "Погоды через запятую (как их называет игра или WeatherRegistry), при которых колонка на луне сбоит и вместо ответа выдаёт ошибку").Value
+                .Split(',').Select(w => w.Trim()).Where(w => w.Length > 0).ToArray();
             var voice = Config.Bind(section, "VoiceCommands", true,
-                "Распознавать голос («Алиса, какая погода?»). Распознаётся только у вас на компьютере, офлайн, " +
-                "и только пока рядом стоит колонка. Выключите, если не нужно или тормозит").Value;
+                "Отвечать на голос из голосового чата («Алиса, какая погода?»). Каждый игрок распознаёт свою речь " +
+                "у себя, офлайн, и только когда его слышно в чате рядом с включённой колонкой. Выключите, если не нужно или тормозит").Value;
             if (!voice)
                 return;
 
@@ -312,7 +212,8 @@ namespace CustomItems
             ToyGunItem.NoAmmoHeader = "Игрушечный пистолет";
             ToyGunItem.NoAmmoBody = "В инвентаре нет пулек. Их можно купить в магазине терминала.";
             ToyGunAmmoItem.TipFormat = "Пулек в пачке : {0}";
-            YandexStationItem.InteractTip = "Поговорить с Алисой : [E]";
+            YandexStationItem.OnOffTip = "Вкл/выкл : [LMB]";
+            YandexStationItem.ColorTip = "Цвет : [E]";
 
             try
             {

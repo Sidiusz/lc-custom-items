@@ -14,15 +14,17 @@ using Vosk;
 namespace CustomItems
 {
     /// <summary>
-    /// Слушает микрофон локального игрока и распознаёт русскую речь офлайн (Vosk,
-    /// маленькая русская модель), пока рядом стоит Яндекс Станция. Распознанный
-    /// текст уходит в <see cref="YandexStationItem.OnLocalSpeech"/>, которая и решает,
+    /// Распознаёт, что локальный игрок говорит в голосовой чат, пока рядом включённая
+    /// Яндекс Станция: офлайн, Vosk с маленькой русской моделью. Распознанный текст
+    /// уходит в <see cref="YandexStationItem.OnLocalSpeech"/>, которая и решает,
     /// обращались ли к Алисе.
     ///
-    /// Звук берётся у голосового чата игры (Dissonance) через подписку на записанный
-    /// микрофон, так что отдельного доступа к микрофону не нужно и выбранное в игре
-    /// устройство учитывается. Распознавание идёт в фоновом потоке и только у себя:
-    /// другим игрокам по сети уходит лишь выбранная колонкой фраза.
+    /// Звук берётся у голосового чата игры (Dissonance, подписка на записанный микрофон),
+    /// а фраза засчитывается, только если в это время игрока было слышно в чате: с
+    /// выключенным микрофоном или не нажатой кнопкой рации (push-to-talk) колонка не
+    /// слышит. Каждый игрок распознаёт свою речь у себя, в фоновом потоке, другим по
+    /// сети уходит лишь выбранная колонкой фраза. Так колонка слышит всех игроков чата
+    /// рядом с собой, а звук чужих голосов никуда не пересылается.
     ///
     /// Vosk лежит рядом с DLL мода: Vosk.dll, папка vosk/ с нативными библиотеками
     /// (Windows x64) и моделью vosk/model-ru/. Всё это кладёт туда сборка (csproj).
@@ -57,6 +59,10 @@ namespace CustomItems
         private static readonly Regex TextField = new Regex("\"text\"\\s*:\\s*\"([^\"]*)\"");
 
         private object subscribedTo;
+        private float lastHeardInChat = -100f;
+
+        // Фраза распознаётся после паузы, поэтому смотрим, звучал ли игрок в чате недавно
+        private const float HeardWindow = 3f;
         private volatile bool active;
         private volatile bool stopping;
         private volatile bool failed;
@@ -81,6 +87,12 @@ namespace CustomItems
             }
 
             active = comms != null && !comms.IsMuted && YandexStationItem.AnyNearLocalPlayer();
+            if (active)
+            {
+                var me = comms.LocalPlayerName != null ? comms.FindPlayer(comms.LocalPlayerName) : null;
+                if (me != null && me.IsSpeaking)
+                    lastHeardInChat = Time.time;
+            }
             if (active && worker == null)
                 StartWorker();
 
@@ -93,6 +105,8 @@ namespace CustomItems
                         break;
                     text = results.Dequeue();
                 }
+                if (Time.time - lastHeardInChat > HeardWindow)
+                    continue; // говорил мимо чата (push-to-talk не нажат)
                 Plugin.Log.LogDebug("Алиса услышала: " + text);
                 YandexStationItem.OnLocalSpeech(text);
             }

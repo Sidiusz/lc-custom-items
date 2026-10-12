@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Временные фразы колонки по темам -> Assets/Sources/Art/Audio/YandexStation/Phrases/<Тема>/Placeholder*.wav
-# Синтезатор espeak-ng (женский русский голос) и короткий звук «Алиса слушает» перед фразой.
+# Синтезатор espeak-ng (женский русский голос). Сигналы (слушает, ошибка, вкл/выкл) делает sounds.sh.
 # Это заглушки: свои записи кладите в те же папки (любые .wav, сколько угодно на тему),
 # а эти удалите. Тему выбирает YandexStationItem.Topic, список тем в README.
 # Нужны espeak-ng и ffmpeg.
@@ -15,8 +15,6 @@ PHRASES=(
   "Random|Привет! Я Алиса. Чем могу помочь?"
   "Random|Сейчас на корабле тепло и уютно. Снаружи лучше не выходить."
   "Random|Ищу в интернете: как сдать квоту и не умереть."
-  "Listen|Да?"
-  "Listen|Слушаю."
   "Unknown|Извините, я не поняла."
   "Unknown|Я пока так не умею."
   "Greeting|Привет! Рада вас слышать."
@@ -37,12 +35,10 @@ PHRASES=(
   "Weather/Foggy|Густой туман. Держитесь вместе."
   "Weather/Flooded|Луну затопило, вода будет подниматься."
   "Weather/Eclipsed|Затмение. Снаружи очень опасно."
+  "Weather/Other|Не могу понять, что за погода на этой луне."
+  "Error|Ошибка. Нет связи с сервером."
+  "Error|Помехи. Повторите. Повторите позже."
 )
-
-# Звук активации: два мягких тона вверх
-ffmpeg -v error -y -f lavfi -i "sine=f=880:d=0.09" -f lavfi -i "sine=f=1320:d=0.14" -filter_complex "\
-[0:a]afade=t=out:st=0.05:d=0.04[a];[1:a]afade=t=in:d=0.01,afade=t=out:st=0.06:d=0.08[b];\
-[a][b]concat=n=2:v=0:a=1,volume=0.35,aresample=44100,apad=pad_dur=0.12[o]" -map "[o]" "$TMP/chime.wav"
 
 declare -A count
 for entry in "${PHRASES[@]}"; do
@@ -52,9 +48,11 @@ for entry in "${PHRASES[@]}"; do
   mkdir -p "$OUT/$topic"
   out="$OUT/$topic/Placeholder${count[$topic]}.wav"
   espeak-ng -v ru+f3 -s 150 -p 60 -w "$TMP/voice.wav" "$text"
-  ffmpeg -v error -y -i "$TMP/chime.wav" -i "$TMP/voice.wav" -filter_complex "\
-[1:a]aresample=44100,highpass=f=120[v];\
-[0:a][v]concat=n=2:v=0:a=1,loudnorm=I=-16:TP=-2:LRA=11,aresample=44100[o]" \
+  fx=""
+  # Сбой связи: голос рвётся и хрипит
+  [ "$topic" = Error ] && fx="acrusher=bits=6:mix=0.6,volume='if(lt(mod(t,0.23),0.04),0.05,1)':eval=frame,"
+  ffmpeg -v error -y -i "$TMP/voice.wav" -filter_complex "\
+[0:a]aresample=44100,highpass=f=120,${fx}loudnorm=I=-16:TP=-2:LRA=11,aresample=44100[o]" \
     -map "[o]" -ac 1 -c:a pcm_s16le "$out"
   echo "saved $out"
 done

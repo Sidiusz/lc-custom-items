@@ -426,6 +426,18 @@ namespace CustomItems.Items
             if (station.IsJammed && topic != TopicStop)
                 topic = topic == TopicTime && station.FindSet(TopicTimeError) != null ? TopicTimeError : TopicError;
 
+            // Каприз: на понятный вопрос «Нет связи с сервером», «Не хочу», «Бормочете?», «Не поняла»
+            if (topic != TopicStop && topic != TopicShush && topic != TopicError && topic != TopicTimeError
+                && Random.value < WhimChance)
+            {
+                var whims = new[] { TopicError, TopicRefuse, TopicMumble, TopicUnknown }.Where(t => station.FindSet(t) != null).ToArray();
+                if (whims.Length > 0)
+                {
+                    station.Say(whims[Random.Range(0, whims.Length)]);
+                    return;
+                }
+            }
+
             // Тот же вопрос второй раз за минуту: «Я уже отвечала»
             if (topic != TopicStop && topic != TopicShush && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null)
@@ -668,11 +680,32 @@ namespace CustomItems.Items
             if (set == null || set.clips.Length == 0)
                 return;
             askedLocally = true;
-            var index = Random.Range(0, set.clips.Length);
-            if (set.clips.Length > 1 && set.name == lastTopic && index == lastIndex)
-                index = (index + 1 + Random.Range(0, set.clips.Length - 1)) % set.clips.Length;
+            var index = NextIndex(set);
             Speak(set.name, index);
             SendSpeak(set.name, index);
+        }
+
+        // Записи темы идут по кругу в случайном порядке: пока не прозвучат все, ни одна не повторится,
+        // и новый круг не начинается с той, что была последней
+        private static readonly Dictionary<string, List<int>> Bags = new Dictionary<string, List<int>>();
+        private static readonly Dictionary<string, int> LastFromBag = new Dictionary<string, int>();
+
+        private static int NextIndex(PhraseSet set)
+        {
+            var n = set.clips.Length;
+            if (n <= 1)
+                return 0;
+            if (!Bags.TryGetValue(set.name, out var bag) || bag.Count == 0 || bag.Any(i => i >= n))
+            {
+                bag = Enumerable.Range(0, n).OrderBy(_ => Random.value).ToList();
+                if (LastFromBag.TryGetValue(set.name, out var last) && bag[0] == last)
+                    (bag[0], bag[n - 1]) = (bag[n - 1], bag[0]);
+                Bags[set.name] = bag;
+            }
+            var index = bag[0];
+            bag.RemoveAt(0);
+            LastFromBag[set.name] = index;
+            return index;
         }
 
         // Фраза из кусочков: «сейчас» + «один» «четыре» + «три» «пять». Уходит одной строкой
@@ -686,7 +719,7 @@ namespace CustomItems.Items
             {
                 var set = FindSet(t);
                 if (set != null)
-                    parts.Add(set.name + "\t" + Random.Range(0, set.clips.Length));
+                    parts.Add(set.name + "\t" + NextIndex(set));
             }
             if (parts.Count == 0)
                 return;
@@ -984,17 +1017,19 @@ namespace CustomItems.Items
 
         public static bool EventsEnabled = true;
         /// <summary>Шанс, что колонка скажет что-то на повод (монстр подошёл, посадка...).</summary>
-        public static float EventChance = 0.35f;
+        public static float EventChance = 0.2f;
+        /// <summary>Шанс каприза вместо ответа (ошибка связи, «не хочу», «бормочете?», «не поняла»).</summary>
+        public static float WhimChance = 0.15f;
         /// <summary>Пауза (с) после реплики колонки, прежде чем она снова заговорит сама.</summary>
-        public static float EventCooldown = 45f;
+        public static float EventCooldown = 90f;
         /// <summary>Одна и та же тема события не чаще, чем раз в столько секунд (на все колонки).</summary>
-        public static float EventTopicCooldown = 180f;
+        public static float EventTopicCooldown = 600f;
         /// <summary>С какого расстояния (м) колонка замечает монстра.</summary>
         public static float EventRadius = 15f;
         /// <summary>Как далеко монстры слышат реплику на событие (м): громко — может приманить.</summary>
         public static float EventNoiseRange = 25f;
         /// <summary>Раз во сколько секунд колонка может поболтать сама, если рядом кто-то есть (0 — никогда).</summary>
-        public static float IdleSeconds = 120f;
+        public static float IdleSeconds = 240f;
 
         public const string EventsFolder = "Events/";
         private const float EventCheckSeconds = 1.5f;

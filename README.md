@@ -214,6 +214,5 @@ Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInE
 
 ## Благодарности
 
-- Звук Егермейстера: Sound effects by BudgetPixel (CC BY 4.0).
 - Голос фраз: [Silero TTS](https://github.com/snakers4/silero-models) (модель v4_ru, CC BY-NC-SA 4.0).
 - Распознавание речи: [Vosk](https://alphacephei.com/vosk/) и модель vosk-model-small-ru-0.22 (Apache 2.0).

@@ -451,6 +451,20 @@ namespace CustomItems.Items
                 station.asking = null;
                 answering = false;
             }
+            if (answering && station.asking == AskWake)
+            {
+                // «Это вы мне?» — «нет» / «да» / сразу вопрос
+                var reply = (wake >= 0 ? text.Substring(wake + WakeWord.Length) : text).Replace("[unk]", " ").Trim();
+                if (reply.Length == 0)
+                    return;
+                ResetHearing?.Invoke(speaker);
+                Debug.Log($"[Алиса] {speaker.playerUsername}: ответ на «Это вы мне?»: «{reply}»");
+                if (!station.OnWakeReply(reply))
+                    return;
+                station.listenUntil = Time.time + ListenSilence; // это был вопрос: разбираем как после «Алиса»
+                station.listenStartedAt = Time.time;
+                answering = false;
+            }
             if (answering)
             {
                 var reply = wake >= 0 ? text.Substring(wake + WakeWord.Length).Trim() : text;
@@ -599,7 +613,7 @@ namespace CustomItems.Items
             // Тот же вопрос второй раз за минуту: «Я уже отвечала». «Где Паша» после «где Андрей» — другой вопрос:
             // у вопросов про человека сравниваем весь текст, а не только тему
             var asked = topic == TopicWhereIs ? topic + "|" + known : topic;
-            if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+            if (RepeatTopics.Contains(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null && Random.value < RepeatChance)
             {
                 station.lastAskedAt = Time.time;
@@ -609,8 +623,16 @@ namespace CustomItems.Items
             station.lastAsked = asked;
             station.lastAskedAt = Time.time;
 
-            if (station.AnswerMore(speaker, topic, known))
+            if (station.AnswerMore(speaker, topic, known) || station.AnswerTalk(speaker, topic))
                 return;
+            // Анекдот ещё раз — «А вот ещё…» и следующий
+            if (topic == TopicJoke && station.lastSaidTopic != null && station.lastSaidTopic.Contains(TopicJoke)
+                && station.FindSet(TopicJokeNext) != null && station.FindSet(TopicJoke) != null)
+            {
+                station.SaySequence(new List<string> { TopicJokeNext, TopicJoke });
+                station.ExpectReply(TopicJoke);
+                return;
+            }
 
             if (topic == TopicGameAsk && station.SayRend(0.3f))
                 return;
@@ -791,7 +813,7 @@ namespace CustomItems.Items
             if (!IsOn)
                 return;
             var intent = string.IsNullOrEmpty(reply) ? null : AliceIntents.Match(reply, out _);
-            if (OnReplyMore(kind, item, intent) || OnReplyLost(kind, intent))
+            if (OnReplyTalk(kind, reply, intent) || OnReplyMore(kind, item, intent) || OnReplyLost(kind, intent))
                 return;
             if (kind == AskFollow)
             {
@@ -1239,8 +1261,9 @@ namespace CustomItems.Items
             if (named != null)
             {
                 asked = others.Where(p => NameFolder(p.playerUsername) == named).ToList();
+                // Его нет в игре: «Сегодня без Андрея?» — только её собственная реплика, на вопрос — «его сегодня нет»
                 if (asked.Count == 0)
-                    return FindSet(EventsFolder + "Missing/" + named) != null ? EventsFolder + "Missing/" + named : folder + "Lost/One";
+                    return FindSet(folder + "NotHere") != null ? folder + "NotHere" : TopicUnknown;
                 // Погиб — «Его съела собака» или его личное PlayerDied
                 if (asked.All(p => p.isPlayerDead))
                 {
@@ -1266,8 +1289,9 @@ namespace CustomItems.Items
             else
             {
                 // «Где он?» — тот, кто дальше всех от спросившего
+                var from = speaker != null ? speaker.transform.position : transform.position;
                 var far = others.Where(p => !p.isPlayerDead)
-                    .OrderByDescending(p => Vector3.Distance(p.transform.position, speaker.transform.position)).FirstOrDefault();
+                    .OrderByDescending(p => Vector3.Distance(p.transform.position, from)).FirstOrDefault();
                 asked = far != null ? new List<GameNetcodeStuff.PlayerControllerB> { far } : new List<GameNetcodeStuff.PlayerControllerB>();
             }
 
@@ -1289,6 +1313,9 @@ namespace CustomItems.Items
                 return Form("Lost", lost);
             if (asked.Count > alive.Count)
                 return Form("Lost", asked.Count - alive.Count); // погибших не выдаёт: «потерялся»
+            // Все спрошенные на корабле: «Он на корабле» / «Все на корабле»
+            if (alive.Count > 0 && alive.All(p => p.isInHangarShipRoom) && FindSet(folder + "Ship/One") != null)
+                return Form("Ship", alive.Count);
             return folder + "AllAlive";
         }
 
@@ -1351,7 +1378,16 @@ namespace CustomItems.Items
                 .Distinct().Select(f => TopicCall + f).ToList();
             if (dead.Count == 0)
             {
-                Say(WhereIsTopic(speaker, command));
+                // «Проверяю… Я проверила. Все живы и здоровы»
+                var check = new List<string>();
+                if (FindSet("Check/Start") != null && Random.value < 0.6f)
+                {
+                    check.Add("Check/Start");
+                    if (FindSet("Check/Done") != null)
+                        check.Add("Check/Done");
+                }
+                check.Add(WhereIsTopic(speaker, "все"));
+                SaySequence(check.Where(t => FindSet(t) != null).ToList());
                 return;
             }
             // «Погибли» (или «Кто-то умер, перепроверяю») и имена
@@ -1667,7 +1703,6 @@ namespace CustomItems.Items
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
         // Кто ушёл в комплекс (ждём на корабле), кто уже вернулся первым за посадку, на ком висит монстр
         private readonly HashSet<ulong> wentInside = new HashSet<ulong>(), onHeadSeen = new HashSet<ulong>();
-        private bool firstBackTold;
         // Про кого уже сказали «Сегодня без …»: общее для всех колонок, раз в игре до посадки
         // и ещё раз после каждой посадки
         private static readonly HashSet<string> missingTold = new HashSet<string>();
@@ -1775,7 +1810,6 @@ namespace CustomItems.Items
             if (round.shipHasLanded && !wasLanded)
             {
                 Reason("Landed");
-                firstBackTold = false;
                 wentInside.Clear();
                 // После посадки ещё раз: кого нет (одна очистка на посадку, даже если колонок несколько)
                 if (Time.time - missingClearedAt > 120f)
@@ -2141,16 +2175,11 @@ namespace CustomItems.Items
 
         private void OnBack(GameNetcodeStuff.PlayerControllerB p, StartOfRound round)
         {
-            var folder = NameFolder(p.playerUsername);
-            var others = round.allPlayerScripts.Any(o => o != null && o != p && o.isPlayerControlled && !o.isPlayerDead && !o.isInHangarShipRoom);
-            if (!firstBackTold && others && folder != null)
-                Reason("FirstBack/" + folder);
-            firstBackTold = true;
+            // «Андрей! Вот и вы», «А остальные где?» — встреча по имени (CollectArrivals), здесь только замечания
             if (p.health < 50)
                 Reason("BackHurt");
             if (p.ItemSlots == null || !p.ItemSlots.Any(i => i != null && i.itemProperties != null && i.itemProperties.isScrap))
                 Reason("BackEmpty");
-            Reason("Back");
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)
@@ -2177,7 +2206,7 @@ namespace CustomItems.Items
             if (listenUntil > 0f && Time.time > listenUntil)
             {
                 listenUntil = 0f;
-                if (askedLocally && IsOn)
+                if (askedLocally && IsOn && !IsJammed && !AskIfMe())
                     Say(SoundTimeout);
             }
 
@@ -2185,6 +2214,7 @@ namespace CustomItems.Items
                 PlayQueued();
             UpdateThinking();
             UpdateOffer();
+            UpdateArrivals();
             UpdateAsking();
             UpdateNavigation();
             UpdateEvents();

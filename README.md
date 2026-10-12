@@ -145,6 +145,8 @@ lc-custom-items/
 
 Вопросы колонка понимает и по смыслу, а не только по словам: «сколько у нас бабла» = «сколько денег», «кто-нибудь откинулся» = «кто умер». Это `CustomItems/AliceSemantic.cs`: маленькая русская модель [rubert-mini-frida](https://huggingface.co/sergeyzh/rubert-mini-frida) (MIT, 68 МБ, лежит в репозитории, `CustomItems/AliceSemantic/`) считает вектор смысла вопроса и сравнивает с примерами intents.txt и текстами записей; работает через llama.cpp (`llama.dll` из пакета `LLamaSharp.Backend.Cpu`) на процессоре, около 5 мс на вопрос. При первом запуске векторы примеров считаются в фоне (пара секунд) и кешируются в `BepInEx/cache`. Совпадение по словам по-прежнему главное; смысл подключается, когда по словам не нашлось или нашлось слабо. `dotnet build` кладёт всё в папку `alice-semantic/` рядом с DLL. Нужен Microsoft Visual C++ Redistributable 2015–2022 x64 (есть почти у всех; без него Алиса понимает только по словам). Выключить — `UnderstandMeaning = false` в конфиге. Проверка на своих вопросах — `Tools/AliceSemantic/run.sh`.
 
+Фразы, обращённые к колонке («Алиса, …» и ответы на её вопросы), ещё раз распознаёт **Whisper** (whisper.cpp, модель `ggml-small-q8_0`): он понимает любую речь, а не только слова из intents.txt. Vosk остаётся для мгновенного «Алиса» (колонка просыпается сразу) и запасным вариантом: если Whisper не загрузился, не успел за `WhisperTimeout` секунд или написал мусор, колонка отвечает по тексту Vosk. Всё лежит в папке `whisper/` рядом с DLL: `vulkan/` (видеокарта любого производителя, нужен драйвер с Vulkan), `cpu/` (нативные библиотеки из NuGet-пакетов Whisper.net.Runtime 1.9.1) и модель (264 МБ). Модели в репозитории нет: `dotnet build` качает её с Hugging Face в `CustomItems/obj/whisper/` (один раз, сверяет SHA-256), без сети — только предупреждение (`-p:WhisperDownload=false` — не качать). Настройки: `WhisperRecognition`, `WhisperGpu`, `WhisperTimeout`. Сравнить Vosk и Whisper на тестовых фразах — `Tools/YandexStation/whisper/run.sh`.
+
 ## 2.1. Как предмет держится в руке: превью в Unity
 
 В игре предмет каждый кадр ставится в точку руки персонажа и сдвигается на Position / Rotation Offset из его ассета Item. Компонент `HeldItemPreview` (`Assets/Sources/Scripts/Runtime/`) делает в редакторе то же самое, так что оффсеты можно подобрать на глаз.
@@ -218,7 +220,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/`, `vosk/` и `alice-semantic/` (около 230 МБ, из них модель распознавания около 70 МБ, модель смысла и llama.cpp около 72 МБ). Проверьте актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/`, `vosk/`, `alice-semantic/` и `whisper/` (около 550 МБ: модель Vosk около 70 МБ, модель смысла и llama.cpp около 72 МБ, модель Whisper 264 МБ, Vulkan-библиотека Whisper 58 МБ; модели zip почти не сжимает). Проверьте лимит размера пакета и актуальные версии зависимостей в `manifest.json` на Thunderstore.
 
 ## Благодарности
 

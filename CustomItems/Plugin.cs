@@ -54,12 +54,17 @@ namespace CustomItems
             SetupItemTuner();
 
             // Настройки поведения, которые не живут в ассетах: их удобно менять без пересборки
-            AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
-                "Ники через запятую: этих игроков энергетик не бодрит, а вырубает").Value.Split(',');
-            AdrenalineItem.BoostDuration = Config.Bind("Adrenaline Game Fuel", "BoostSeconds", 30f,
-                "Сколько секунд стамина восстанавливается быстрее").Value;
-            AdrenalineItem.SleepDuration = Config.Bind("Adrenaline Game Fuel", "SleepSeconds", 10f,
+            const string adrenaline = "Adrenaline Game Fuel";
+            AdrenalineItem.SleepyPlayers = Config.Bind(adrenaline, "SleepyPlayers", "Sidiusz",
+                "Ники через запятую (регистр и значки вроде * не важны): этих игроков энергетик может вырубить").Value.Split(',');
+            AdrenalineItem.SleepChance = Config.Bind(adrenaline, "SleepChance", 20f,
+                "Шанс в процентах, что игрок из SleepyPlayers уснёт от глотка").Value;
+            AdrenalineItem.SleepDuration = Config.Bind(adrenaline, "SleepSeconds", 10f,
                 "Сколько секунд спит игрок из SleepyPlayers").Value;
+            AdrenalineItem.BoostDuration = Config.Bind(adrenaline, "BoostSeconds", 30f,
+                "Сколько секунд после глотка стамина восстанавливается быстрее").Value;
+            AdrenalineItem.HeartAttackChancePerSip = Config.Bind(adrenaline, "HeartAttackChancePerSip", 1f,
+                "Шанс сердечного приступа в процентах за каждый глоток за день: 1-й глоток 1%, 2-й 2%, 3-й 3%...").Value;
             SetupToyGun();
 
             LoadRussianTranslation(Path.Combine(dir, "translations"));

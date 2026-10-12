@@ -7,7 +7,7 @@
 
 Пишет в Assets/Sources/Art/:
     Textures/Adrenaline/AdrenalineCan.png       текстура 512x512 (этикетка + металл)
-    Models/Adrenaline/AdrenalineCan.fbx         модель, ~170 треугольников, центр в середине банки
+    Models/Adrenaline/AdrenalineCan.fbx         модель: Can (целая, центр в середине) и Crushed (мятая пустая)
     Textures/Adrenaline/AdrenalineCanIcon.png   иконка для инвентаря 256x256
 """
 import math
@@ -212,7 +212,7 @@ def make_model():
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     mesh = bpy.data.meshes.new("AdrenalineCan")
-    obj = bpy.data.objects.new("AdrenalineCan", mesh)
+    obj = bpy.data.objects.new("Can", mesh)
     bpy.context.scene.collection.objects.link(obj)
 
     bm = bmesh.new()
@@ -308,8 +308,13 @@ def make_model():
     bsdf.inputs["Roughness"].default_value = 0.4
     mesh.materials.append(mat)
 
+    crushed = make_crushed(obj)
+
+    # Два объекта в одном FBX: целая банка и мятая пустая, AdrenalineItem показывает нужную
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in (obj, crushed):
+        o.select_set(True)
     bpy.context.view_layer.objects.active = obj
-    obj.select_set(True)
     bpy.ops.export_scene.fbx(
         filepath=FBX,
         use_selection=True,
@@ -327,7 +332,41 @@ def make_model():
         bake_anim=False,
     )
     tris = sum(len(p.vertices) - 2 for p in mesh.polygons)
-    print(f"FBX: {FBX} ({tris} треугольников)")
+    print(f"FBX: {FBX} ({tris} треугольников на банку)")
+    crushed.hide_render = True  # на иконке только целая банка
+    return obj
+
+
+def make_crushed(can):
+    """Мятая пустая банка: та же сетка и развёртка, сплющенная гармошкой, с вмятинами и перекосом."""
+    import bpy
+
+    rng = random.Random(449)
+    phases = [rng.uniform(0, 2 * math.pi) for _ in range(3)]
+    mesh = can.data.copy()
+    mesh.name = "Crushed"
+    half = HEIGHT / 2
+    crushed_h = HEIGHT * 0.42
+    for v in mesh.vertices:
+        x, y, z = v.co
+        t = (z + half) / HEIGHT                     # 0 у дна, 1 у крышки
+        a = math.atan2(y, x)
+        # гармошка: середина сжимается сильнее, дно и крышка почти целые
+        tz = t + 0.18 * math.sin(2 * math.pi * t) * (1 - t)
+        nz = -half + tz * crushed_h
+        # выпирает в середине, вмятины по кругу и вдоль высоты
+        bulge = 1 + 0.22 * math.sin(math.pi * t) + 0.10 * math.sin(6 * math.pi * t) * math.sin(math.pi * t)
+        dent = 1 - 0.28 * max(0.0, math.sin(3 * a + phases[0] + 5 * t)) * math.sin(math.pi * t) \
+                 - 0.14 * max(0.0, math.sin(5 * a + phases[1] - 3 * t)) * math.sin(math.pi * t)
+        k = bulge * dent
+        # перекос: верх съехал вбок и наклонился
+        shift = 0.006 * t
+        tilt = 0.006 * (x / 0.033) * t
+        v.co = (x * k + shift, y * k, nz + tilt)
+    for poly in mesh.polygons:
+        poly.use_smooth = False  # грани видны: смятый металл
+    obj = bpy.data.objects.new("Crushed", mesh)
+    bpy.context.scene.collection.objects.link(obj)
     return obj
 
 

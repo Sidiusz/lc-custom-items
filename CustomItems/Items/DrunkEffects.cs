@@ -6,8 +6,8 @@ namespace CustomItems.Items
 {
     /// <summary>
     /// Эффект от глотка Егермейстера: каждый глоток действует 90 секунд, глотки складываются.
-    /// Голова кружится только у выпившего (камера покачивается), а голос становится ниже
-    /// для всех, кто его слышит. Работает на каждом клиенте: глоток приходит всем через
+    /// У выпившего кружится голова (камера покачивается) и голоса остальных звучат
+    /// искажённо, а его собственный голос все слышат низким. Работает на каждом клиенте: глоток приходит всем через
     /// синхронизацию использования предмета.
     /// </summary>
     internal class DrunkEffects : MonoBehaviour
@@ -28,6 +28,8 @@ namespace CustomItems.Items
         private static DrunkEffects instance;
 
         private readonly Dictionary<PlayerControllerB, List<float>> sips = new Dictionary<PlayerControllerB, List<float>>();
+        private readonly Dictionary<PlayerControllerB, float> ownPitch = new Dictionary<PlayerControllerB, float>();
+        private readonly HashSet<PlayerControllerB> touched = new HashSet<PlayerControllerB>();
         private readonly List<PlayerControllerB> finished = new List<PlayerControllerB>();
         private bool cameraTilted;
 
@@ -70,6 +72,7 @@ namespace CustomItems.Items
             var localStrength = 0f;
             finished.Clear();
 
+            // Свой голос: у каждого выпившего ниже для всех
             foreach (var pair in sips)
             {
                 var player = pair.Key;
@@ -83,19 +86,74 @@ namespace CustomItems.Items
                 }
 
                 var strength = Strength(list);
-                SetVoicePitch(player, VoicePitch(strength));
+                ownPitch[player] = VoicePitch(strength);
                 if (player == local)
                     localStrength = strength;
             }
-
             foreach (var player in finished)
             {
                 sips.Remove(player);
-                if (player != null)
-                    SetVoicePitch(player, 1f);
+                ownPitch.Remove(player);
             }
 
+            UpdateVoices(local, localStrength);
             SwayCamera(local, localStrength);
+        }
+
+        // Голоса, которые слышит этот клиент. Высота = собственный низкий голос говорящего
+        // (если он выпил), а если выпили мы сами, то ещё плавание высоты и искажение у всех
+        // остальных. Кого эффект отпустил, тому возвращаем обычный голос.
+        private void UpdateVoices(PlayerControllerB local, float localStrength)
+        {
+            var players = StartOfRound.Instance?.allPlayerScripts;
+            if (players == null)
+                return;
+
+            var dizzy = Mathf.Min(localStrength, 2f);
+            foreach (var player in players)
+            {
+                if (player == null)
+                    continue;
+                var hasOwn = ownPitch.TryGetValue(player, out var pitch);
+                var distort = dizzy > 0f && player != local && player.isPlayerControlled;
+                if (!hasOwn)
+                    pitch = 1f;
+
+                if (distort)
+                {
+                    var phase = player.playerClientId * 1.7f;
+                    pitch *= 1f + (Mathf.PerlinNoise(Time.time * 0.8f, phase) * 2f - 1f) * 0.12f * dizzy;
+                }
+
+                SetDistortion(player, distort ? 0.3f * dizzy : 0f);
+                if (hasOwn || distort)
+                {
+                    SetVoicePitch(player, pitch);
+                    touched.Add(player);
+                }
+                else if (touched.Remove(player))
+                {
+                    SetVoicePitch(player, 1f);
+                }
+            }
+        }
+
+        private void SetDistortion(PlayerControllerB player, float level)
+        {
+            var source = player.currentVoiceChatAudioSource;
+            if (source == null)
+                return;
+            var filter = source.GetComponent<AudioDistortionFilter>();
+            if (level <= 0f)
+            {
+                if (filter != null && filter.enabled)
+                    filter.enabled = false;
+                return;
+            }
+            if (filter == null)
+                filter = source.gameObject.AddComponent<AudioDistortionFilter>();
+            filter.enabled = true;
+            filter.distortionLevel = Mathf.Clamp01(level);
         }
 
         // Камеру качаем только по Y и Z и задаём их целиком, а не прибавляем: X (взгляд

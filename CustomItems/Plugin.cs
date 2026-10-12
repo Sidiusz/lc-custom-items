@@ -67,6 +67,7 @@ namespace CustomItems
             AdrenalineItem.HeartAttackChancePerSip = Config.Bind(adrenaline, "HeartAttackChancePerSip", 1f,
                 "Шанс сердечного приступа в процентах за каждый глоток за день: 1-й глоток 1%, 2-й 2%, 3-й 3%...").Value;
             SetupToyGun();
+            SetupJagermeister();
             SetupYandexStation(dir);
 
             LoadRussianTranslation(Path.Combine(dir, "translations"));
@@ -243,6 +244,15 @@ namespace CustomItems
             if (oldDefaults.Any(d => Mathf.Approximately(entry.Value, d)))
                 entry.Value = (float)entry.DefaultValue;
             return entry.Value;
+        }
+
+        private void SetupJagermeister()
+        {
+            const string section = "Jagermeister";
+            VomitEffects.WeakPlayers = Config.Bind(section, "WeakPlayers", "Senya,Shakabuy",
+                "Ники через запятую (регистр и значки не важны, хватает начала ника): этих тошнит с первого глотка и они рыгают").Value.Split(',');
+            VomitEffects.VomitAfterSips = Mathf.Max(1, Config.Bind(section, "VomitAfterSips", 2,
+                "Со скольких одновременно действующих глотков игрока начинает тошнить").Value);
         }
 
         private void SetupToyGun()

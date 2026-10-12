@@ -24,4 +24,9 @@
     <PackageReference Include="LethalCompany.GameLibs.Steam" Version="81.0.5-ngd.0" PrivateAssets="all" />
   </ItemGroup>
 
+  <!-- Звуки рвоты и отрыжки Егермейстера (Tools/Jagermeister/vomit_sounds.py), читаются кодом -->
+  <ItemGroup>
+    <EmbeddedResource Include="Sounds\*.wav" LogicalName="SidiuszCustomItems.Items.%(Filename).wav" />
+  </ItemGroup>
+
 </Project>

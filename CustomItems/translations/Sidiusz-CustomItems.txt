@@ -12,3 +12,6 @@ Talk : [LMB]=Говорить : [LMB]
 
 // Сообщения
 The bottle is empty.=Бутылка пуста.
+The can is empty.=Банка пуста.
+Heart attack=Сердечный приступ
+Too much Adrenaline.=Слишком много Adrenaline.

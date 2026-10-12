@@ -72,8 +72,9 @@ public static class ItemAssets
             MinValue = 80, MaxValue = 160, Rarity = 30, Weight = 1.01f,
             VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
             ToolTips = new[] { "Drink : [LMB]" },
-            SaveItemVariable = true, // пустая банка остаётся пустой после сохранения
+            SaveItemVariable = true, // сохранять оставшиеся глотки
             Icon = Art + "/Textures/Adrenaline/AdrenalineCanIcon.png",
+            Texture = Art + "/Textures/Adrenaline/AdrenalineCan.png",
         },
         new Spec
         {

@@ -261,7 +261,7 @@ namespace CustomItems.Items
             var turret = target.GetComponent<Turret>() ?? target.GetComponentInParent<Turret>();
             var mine = target.GetComponent<Landmine>() ?? target.GetComponentInParent<Landmine>();
             var fail = turret != null ? "Door/Fail/Turret" : mine != null ? "Door/Fail/Mine" : "Door/Fail/Door";
-            if (target.inCooldown || target.isBigDoor && !target.isPoweredOn)
+            if (GamePrivate.Get<bool>(target, "inCooldown") || target.isBigDoor && !GamePrivate.Get(target, "isPoweredOn", true))
             {
                 SayFirst(fail, TopicRefuse);
                 return;
@@ -319,7 +319,7 @@ namespace CustomItems.Items
             {
                 asking = AskKey;
                 askStartedAt = Mathf.Max(Time.time, talkUntil);
-                askUntil = askStartedAt + ListenSilence;
+                askUntil = askStartedAt + AnswerSeconds;
             }
         }
 
@@ -612,7 +612,7 @@ namespace CustomItems.Items
             }
             // Как ЛКМ по бумбоксу: игра включает музыку у всех
             box.ItemActivate(on, true);
-            box.ActivateItemRpc(on, true);
+            GamePrivate.Call(box, "ActivateItemRpc", on, true);
             SayFirst(on ? "Music/On" : "Stopping", "Ok");
         }
 
@@ -950,7 +950,7 @@ namespace CustomItems.Items
 
             // Сканирует рядом (видно только свой скан: у хоста) — «Что вы ищете?»
             var me = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
-            var scanning = HUDManager.Instance != null && HUDManager.Instance.playerPingingScan > 0f && me != null
+            var scanning = HUDManager.Instance != null && GamePrivate.Get<float>(HUDManager.Instance, "playerPingingScan") > 0f && me != null
                            && Vector3.Distance(me.transform.position, pos) < EventRadius;
             if (scanning && !wasScanning)
                 Reason("Scan");
@@ -1058,7 +1058,7 @@ namespace CustomItems.Items
                         Reason("Mine/Pressed");
                     continue;
                 }
-                if (d < 8f && mine.mineActivated)
+                if (d < 8f && GamePrivate.Get(mine, "mineActivated", true))
                 {
                     if (minesSeen.Add(id))
                         Reason("Mine");
@@ -1084,7 +1084,7 @@ namespace CustomItems.Items
                 if (valve == null)
                     continue;
                 var id = (ulong)valve.GetInstanceID();
-                if (valve.valveHasBurst && !valve.valveHasBeenRepaired && Vector3.Distance(valve.transform.position, pos) < 15f)
+                if (GamePrivate.Get<bool>(valve, "valveHasBurst") && !GamePrivate.Get<bool>(valve, "valveHasBeenRepaired") && Vector3.Distance(valve.transform.position, pos) < 15f)
                 {
                     if (steamSeen.Add(id))
                         Reason("Steam");
@@ -1174,7 +1174,7 @@ namespace CustomItems.Items
                 return;
             Say("OutOf/Offer");
             askStartedAt = Mathf.Max(Time.time, talkUntil);
-            askUntil = askStartedAt + ListenSilence;
+            askUntil = askStartedAt + AnswerSeconds;
         }
 
         // Ответ на «Вы заблудились?»

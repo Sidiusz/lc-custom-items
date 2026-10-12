@@ -2,14 +2,14 @@
 # Собирает модель распознавания Алисы (CustomItems/Vosk/model-ru) на Linux.
 # Акустика — из vosk-model-ru-0.42 (большая, точная), граф — свой: 60 тыс. частых русских слов
 # + всё из intents.txt (луны «асуранс», «офенс», предметы, имена) с английскими названиями в словаре.
-# Нужно: Kaldi (src/bin, src/fstbin; OpenFst с --enable-lookahead-fsts --enable-ngram-fsts),
+# Нужно: Kaldi (src/bin, src/fstbin, src/nnet3bin; OpenFst с --enable-lookahead-fsts --enable-ngram-fsts),
 # OpenGrm NGram, phonetisaurus (pip), распакованный vosk-model-ru-0.42-compile.
 #   KALDI=~/kaldi GRM=~/opengrm/bin COMPILE=~/vosk-model-ru-0.42-compile ./build.sh
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); REPO=$(cd "$HERE/../../.." && pwd)
 : "${KALDI:?}" "${GRM:?}" "${COMPILE:?}"
 W=${WORK:-/tmp/alice-model-build}; OUT=$REPO/CustomItems/Vosk/model-ru
-export PATH=$GRM:$KALDI/tools/openfst/bin:$KALDI/src/bin:$KALDI/src/fstbin:$PATH
+export PATH=$GRM:$KALDI/tools/openfst/bin:$KALDI/src/bin:$KALDI/src/fstbin:$KALDI/src/nnet3bin:$PATH
 export LD_LIBRARY_PATH=$KALDI/tools/openfst/lib:$KALDI/src/lib:${LD_LIBRARY_PATH:-}
 mkdir -p "$W" && cd "$W"
 
@@ -20,7 +20,7 @@ python3 "$HERE/renorm.py" general.arpa general-n.arpa
 (awk '/^\\1-grams:/{f=1;next} /^\\2-grams:/{f=0} f&&NF{print $2}' general-n.arpa; cat domain.vocab) | sort -u | grep -v '^</\?s>$' > words.list
 (echo "<eps> 0"; awk '{print $1, NR}' words.list; echo "<unk> $(( $(wc -l < words.list) + 1 ))") > syms.txt
 ngramread --ARPA --symbols=syms.txt general-n.arpa general.fst
-ngramshrink --method=relative_entropy --target_number_of_ngrams=1400000 general.fst generalp.fst
+ngramshrink --method=relative_entropy --target_number_of_ngrams=500000 general.fst generalp.fst
 farcompilestrings --fst_type=compact --symbols=syms.txt --keep_symbols --unknown_symbol="<unk>" domain.txt domain.far
 ngramcount --order=3 domain.far domain.cnt
 ngrammake --method=witten_bell domain.cnt domain.fst
@@ -53,10 +53,14 @@ utils/apply_map.pl --permissive -f 2 graph/relabel < data/lang/words.txt 2>/dev/
 ngramread --OOV_symbol="[unk]" --symbols=graph/words-g.txt --ARPA mix.arpa G.fst
 fstarcsort --sort_type=ilabel G.fst | fstconvert --fst_type=ngram > graph/Gr.fst
 
-# 4. Папка модели; final.mdl (118 МБ) кусками до 100 МБ — лимит GitHub, сборка склеивает
+# 4. Папка модели. Веса акустики округлены до 7 бит мантиссы (точность та же), final.mdl лежит в zip
+#    (53 МБ вместо 118, одним файлом под лимит GitHub), сборка распаковывает
 E=$COMPILE/exp/chain/extractor
 rm -rf "$OUT" && mkdir -p "$OUT"/{am,conf,ivector,graph/phones}
-split -b 60M -d -a 1 "$COMPILE/exp/chain/tdnn/final.mdl" "$OUT/am/final.mdl.part"
+nnet3-am-copy --binary=false "$COMPILE/exp/chain/tdnn/final.mdl" mdl.txt
+python3 "$HERE/roundmdl.py" 7 mdl.txt mdl7.txt
+mkdir -p am && nnet3-am-copy mdl7.txt am/final.mdl && rm mdl.txt mdl7.txt
+(cd am && rm -f "$OUT/am/final.mdl.zip" && zip -q -9 "$OUT/am/final.mdl.zip" final.mdl)
 cp "$HERE/mfcc.conf" "$HERE/model.conf" "$OUT/conf/"
 cp "$E"/{final.dubm,final.ie,final.mat,global_cmvn.stats,online_cmvn.conf} "$OUT/ivector/"
 tr ' ' '\n' < "$E/splice_opts" | grep . > "$OUT/ivector/splice.conf"

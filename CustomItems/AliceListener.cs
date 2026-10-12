@@ -88,6 +88,27 @@ namespace CustomItems
             public bool Partial;
         }
 
+        private void Awake() =>
+            YandexStationItem.ResetHearing = ResetPlayer;
+
+        /// <summary>
+        /// Колонка услышала шаг разговора («Алиса», вопрос) или говорит: всё, что игрок наговорил
+        /// до сих пор, выбрасываем, чтобы следующая фраза не склеилась с прошлой.
+        /// </summary>
+        private void ResetPlayer(GameNetcodeStuff.PlayerControllerB player)
+        {
+            var round = StartOfRound.Instance;
+            if (round == null || player == null)
+                return;
+            var index = Array.IndexOf(round.allPlayerScripts, player);
+            if (index < 0)
+                return;
+            lastPartial.Remove(index);
+            answered.Add(index); // остаток этой фразы (финальный результат) не отвечаем
+            lock (gate)
+                resetRequests.Add(index);
+        }
+
         private void Update()
         {
             if (failed)

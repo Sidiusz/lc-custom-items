@@ -39,7 +39,65 @@ namespace CustomItems.Items
         public static string MoonIn(string token) => MoonStems.TryGetValue(Stem(token), out var moon) ? moon : null;
 
         /// <summary>Есть ли в тексте русское имя луны.</summary>
-        public static bool NamesMoon(string text) => Tokens(text).Any(t => MoonIn(t) != null);
+        public static bool NamesMoon(string text) => MoonInText(text) != null;
+
+        // Основы слов, после которых называют луну
+        private static HashSet<string> routeVerbs;
+        private static HashSet<string> RouteVerbs => routeVerbs ?? (routeVerbs = new HashSet<string>(
+            new[] { "поставь", "полетели", "полетим", "лети", "летим", "летите", "маршрут", "курс", "проложи" }.Select(Stem)));
+
+        private static bool IsRoute(string[] tokens) => tokens.Any(t => RouteVerbs.Contains(Stem(t)));
+
+        // Как луны звучат, без пробелов: «ашуранс» → Assurance
+        private static readonly Dictionary<string, string> MoonSounds = new Dictionary<string, string>();
+
+        /// <summary>
+        /// Луна, названная в тексте: целым словом («Титана»), а после «поставь», «полетели» ещё и
+        /// похоже по звучанию кусками, как их слышит распознавание («пашу рен с» ≈ «ашуранс»).
+        /// null — луны нет.
+        /// </summary>
+        public static string MoonInText(string text)
+        {
+            var all = Tokens(text).Where(t => !t.StartsWith("алис")).ToArray();
+            var fuzzy = IsRoute(all);
+            var tokens = all.Where(t => !RouteVerbs.Contains(Stem(t)) && t != "на").ToArray();
+            string best = null;
+            var bestGain = 0;
+            foreach (var t in tokens)
+            {
+                var moon = MoonIn(t);
+                if (moon != null && t.Length > bestGain)
+                {
+                    bestGain = t.Length;
+                    best = moon;
+                }
+            }
+            if (!fuzzy)
+                return best;
+            // Подряд идущие 1–3 слова, склеенные, против всех имён лун: ошибок не больше четверти,
+            // побеждает кусок, где совпало больше букв
+            for (var i = 0; i < tokens.Length; i++)
+            {
+                var glued = "";
+                for (var j = i; j < tokens.Length && j < i + 3; j++)
+                {
+                    glued += tokens[j];
+                    if (glued.Length < 5)
+                        continue;
+                    foreach (var pair in MoonSounds)
+                    {
+                        var d = Levenshtein(glued, pair.Key);
+                        var gain = pair.Key.Length - d;
+                        if (d * 4 <= Math.Max(glued.Length, pair.Key.Length) && gain > bestGain)
+                        {
+                            bestGain = gain;
+                            best = pair.Value;
+                        }
+                    }
+                }
+            }
+            return best;
+        }
 
         /// <summary>Все слова примеров и формы имён: из них собирается грамматика распознавания.</summary>
         public static IEnumerable<string> Vocabulary => Words.Concat(NameForms.Keys);
@@ -78,6 +136,7 @@ namespace CustomItems.Items
                     {
                         Words.Add(alias);
                         MoonStems[Stem(alias)] = topic.Substring(1).Trim();
+                        MoonSounds[Normalize(alias)] = topic.Substring(1).Trim();
                     }
                     continue;
                 }
@@ -165,11 +224,20 @@ namespace CustomItems.Items
         }
 
         /// <summary>Лучшая тема для вопроса и её похожесть (0–1). null — ничего похожего.</summary>
-        public static string Match(string command, out float score)
+        public static string Match(string command, out float score) => Match(command, out score, out _);
+
+        /// <param name="example">Самый похожий пример (для лога), даже если он ниже порога.</param>
+        public static string Match(string command, out float score, out string example)
         {
             score = 0f;
+            example = null;
             // «Алиса» в середине вопроса — обращение, а не смысл
-            var tokens = Tokens(command).Where(t => !t.StartsWith("алис")).Select(t => NameOf(t) != null ? NameSlot : MoonIn(t) != null ? MoonSlot : t).ToArray();
+            var words = Tokens(command).Where(t => !t.StartsWith("алис")).ToArray();
+            // «Поставь …», «полетели на …»: дальше луна, а не друг («пашу рен с» — это Assurance, не Паша)
+            var route = IsRoute(words);
+            var tokens = words.Select(t => !route && NameOf(t) != null ? NameSlot : MoonIn(t) != null ? MoonSlot : t).ToArray();
+            if (route && MoonInText(command) != null)
+                tokens = tokens.Where(t => RouteVerbs.Contains(Stem(t)) || t == "на").Append(MoonSlot).ToArray();
             if (tokens.Length == 0)
                 return null;
             var stems = tokens.Select(t => IsSlot(t) ? t : Stem(t)).ToArray();
@@ -184,6 +252,7 @@ namespace CustomItems.Items
                     best = e;
                 }
             }
+            example = best?.Text;
             return best != null && score >= Threshold ? best.Topic : null;
         }
 

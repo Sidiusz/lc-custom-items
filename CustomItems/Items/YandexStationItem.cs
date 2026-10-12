@@ -101,6 +101,9 @@ namespace CustomItems.Items
         /// </summary>
         public static Func<string, string[]> RouteHandler;
 
+        /// <summary>Забыть, что игрок наговорил распознаванию (ставит плагин), чтобы фразы не склеивались.</summary>
+        public static Action<GameNetcodeStuff.PlayerControllerB> ResetHearing;
+
         /// <summary>Рядом дунули в рожок или горн (вызывает патч плагина) — Events/Horn.</summary>
         public static void OnHorn(Vector3 position)
         {
@@ -446,10 +449,28 @@ namespace CustomItems.Items
 
             // [unk] — распознавание не разобрало слово: вопрос есть, но непонятный
             var known = command.Replace("[unk]", " ").Trim();
-            var topic = command.Length == 0 ? null : known.Length == 0 ? TopicMumble : Topic(known);
+            string topic, why;
+            if (command.Length == 0)
+            {
+                topic = null;
+                why = "только «Алиса»";
+            }
+            else if (known.Length == 0)
+            {
+                topic = TopicMumble;
+                why = "только [unk]";
+            }
+            else
+            {
+                topic = Topic(known, out why);
+            }
+            Debug.Log($"[Алиса] {speaker.playerUsername}: «{text}» → вопрос «{known}» → {topic ?? "слушаю"} ({why})");
 
-            // Пока отвечает, других не слушает (кроме «стоп» и «замолчи»)
-            if (station.IsTalking && !AllowInterrupt && topic != TopicStop && topic != TopicShush)
+            // Каждый шаг (позвали, спросили) начинает распознавание заново: следующая фраза не склеится с этой
+            ResetHearing?.Invoke(speaker);
+
+            // Пока думает или отвечает, других не слушает (кроме «стоп» и «замолчи»)
+            if ((station.IsTalking && !AllowInterrupt || station.pendingAnswer != null) && topic != TopicStop && topic != TopicShush)
                 return;
 
             if (topic == null)
@@ -668,10 +689,16 @@ namespace CustomItems.Items
         private static bool IsCustom(string name) => name != null && name.Any(c => c >= 'а' && c <= 'я' || c >= 'А' && c <= 'Я');
 
         /// <summary>Тема ответа по тексту вопроса и состоянию игры.</summary>
-        public static string Topic(string command)
+        public static string Topic(string command) => Topic(command, out _);
+
+        /// <param name="why">Для лога: какой пример победил и с какой похожестью.</param>
+        public static string Topic(string command, out string why)
         {
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
-            var intent = AliceIntents.Match(command, out _);
+            var intent = AliceIntents.Match(command, out var score, out var example);
+            why = example != null
+                ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
+                : "нет примеров";
             // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
             if ((intent == "Moon" || intent == "Navigation") && AliceIntents.NamesMoon(command))
                 intent = TopicRoute;
@@ -1188,7 +1215,10 @@ namespace CustomItems.Items
         /// <summary>Кто от чего погиб в этот день (для «чё с Пашей?»).</summary>
         private static readonly Dictionary<ulong, string> DeathCauses = new Dictionary<ulong, string>();
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
-        private readonly HashSet<string> missingTold = new HashSet<string>();
+        // Про кого уже сказали «Сегодня без …»: общее для всех колонок, раз в игре до посадки
+        // и ещё раз после каждой посадки
+        private static readonly HashSet<string> missingTold = new HashSet<string>();
+        private static float missingClearedAt = -999f;
         private float lastJoinAt;
         private bool joinedSeeded, wasShipPhase = true, dropshipLanded, dropshipOpened, junkTold;
         private float deathsFlushAt;
@@ -1285,7 +1315,12 @@ namespace CustomItems.Items
             if (round.shipHasLanded && !wasLanded)
             {
                 Reason("Landed");
-                missingTold.Clear(); // после посадки ещё раз: кого нет
+                // После посадки ещё раз: кого нет (одна очистка на посадку, даже если колонок несколько)
+                if (Time.time - missingClearedAt > 120f)
+                {
+                    missingTold.Clear();
+                    missingClearedAt = Time.time;
+                }
                 if (Shop() is { } shop && (shop.numberOfItemsInDropship > 0 || shop.orderedItemsFromTerminal != null && shop.orderedItemsFromTerminal.Count > 0))
                     Reason("Delivery");
             }
@@ -1359,9 +1394,10 @@ namespace CustomItems.Items
                 if (here && joined.Add(id))
                 {
                     // Пришёл: «А, вот он пришёл!», сначала его личное Joined/<Имя>
+                    // (а «Сегодня без …» про него больше не звучит, даже если выйдет и вернётся)
                     var folder = NameFolder(p.playerUsername);
                     if (folder != null)
-                        missingTold.Remove(folder);
+                        missingTold.Add(folder);
                     if (joinedSeeded)
                     {
                         if (folder != null)
@@ -1397,11 +1433,11 @@ namespace CustomItems.Items
 
             // Все или часть зашли и 20 секунд никто не приходит — «Сегодня без Андрея?» про каждого, кого нет
             // (пока не скажет про каждого: повод держится, отмечается сказанным, когда прозвучал)
-            if (Time.time > lastJoinAt + 20f && (round.inShipPhase || round.shipHasLanded))
+            // Только когда в игре есть кто-то кроме хоста: один на тесте — не «без всех»
+            var players = round.allPlayerScripts.Where(p => p != null && (p.isPlayerControlled || p.isPlayerDead)).ToList();
+            if (Time.time > lastJoinAt + 20f && players.Count >= 2 && (round.inShipPhase || round.shipHasLanded))
             {
-                var present = round.allPlayerScripts
-                    .Where(p => p != null && (p.isPlayerControlled || p.isPlayerDead))
-                    .Select(p => NameFolder(p.playerUsername)).Where(f => f != null).ToList();
+                var present = players.Select(p => NameFolder(p.playerUsername)).Where(f => f != null).ToList();
                 foreach (var folder in FriendNames.Values.Distinct())
                 {
                     if (!present.Contains(folder) && !missingTold.Contains(folder))

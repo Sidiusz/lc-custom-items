@@ -425,6 +425,19 @@ namespace CustomItems.Items
                 return;
 
             var wake = text.IndexOf(WakeWord, StringComparison.Ordinal);
+
+            // Ответ на её вопрос («Вы уверены?», «Сколько?»): «Алиса» не нужна
+            if (station.asking != null && Time.time < station.askUntil)
+            {
+                var reply = wake >= 0 ? text.Substring(wake + WakeWord.Length).Trim() : text;
+                if (reply.Length == 0)
+                    return;
+                ResetHearing?.Invoke(speaker);
+                Debug.Log($"[Алиса] {speaker.playerUsername}: ответ на вопрос «{station.asking}»: «{reply}»");
+                station.OnReply(reply.Replace("[unk]", " ").Trim());
+                return;
+            }
+
             string command;
             if (wake >= 0)
             {
@@ -521,7 +534,7 @@ namespace CustomItems.Items
             }
 
             // Тот же вопрос второй раз за минуту: «Я уже отвечала»
-            if (topic != TopicStop && topic != TopicShush && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
+            if (topic != TopicStop && topic != TopicShush && !IsAction(topic) && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null)
             {
                 station.lastAskedAt = Time.time;
@@ -590,8 +603,114 @@ namespace CustomItems.Items
             }
             else if (topic == TopicTime && station.SayTime())
                 return;
+            else if (topic == TopicLaunch)
+            {
+                // Рычаг: сначала «Вы уверены?», если корабль вообще может взлететь или сесть
+                var refuse = LaunchCheck != null ? LaunchCheck() : new[] { TopicRefuse };
+                if (refuse != null && refuse.Length > 0)
+                    station.SayFirst(refuse);
+                else
+                    station.Ask(AskLaunch, null, LaunchConfirm);
+            }
+            else if (topic == TopicDoorsOpen || topic == TopicDoorsClose)
+                station.SayFirst(Doors != null ? Doors(topic == TopicDoorsClose) : new[] { TopicRefuse });
+            else if (topic == TopicBuy)
+            {
+                // «Купи про-фонарик» — «Сколько?»; «купи два фонарика» — сразу
+                var item = AliceIntents.ItemIn(known);
+                var count = AliceIntents.NumberIn(known);
+                if (item == null)
+                    station.SayFirst(BuyUnknown, TopicUnknown);
+                else if (count != null)
+                    station.SayFirst(Buy != null ? Buy(item, count.Value) : new[] { TopicRefuse });
+                else
+                    station.Ask(AskBuy, item, BuyHowMany);
+            }
             else
                 station.Say(topic);
+        }
+
+        // ---- Корабль: рычаг, двери, магазин (делает плагин, у него игровые типы) ----
+
+        /// <summary>null — рычаг можно дёрнуть, иначе темы отказа (первая с записями).</summary>
+        public static Func<string[]> LaunchCheck;
+        /// <summary>Дёрнуть рычаг (взлёт или посадка), вернуть темы ответа.</summary>
+        public static Func<string[]> Launch;
+        /// <summary>Закрыть (true) или открыть двери, вернуть темы ответа.</summary>
+        public static Func<bool, string[]> Doors;
+        /// <summary>Купить предмет (как в строке «$Flashlight: фонарик») столько штук, вернуть темы ответа.</summary>
+        public static Func<string, int, string[]> Buy;
+        /// <summary>Шанс, что на непонятный ответ про рычаг она всё равно запустит.</summary>
+        public static float LaunchAnywayChance = 0.1f;
+
+        private const string TopicLaunch = "#launch", TopicDoorsOpen = "#doorsopen", TopicDoorsClose = "#doorsclose",
+            TopicBuy = "#buy", TopicYes = "#yes", TopicNo = "#no";
+        public const string LaunchConfirm = "Launch/Confirm", LaunchCancel = "Launch/Cancel", LaunchNoAnswer = "Launch/NoAnswer",
+            LaunchAnyway = "Launch/Anyway", BuyHowMany = "Buy/HowMany", BuyCancel = "Buy/Cancel", BuyUnknown = "Buy/Unknown";
+        private const string AskLaunch = "launch", AskBuy = "buy";
+
+        private static bool IsAction(string topic) =>
+            topic == TopicLaunch || topic == TopicDoorsOpen || topic == TopicDoorsClose || topic == TopicBuy || topic == TopicRoute;
+
+        // Чего она ждёт ответа (только на хосте, где слушают)
+        private string asking, askingItem;
+        private float askUntil;
+
+        private void SayFirst(params string[] topics) =>
+            Say(topics.FirstOrDefault(t => FindSet(t) != null) ?? TopicUnknown);
+
+        private void Ask(string kind, string item, string question)
+        {
+            asking = kind;
+            askingItem = item;
+            if (FindSet(question) != null)
+                Say(question);
+            else
+            {
+                Say(SoundListen); // нет записи вопроса — хотя бы сигнал «слушаю»
+                listenUntil = 0f;
+            }
+            askUntil = Mathf.Max(Time.time, talkUntil) + ListenSeconds;
+        }
+
+        // Ответили на вопрос (или промолчали: reply == null)
+        private void OnReply(string reply)
+        {
+            var kind = asking;
+            var item = askingItem;
+            asking = askingItem = null;
+            if (!IsOn)
+                return;
+            var intent = string.IsNullOrEmpty(reply) ? null : AliceIntents.Match(reply, out _);
+            if (kind == AskLaunch)
+            {
+                if (intent == TopicYes)
+                    SayFirst(Launch != null ? Launch() : new[] { TopicRefuse });
+                else if (intent == TopicNo)
+                    SayFirst(LaunchCancel, "Ok");
+                else if (Random.value < LaunchAnywayChance && Launch != null)
+                {
+                    // «Не расслышала… Ладно, запускаю!»
+                    var done = Launch();
+                    SayFirst(new[] { LaunchAnyway }.Concat(done).ToArray());
+                }
+                else
+                    SayFirst(LaunchNoAnswer, TopicMumble, TopicUnknown);
+            }
+            else if (kind == AskBuy)
+            {
+                if (intent == TopicNo)
+                    SayFirst(BuyCancel, "Ok");
+                else
+                    SayFirst(Buy != null ? Buy(item, AliceIntents.NumberIn(reply ?? "") ?? 1) : new[] { TopicRefuse });
+            }
+        }
+
+        // Не ответили на вопрос: рычаг — «не расслышала», покупка — одна штука
+        private void UpdateAsking()
+        {
+            if (asking != null && Time.time > askUntil && !IsTalking)
+                OnReply(null);
         }
 
         // ---- «Думает» перед ответом ----
@@ -710,6 +829,9 @@ namespace CustomItems.Items
                     return TopicShush;
                 case "#time":
                     return TopicTime;
+                case "#yes":
+                case "#no":
+                    return "Ok"; // «да», «нет» без вопроса
                 case "Weather":
                     return "Weather/" + (WeatherName() ?? "Other");
                 case "Deadline":
@@ -1284,7 +1406,7 @@ namespace CustomItems.Items
             }
             if (reasons.Count == 0 || !IsOn || IsTalking || isPocketed || IsJammed || Time.time < quietUntil
                 || Time.time < eventFreeAt || Time.time < anyEventFreeAt || listenUntil > 0f
-                || Time.time < thinkUntil || pendingAnswer != null)
+                || Time.time < thinkUntil || pendingAnswer != null || asking != null)
                 return;
 
             foreach (var topic in reasons)
@@ -1684,6 +1806,7 @@ namespace CustomItems.Items
 
             PlayQueued();
             UpdateThinking();
+            UpdateAsking();
             UpdateEvents();
             var talking = IsTalking;
             UpdateLevel(talking);

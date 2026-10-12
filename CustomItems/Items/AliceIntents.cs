@@ -20,6 +20,68 @@ namespace CustomItems.Items
         public const string NameSlot = "{name}";
         /// <summary>Любая луна из строк «@Луна: …»: «поставь {moon}» = «поставь Ашуру».</summary>
         public const string MoonSlot = "{moon}";
+        /// <summary>Предмет магазина из строк «$Flashlight: фонарик» (после «купи», «закажи»).</summary>
+        public const string ItemSlot = "{item}";
+        /// <summary>Число словами или цифрами («два», «пару», «3») после «купи», «закажи».</summary>
+        public const string NumberSlot = "{number}";
+
+        // Предмет: основы слов его имени подряд («про фонарик» → про, фонарик) → как в магазине
+        private static readonly List<KeyValuePair<string[], string>> ItemNames = new List<KeyValuePair<string[], string>>();
+        private static readonly HashSet<string> ItemStems = new HashSet<string>();
+
+        private static readonly Dictionary<string, int> NumberWords = new Dictionary<string, int>
+        {
+            ["один"] = 1, ["одну"] = 1, ["одна"] = 1, ["одного"] = 1, ["штуку"] = 1, ["два"] = 2, ["две"] = 2,
+            ["пару"] = 2, ["пара"] = 2, ["три"] = 3, ["четыре"] = 4, ["пять"] = 5, ["шесть"] = 6, ["семь"] = 7,
+            ["восемь"] = 8, ["девять"] = 9, ["десять"] = 10, ["одиннадцать"] = 11, ["двенадцать"] = 12,
+        };
+
+        private static HashSet<string> buyVerbs;
+        private static HashSet<string> BuyVerbs => buyVerbs ?? (buyVerbs = new HashSet<string>(
+            new[] { "купи", "купим", "купить", "закажи", "закажем", "заказать", "доставь", "прикупи" }.Select(Stem)));
+
+        /// <summary>Сколько штук назвали («два», «пару», «3»), или null.</summary>
+        public static int? NumberIn(string text)
+        {
+            foreach (var t in Tokens(text))
+            {
+                if (NumberWords.TryGetValue(t, out var n))
+                    return n;
+                if (int.TryParse(t, out n) && n > 0)
+                    return n;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Предмет магазина, названный в тексте, как в строке «$Pro-flashlight: про фонарик»
+        /// (самое длинное совпавшее имя: «про фонарик» — не просто «фонарик»), или null.
+        /// </summary>
+        public static string ItemIn(string text)
+        {
+            var stems = Tokens(text).Select(Stem).ToArray();
+            string best = null;
+            var bestLength = 0;
+            foreach (var pair in ItemNames)
+            {
+                var name = pair.Key;
+                if (name.Length <= bestLength)
+                    continue;
+                for (var i = 0; i + name.Length <= stems.Length; i++)
+                {
+                    var all = true;
+                    for (var j = 0; j < name.Length && all; j++)
+                        all = Similarity(name[j], stems[i + j]) >= 0.75f;
+                    if (all)
+                    {
+                        best = pair.Value;
+                        bestLength = name.Length;
+                        break;
+                    }
+                }
+            }
+            return best;
+        }
 
         private class Example
         {
@@ -100,7 +162,7 @@ namespace CustomItems.Items
         }
 
         /// <summary>Все слова примеров и формы имён: из них собирается грамматика распознавания.</summary>
-        public static IEnumerable<string> Vocabulary => Words.Concat(NameForms.Keys);
+        public static IEnumerable<string> Vocabulary => Words.Concat(NameForms.Keys).Concat(NumberWords.Keys);
 
         public static int Count => Examples.Count;
 
@@ -129,6 +191,23 @@ namespace CustomItems.Items
                 if (colon <= 0)
                     continue;
                 var topic = line.Substring(0, colon).Trim();
+                if (topic.StartsWith("$"))
+                {
+                    // Предмет магазина: «$Pro-flashlight: про фонарик, профонарик»
+                    foreach (var alias in line.Substring(colon + 1).Split(','))
+                    {
+                        var words = Tokens(alias, keepYo: true);
+                        if (words.Length == 0)
+                            continue;
+                        foreach (var w in words)
+                        {
+                            Words.Add(w);
+                            ItemStems.Add(Stem(Normalize(w)));
+                        }
+                        ItemNames.Add(new KeyValuePair<string[], string>(words.Select(w => Stem(Normalize(w))).ToArray(), topic.Substring(1).Trim()));
+                    }
+                    continue;
+                }
                 if (topic.StartsWith("@"))
                 {
                     // Луна: «@Titan: титан, титана» — как её называют вслух
@@ -178,6 +257,8 @@ namespace CustomItems.Items
                 Idf[pair.Key] = (float)Math.Log(1.0 + (double)Examples.Count / pair.Value);
             Idf[NameSlot] = 3f;
             Idf[MoonSlot] = 3f;
+            Idf[ItemSlot] = 3f;
+            Idf[NumberSlot] = 2f;
             MaxIdf = Idf.Values.DefaultIfEmpty(1f).Max();
         }
 
@@ -238,6 +319,20 @@ namespace CustomItems.Items
             var tokens = words.Select(t => !route && NameOf(t) != null ? NameSlot : MoonIn(t) != null ? MoonSlot : t).ToArray();
             if (route && MoonInText(command) != null)
                 tokens = tokens.Where(t => RouteVerbs.Contains(Stem(t)) || t == "на").Append(MoonSlot).ToArray();
+            // «Купи два про-фонарика»: предмет и число — слоты, имя предмета из нескольких слов — один слот
+            if (words.Any(t => BuyVerbs.Contains(Stem(t))))
+            {
+                var slots = new List<string>();
+                foreach (var t in tokens)
+                {
+                    var slot = NumberWords.ContainsKey(t) || int.TryParse(t, out _) ? NumberSlot
+                        : ItemStems.Contains(Stem(t)) ? ItemSlot : t;
+                    if (slot == ItemSlot && slots.Count > 0 && slots[slots.Count - 1] == ItemSlot)
+                        continue;
+                    slots.Add(slot);
+                }
+                tokens = slots.ToArray();
+            }
             if (tokens.Length == 0)
                 return null;
             var stems = tokens.Select(t => IsSlot(t) ? t : Stem(t)).ToArray();
@@ -256,7 +351,7 @@ namespace CustomItems.Items
             return best != null && score >= Threshold ? best.Topic : null;
         }
 
-        private static bool IsSlot(string token) => token == NameSlot || token == MoonSlot;
+        private static bool IsSlot(string token) => token == NameSlot || token == MoonSlot || token == ItemSlot || token == NumberSlot;
 
         // Насколько вопрос покрывает пример (с весами слов) и насколько сам вопрос из него состоит.
         // Лишнее редкое слово в вопросе («поставь» рядом с именем) сильно снижает похожесть:

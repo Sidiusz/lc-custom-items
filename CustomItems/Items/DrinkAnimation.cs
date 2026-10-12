@@ -20,14 +20,19 @@ namespace CustomItems.Items
         /// <summary>Кто-то отпил (для Яндекс Колонки): номер глотка и где.</summary>
         public static int Sips;
         public static Vector3 LastSipAt;
+        /// <summary>Кто отпил последним (ник) и был ли это алкоголь (Егермейстер).</summary>
+        public static string LastSipBy;
+        public static bool LastSipAlcohol;
 
         /// <summary>Отметить глоток для колонки, если анимацию ставит сам предмет (Егермейстер).</summary>
-        public static void CountSip(PlayerControllerB player)
+        public static void CountSip(PlayerControllerB player, bool alcohol = false)
         {
             if (player == null)
                 return;
             Sips++;
             LastSipAt = player.transform.position;
+            LastSipBy = player.playerUsername;
+            LastSipAlcohol = alcohol;
         }
 
         public static void Play(PlayerControllerB player, float seconds = 1.2f)

@@ -32,7 +32,7 @@ namespace CustomItems.Items
     /// фразу выбирает тот, кто спросил, и рассылает через хост именованными сообщениями
     /// Netcode. Опоздавшим хост присылает цвет и состояние. NetcodePatcher не нужен.
     /// </summary>
-    public class YandexStationItem : CustomGrabbable
+    public partial class YandexStationItem : CustomGrabbable
     {
         [Serializable]
         public class PhraseSet
@@ -276,6 +276,7 @@ namespace CustomItems.Items
         {
             base.Start();
             useCooldown = 0.4f;
+            ApplyReuse();
             RegisterMessages();
             FindSegments();
             SetupMaterials();
@@ -373,7 +374,18 @@ namespace CustomItems.Items
                 talkUntil = 0f; // выключают — только звук выключения, без «до свидания»
             }
             PlaySound(on ? turnOnClip : turnOffClip);
+            // Через раз после сигнала включения «Включаюсь» (TurnOn): у всех одинаково, без сети
+            if (on && FindSet(TopicTurnOn) is { } hello && switchOns++ % 2 == 0)
+            {
+                queued.Clear();
+                queued.Enqueue(hello.clips[switchOns / 2 % hello.clips.Length]);
+                turnOnSpeechAt = Time.time + (turnOnClip != null ? turnOnClip.length : 0.5f);
+            }
         }
+
+        private const string TopicTurnOn = "TurnOn";
+        private int switchOns;
+        private float turnOnSpeechAt;
 
         // Батарея села: гаснет
         public override void UseUpBatteries()
@@ -447,6 +459,10 @@ namespace CustomItems.Items
                 station.OnReply(reply.Replace("[unk]", " ").Trim());
                 return;
             }
+
+            // «Алиса, Алиса, Алиса!» — «Вы чего кричите?»
+            if (wake >= 0 && !station.IsTalking && station.pendingAnswer == null && Shouted(station, text))
+                return;
 
             // Уже проснулась (ждёт вопрос после «Алиса») — сразу думает; иначе сначала просыпается
             var listening = Time.time < station.listenUntil;
@@ -564,6 +580,9 @@ namespace CustomItems.Items
             station.lastAsked = topic;
             station.lastAskedAt = Time.time;
 
+            if (station.AnswerMore(speaker, topic, known))
+                return;
+
             if (topic == TopicGameAsk && station.SayRend(0.3f))
                 return;
             if (topic == TopicGameAsk || topic == TopicBored)
@@ -653,7 +672,7 @@ namespace CustomItems.Items
                 if (item == null)
                     station.SayFirst(BuyUnknown, TopicUnknown);
                 else if (count != null)
-                    station.SayFirst(Buy != null ? Buy(item, count.Value) : new[] { TopicRefuse });
+                    station.SayBought(item, count.Value);
                 else
                     station.Ask(AskBuy, item, BuyHowMany);
             }
@@ -708,7 +727,9 @@ namespace CustomItems.Items
         }
 
         private static bool IsAction(string topic) =>
-            topic == TopicLaunch || topic == TopicDoorsOpen || topic == TopicDoorsClose || topic == TopicBuy || topic == TopicRoute;
+            topic == TopicLaunch || topic == TopicDoorsOpen || topic == TopicDoorsClose || topic == TopicBuy || topic == TopicRoute
+            || topic == TopicCode || topic == TopicNavExit || topic == TopicNavShip || topic == TopicRepeatLast || topic == TopicMusicOn
+            || topic == TopicMusicOff || topic == TopicInHand || topic == TopicScanMoon || topic == TopicLightsOn || topic == TopicLightsOff;
 
         // Чего она ждёт ответа (только на хосте, где слушают)
         private string asking, askingItem;
@@ -741,6 +762,8 @@ namespace CustomItems.Items
             if (!IsOn)
                 return;
             var intent = string.IsNullOrEmpty(reply) ? null : AliceIntents.Match(reply, out _);
+            if (OnReplyMore(kind, item, intent) || OnReplyLost(kind, intent))
+                return;
             if (kind == AskFollow)
             {
                 // «А у меня хорошо» — «Здорово!»; ответ на ответ тоже может ждать продолжения
@@ -777,7 +800,7 @@ namespace CustomItems.Items
                 if (intent == TopicNo)
                     SayFirst(BuyCancel, "Ok");
                 else
-                    SayFirst(Buy != null ? Buy(item, AliceIntents.NumberIn(reply ?? "") ?? 1) : new[] { TopicRefuse });
+                    SayBought(item, AliceIntents.NumberIn(reply ?? "") ?? 1);
             }
         }
 
@@ -924,13 +947,20 @@ namespace CustomItems.Items
         /// <param name="why">Для лога: какой пример победил и с какой похожестью.</param>
         public static string Topic(string command, out string why)
         {
+            // «Открой дверь бэ четыре», «отключи турель a2»: код как в терминале
+            var codes = CodesIn(command);
+            if (codes.Count > 0)
+            {
+                why = "код " + string.Join(",", codes);
+                return TopicCode;
+            }
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out var score, out var example);
             why = example != null
                 ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
                 : "нет примеров";
             // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
-            if ((intent == "Moon" || intent == "Navigation") && AliceIntents.NamesMoon(command))
+            if ((intent == "Moon" || intent == "#navexit" || intent == "#navship") && AliceIntents.NamesMoon(command))
                 intent = TopicRoute;
             switch (intent)
             {
@@ -1220,6 +1250,9 @@ namespace CustomItems.Items
             var inside = alive.Count(p => p.isInsideFactory);
             if (inside > 0)
                 return Form("Inside", inside);
+            // «Он снаружи!» — один, на луне, но не на корабле
+            if (asked.Count == 1 && alive.Count == 1 && !alive[0].isInHangarShipRoom && FindSet(folder + "Outside/One") != null && Random.value < 0.5f)
+                return folder + "Outside/One";
             var everyone = round.allPlayerScripts.Where(p => p != null && p.isPlayerControlled && !p.isPlayerDead).ToList();
             var lost = alive.Count(p => !p.isInHangarShipRoom
                                         && everyone.All(o => o == p || Vector3.Distance(o.transform.position, p.transform.position) > 40f));
@@ -1292,7 +1325,11 @@ namespace CustomItems.Items
                 Say(WhereIsTopic(speaker, command));
                 return;
             }
+            // «Погибли» (или «Кто-то умер, перепроверяю») и имена
             var topics = new List<string>();
+            var intro = Random.value < 0.15f && FindSet("WhoDied/Recheck") != null ? "WhoDied/Recheck" : "WhoDied/Intro";
+            if (FindSet(intro) != null && Random.value < 0.7f)
+                topics.Add(intro);
             AddList(topics, dead);
             SaySequence(topics);
         }
@@ -1301,11 +1338,17 @@ namespace CustomItems.Items
         private void SayLoot()
         {
             var total = 0;
+            var count = 0;
             foreach (var item in FindObjectsOfType<GrabbableObject>())
             {
                 if (item != null && item.itemProperties != null && item.itemProperties.isScrap && item.isInShipRoom)
+                {
                     total += item.scrapValue;
+                    count++;
+                }
             }
+            if (count > 0 && SayLootMore(count, total))
+                return;
             var topics = new List<string>();
             if (FindSet(TopicWait) != null && Random.value < 0.5f)
                 topics.Add(TopicWait);
@@ -1483,6 +1526,11 @@ namespace CustomItems.Items
             }
 
             queued.Clear();
+            if (!topic.StartsWith("#") || topic.StartsWith(SeqPrefix) && !topic.Contains("Repeat/Again"))
+            {
+                lastSaidTopic = topic;
+                lastSaidIndex = index;
+            }
             if (topic.StartsWith(SeqPrefix))
             {
                 foreach (var part in topic.Substring(SeqPrefix.Length).Split('\n'))
@@ -1657,8 +1705,10 @@ namespace CustomItems.Items
                 var set = FindSet(topic);
                 // Кто пришёл и кого нет — говорит всегда, остальное изредка
                 var sure = topic.StartsWith(EventsFolder + "Missing/") || topic.StartsWith(EventsFolder + "Joined")
-                    || topic == EventsFolder + "NewGame" || topic.StartsWith(EventsFolder + "FirstBack/");
-                if (set == null || !sure && Random.value > EventChance)
+                    || topic == EventsFolder + "NewGame" || topic.StartsWith(EventsFolder + "FirstBack/")
+                    || topic == EventsFolder + "DoorsClosedOutside" || topic == EventsFolder + "Fired" || topic == EventsFolder + "Teamkill"
+                    || topic == EventsFolder + "Dropped" && Random.value < 0.6f; // уронили — говорит чаще остального
+                if (set == null && topic != NavLostReason || !sure && Random.value > EventChance)
                     continue;
                 topicFreeAt[topic] = Time.time + EventTopicCooldown;
                 if (topic.StartsWith(EventsFolder + "Missing/"))
@@ -1668,6 +1718,8 @@ namespace CustomItems.Items
                 noiseRange = EventNoiseRange;
                 // От скуки иногда «Давайте поиграем в Rend!» и тут же «Хотя нет…»
                 if (topic == EventsFolder + "Idle" && SayRend(0.25f))
+                    return;
+                if (SayEventMore(topic))
                     return;
                 SayFrom(set);
                 return;
@@ -1682,6 +1734,7 @@ namespace CustomItems.Items
             var round = StartOfRound.Instance;
             if (round == null)
                 return;
+            CollectMoreReasons(round);
 
             // Дёрнули рычаг: корабль садится на луну — «Не забудьте зарядить фонарики!»
             if (!round.inShipPhase && wasShipPhase)
@@ -1734,6 +1787,9 @@ namespace CustomItems.Items
                 // Умер именно этот: сначала его личная тема PlayerDied/<Имя>, потом общая
                 if (deadIds.Add(p.playerClientId) && !round.inShipPhase)
                 {
+                    // Убили свои — «Зачем вы убили своего друга?» раньше обычного «Ой, нет!»
+                    if (IsTeamkill(p))
+                        Reason("Teamkill");
                     var folder = NameFolder(p.playerUsername);
                     if (folder != null)
                         Reason("PlayerDied/" + folder);
@@ -1741,6 +1797,7 @@ namespace CustomItems.Items
                     // Причину копим пару секунд: погибли разом несколько — «их», один — «его»
                     var cause = DeathCause(p);
                     DeathCauses[p.playerClientId] = cause;
+                    MetReason(cause);
                     pendingDeaths.Add(cause);
                     deathsFlushAt = Time.time + 3f;
                 }
@@ -1916,7 +1973,19 @@ namespace CustomItems.Items
             if (DrinkAnimation.Sips != sipsSeen)
             {
                 if (sipsSeen >= 0 && Vector3.Distance(DrinkAnimation.LastSipAt, transform.position) < EventRadius)
+                {
+                    // Егермейстер: «Егермейстер? Классика!», «Не увлекайтесь алкоголем, Арсений!»
+                    if (DrinkAnimation.LastSipAlcohol)
+                    {
+                        var folder = NameFolder(DrinkAnimation.LastSipBy);
+                        if (Random.value < 0.5f)
+                            Reason("Drink/Jagermeister");
+                        if (folder != null)
+                            Reason("Drink/Alcohol/" + folder);
+                        Reason("Drink/Alcohol");
+                    }
                     Reason("Drink");
+                }
                 sipsSeen = DrinkAnimation.Sips;
             }
 
@@ -1965,7 +2034,12 @@ namespace CustomItems.Items
             if (terminal != null)
             {
                 if (credits >= 0 && terminal.groupCredits > credits)
+                {
+                    // Сдали лут в Компании — «Отлично, деньги на счету!»
+                    if (round.currentLevel != null && round.currentLevel.levelID == 3)
+                        Reason("Sold");
                     Reason("Money");
+                }
                 else if (credits >= 0 && terminal.groupCredits < credits)
                     Reason("Purchase");
                 credits = terminal.groupCredits;
@@ -2075,9 +2149,12 @@ namespace CustomItems.Items
                     Say(SoundTimeout);
             }
 
-            PlayQueued();
+            if (Time.time >= turnOnSpeechAt)
+                PlayQueued();
             UpdateThinking();
+            UpdateOffer();
             UpdateAsking();
+            UpdateNavigation();
             UpdateEvents();
             var talking = IsTalking;
             UpdateLevel(talking);

@@ -48,6 +48,7 @@ public static class ItemAssets
         public string[] ToolTips = new string[0];
         public bool SaveItemVariable;
         public string Icon;                                          // путь к спрайту, необязательно
+        public string Texture;                                       // текстура на все меши (HDRP/Lit), необязательно
         public (string field, string path)[] Clips = new (string, string)[0];
         public Action<GameObject> Customize;                         // доп. настройка префаба
     }
@@ -80,6 +81,7 @@ public static class ItemAssets
             Template = "Cash register", // двуручная анимация переноски
             MinValue = 100, MaxValue = 220, Rarity = 20, Weight = 1.28f, TwoHanded = true,
             VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
+            Texture = Art + "/Textures/Monitor27/Monitor27.png",
         },
         new Spec
         {
@@ -166,7 +168,8 @@ public static class ItemAssets
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
             // Пересобираем и префаб старого вида (голая модель без скрипта предмета),
             // и сохранённый с потерянными скриптами
-            if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null || HasMissingScripts(prefab))
+            if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null || HasMissingScripts(prefab)
+                || !HasTexture(prefab, spec))
             {
                 prefab = BuildPrefab(spec, model, item, prefabPath);
                 created.Add(prefabPath);
@@ -237,6 +240,7 @@ public static class ItemAssets
                 foreach (var c in visual.GetComponentsInChildren<Collider>(true))
                     Object.DestroyImmediate(c);
             }
+            ApplyTexture(root, spec);
             spec.Customize?.Invoke(root);
 
             var bounds = ModelBounds(root);
@@ -314,6 +318,43 @@ public static class ItemAssets
         Set(entry, "price", spec.Price);
         list.Add(entry);
         EditorUtility.SetDirty(registry);
+    }
+
+    // ---------------- текстура из Spec.Texture: материал HDRP/Lit в Art/Materials/<Name>/
+
+    private static string TextureMaterialPath(Spec spec) => $"{Art}/Materials/{spec.Name}/{spec.Name}.mat";
+
+    private static void ApplyTexture(GameObject root, Spec spec)
+    {
+        if (spec.Texture == null)
+            return;
+        var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(spec.Texture);
+        if (texture == null)
+        {
+            Debug.LogWarning($"{spec.ItemName}: нет текстуры {spec.Texture}");
+            return;
+        }
+        var path = TextureMaterialPath(spec);
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material == null)
+        {
+            material = NewLitMaterial(path, Color.white, 0.3f);
+            material.SetTexture("_BaseColorMap", texture);
+            material.SetTexture("_MainTex", texture);
+            EditorUtility.SetDirty(material);
+        }
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            r.sharedMaterials = Enumerable.Repeat(material, r.sharedMaterials.Length).ToArray();
+    }
+
+    // Префаб, собранный до появления текстуры, пересобираем
+    private static bool HasTexture(GameObject prefab, Spec spec)
+    {
+        if (spec.Texture == null || AssetDatabase.LoadAssetAtPath<Texture2D>(spec.Texture) == null)
+            return true;
+        var material = AssetDatabase.LoadAssetAtPath<Material>(TextureMaterialPath(spec));
+        return material != null && prefab.GetComponentsInChildren<Renderer>(true)
+            .All(r => r.sharedMaterials.All(m => m == material));
     }
 
     // ---------------- игрушечный пистолет: материал с текстурой и точка дула

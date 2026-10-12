@@ -271,17 +271,19 @@ namespace CustomItems.Items
             else if (NetworkManager != null && NetworkManager.IsConnectedClient)
                 RequestState();
             ApplyColor();
+            ApplyVolume();
         }
 
         private void OnEnable() => All.Add(this);
 
         private void OnDisable() => All.Remove(this);
 
-        // Цвет (случайный при покупке) и «включена» в одном числе: сохраняются вместе с кораблём
+        // Цвет (случайный при покупке), «включена» и громкость в одном числе: сохраняются вместе с кораблём.
+        // Громкость хранится как «на сколько шагов тише 100%», чтобы в старых сохранениях было 100%
         public override int GetItemDataToSave()
         {
             EnsureColor();
-            return colorIndex | (isOn ? 16 : 0);
+            return colorIndex | (isOn ? 16 : 0) | (10 - volumeStep) << 5;
         }
 
         public override void LoadItemSaveData(int saveData)
@@ -289,7 +291,46 @@ namespace CustomItems.Items
             colorIndex = Mathf.Clamp(saveData & 15, 0, bodyColors.Length - 1);
             isOn = (saveData & 16) != 0;
             isBeingUsed = isOn;
+            volumeStep = Mathf.Clamp(10 - ((saveData >> 5) & 15), MinVolumeStep, 10);
             ApplyColor();
+            ApplyVolume();
+        }
+
+        // ---- Громкость: «Алиса, громче / тише», шаг 10% ----
+
+        public const string TopicLouder = "#louder", TopicQuieter = "#quieter", TopicVolume = "#volume";
+        private const string VolumePrefix = "#vol:";
+        private const int MinVolumeStep = 1;
+        /// <summary>Сколько секунд на экране проценты громкости.</summary>
+        public static float VolumeShowSeconds = 2.5f;
+        private int volumeStep = 10;
+        private float baseVolume = -1f, volumeShownUntil;
+
+        private void ApplyVolume()
+        {
+            if (audioSource == null)
+                return;
+            if (baseVolume < 0f)
+                baseVolume = audioSource.volume;
+            audioSource.volume = baseVolume * volumeStep / 10f;
+        }
+
+        // Решает тот, кто услышал; всем уходит «#vol:N», как фраза
+        private void ChangeVolume(int delta)
+        {
+            var step = Mathf.Clamp(volumeStep + delta, MinVolumeStep, 10);
+            Speak(VolumePrefix + step, 0);
+            SendSpeak(VolumePrefix + step, 0);
+        }
+
+        // Проценты: «60» и значок процента из двух кружков, «100» и нижний кружок
+        private long VolumeMask()
+        {
+            var pct = volumeStep * 10;
+            int upper = Mask("abfg"), lower = Mask("cdeg");
+            if (pct >= 100)
+                return Digit(0, DigitMasks[1]) | Digit(1, DigitMasks[0]) | Digit(2, DigitMasks[0]) | Digit(3, lower);
+            return Digit(0, DigitMasks[pct / 10]) | Digit(1, DigitMasks[0]) | Digit(2, upper) | Digit(3, lower);
         }
 
         public override void SetControlTipsForItem()
@@ -427,6 +468,12 @@ namespace CustomItems.Items
                 topic = topic == TopicTime && station.FindSet(TopicTimeError) != null ? TopicTimeError : TopicError;
 
             // Каприз: на понятный вопрос «Нет связи с сервером», «Не хочу», «Бормочете?», «Не поняла»
+            if (topic == TopicLouder || topic == TopicQuieter || topic == TopicVolume)
+            {
+                station.ChangeVolume(topic == TopicLouder ? 1 : topic == TopicQuieter ? -1 : 0);
+                return;
+            }
+
             if (topic != TopicStop && topic != TopicShush && topic != TopicError && topic != TopicTimeError
                 && Random.value < WhimChance)
             {
@@ -538,7 +585,8 @@ namespace CustomItems.Items
                 return false;
             if (intent == TopicRoute)
                 return false; // луну дослушиваем до конца
-            return intent == TopicStop || intent == "#shush" || AliceIntents.Tokens(command).Length >= 2;
+            return intent == TopicStop || intent == "#shush" || intent == TopicLouder || intent == TopicQuieter
+                   || AliceIntents.Tokens(command).Length >= 2;
         }
 
         private static YandexStationItem NearestTo(Vector3 pos, float radius)
@@ -961,6 +1009,17 @@ namespace CustomItems.Items
                     listenUntil = 0f;
                     PlaySound(listenTimeoutClip);
                     return;
+            }
+            if (topic.StartsWith(VolumePrefix))
+            {
+                // Без слов: сигнал уже новой громкостью и проценты на экране
+                if (int.TryParse(topic.Substring(VolumePrefix.Length), out var step))
+                    volumeStep = Mathf.Clamp(step, MinVolumeStep, 10);
+                ApplyVolume();
+                listenUntil = 0f;
+                volumeShownUntil = Time.time + VolumeShowSeconds;
+                PlaySound(listenClip);
+                return;
             }
 
             queued.Clear();
@@ -1524,6 +1583,8 @@ namespace CustomItems.Items
                 mask = 0;
             else if (IsJammed)
                 mask = GlitchMask();
+            else if (Time.time < volumeShownUntil)
+                mask = VolumeMask();
             else if (talking && !clockWhileTalking)
                 mask = FaceMask();
             else if (Time.time < listenUntil)

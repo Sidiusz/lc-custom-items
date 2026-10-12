@@ -48,6 +48,19 @@ namespace CustomItems
             if (duck != null)
                 duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
 
+            Register<AdrenalineItem>(bundle, new CustomItemDef
+            {
+                Name = "Adrenaline Game Fuel",
+                ModelAsset = "AdrenalineCan",
+                IconAsset = "AdrenalineCanIcon",
+                TemplateItem = "Red soda",
+                MinValue = 80,
+                MaxValue = 160,
+                DefaultRarity = 30,
+                Weight = 1.01f,
+                VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
+            });
+
             Log.LogInfo($"{PluginName} {PluginVersion} загружен");
         }
 

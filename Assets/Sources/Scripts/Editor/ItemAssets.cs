@@ -43,6 +43,8 @@ public static class ItemAssets
         public int Price = 25;
         public float Weight = 1.05f;
         public bool TwoHanded;
+        // Оффсеты ниже — от пивота исходной модели (обычно её центра). Префаб собирается
+        // с пивотом в нижней точке, и при создании Item они пересчитываются (MovePivotOffsets)
         public float VerticalOffset = 0.1f;
         public Vector3 RestingRotation;
         public Vector3 RotationOffset;
@@ -214,15 +216,24 @@ public static class ItemAssets
                 FillItem(item, spec);
             }
 
+            var itemIsNew = created.Contains(itemPath);
             var prefabPath = $"{PrefabsDir}/{spec.Name}.prefab";
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            // Префаб старого вида с пивотом не внизу: после пересборки поправим оффсеты в Item
+            var pivotIsOld = prefab != null && Mathf.Abs(BottomY(prefab)) > 0.002f;
             // Пересобираем и префаб старого вида (голая модель без скрипта предмета),
             // и сохранённый с потерянными скриптами
-            if (prefab == null || rebuildPrefabs || prefab.GetComponent(T("GrabbableObject")) == null || HasMissingScripts(prefab)
-                || !HasTexture(prefab, spec) || HasVisibleHidden(prefab, spec))
+            if (prefab == null || rebuildPrefabs || pivotIsOld || prefab.GetComponent(T("GrabbableObject")) == null
+                || HasMissingScripts(prefab) || !HasTexture(prefab, spec) || HasVisibleHidden(prefab, spec))
             {
-                prefab = BuildPrefab(spec, model, item, prefabPath);
+                prefab = BuildPrefab(spec, model, item, prefabPath, out var lift);
                 created.Add(prefabPath);
+                // Оффсеты из Spec и старых ассетов считались от пивота модели (обычно её центра)
+                if (itemIsNew || pivotIsOld)
+                {
+                    MovePivotOffsets(item, lift);
+                    created.Add($"{spec.Name}: пивот внизу, модель поднята на {lift:0.###} м, оффсеты в Item пересчитаны");
+                }
             }
 
             if (Get(item, "spawnPrefab") as Object == null)
@@ -289,7 +300,7 @@ public static class ItemAssets
         EditorUtility.SetDirty(item);
     }
 
-    private static GameObject BuildPrefab(Spec spec, GameObject model, ScriptableObject item, string path)
+    private static GameObject BuildPrefab(Spec spec, GameObject model, ScriptableObject item, string path, out float lift)
     {
         var root = new GameObject(spec.Name);
         try
@@ -309,6 +320,12 @@ public static class ItemAssets
                 if (spec.HiddenChildren.Contains(t.name))
                     t.gameObject.SetActive(false);
             spec.Customize?.Invoke(root);
+
+            // Пивот (точка, которую игра ставит в руку и на пол) — в нижней точке модели:
+            // поднимаем всё содержимое корня так, чтобы низ видимых мешей был на y = 0
+            lift = -ModelBounds(root).min.y;
+            foreach (Transform child in root.transform)
+                child.localPosition += Vector3.up * lift;
 
             var bounds = ModelBounds(root);
             var collider = root.AddComponent<BoxCollider>();
@@ -762,9 +779,53 @@ public static class ItemAssets
         AssetDatabase.DeleteAsset(path);
     }
 
+    // Модель поднялась на lift относительно пивота. Чтобы предмет остался там же в руке
+    // и на полу, сдвигаем пивот обратно: в руке вдоль «верха» предмета (с учётом Rotation Offset),
+    // на полу на столько, на сколько подъём виден по вертикали при Resting Rotation
+    private static void MovePivotOffsets(ScriptableObject item, float lift)
+    {
+        if (Mathf.Abs(lift) < 0.0005f)
+            return;
+        var rotation = (Vector3)Get(item, "rotationOffset");
+        var position = (Vector3)Get(item, "positionOffset");
+        Set(item, "positionOffset", position - Quaternion.Euler(rotation) * (Vector3.up * lift));
+
+        var resting = (Vector3)Get(item, "restingRotation");
+        var vertical = (float)Get(item, "verticalOffset");
+        var rise = (Quaternion.Euler(resting.x, 0f, resting.z) * (Vector3.up * lift)).y;
+        Set(item, "verticalOffset", vertical - rise);
+        EditorUtility.SetDirty(item);
+    }
+
+    // Нижняя точка мешей префаба в координатах его корня (0, если пивот уже внизу).
+    // Считаем по мешам: у ассета префаба нет мировых границ рендереров.
+    private static float BottomY(GameObject prefab)
+    {
+        var root = prefab.transform;
+        var min = float.PositiveInfinity;
+        void Add(Transform t, Mesh mesh)
+        {
+            if (mesh == null)
+                return;
+            var m = root.worldToLocalMatrix * t.localToWorldMatrix;
+            var b = mesh.bounds;
+            for (var i = 0; i < 8; i++)
+            {
+                var corner = b.center + Vector3.Scale(b.extents,
+                    new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                min = Mathf.Min(min, m.MultiplyPoint3x4(corner).y);
+            }
+        }
+        foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>(false))
+            Add(mf.transform, mf.sharedMesh);
+        foreach (var smr in prefab.GetComponentsInChildren<SkinnedMeshRenderer>(false))
+            Add(smr.transform, smr.sharedMesh);
+        return float.IsPositiveInfinity(min) ? 0f : min;
+    }
+
     private static Bounds ModelBounds(GameObject root)
     {
-        var renderers = root.GetComponentsInChildren<Renderer>(true);
+        var renderers = root.GetComponentsInChildren<Renderer>(false);
         if (renderers.Length == 0)
             return new Bounds(Vector3.zero, Vector3.one * 0.3f);
         var b = renderers[0].bounds;

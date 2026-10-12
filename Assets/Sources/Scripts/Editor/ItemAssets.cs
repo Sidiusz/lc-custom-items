@@ -141,7 +141,6 @@ public static class ItemAssets
             {
                 ("listenClip", YandexSounds + "/Listen.wav"),
                 ("listenTimeoutClip", YandexSounds + "/ListenTimeout.wav"),
-                ("errorClip", YandexSounds + "/Error.wav"),
                 ("turnOnClip", YandexSounds + "/TurnOn.wav"),
                 ("turnOffClip", YandexSounds + "/TurnOff.wav"),
             },

@@ -47,7 +47,6 @@ namespace CustomItems.Items
         [Header("Звуки Алисы (Art/Audio/YandexStation/Sounds)")]
         public AudioClip listenClip;
         public AudioClip listenTimeoutClip;
-        public AudioClip errorClip;
         public AudioClip turnOnClip;
         public AudioClip turnOffClip;
 
@@ -496,15 +495,12 @@ namespace CustomItems.Items
             listenUntil = 0f;
             clockWhileTalking = set.name == TopicTime;
 
-            // Ошибка: сначала сигнал сбоя, потом фраза
-            var delay = set.name == TopicError && errorClip != null ? errorClip.length : 0f;
+            // Ошибка (солнечная вспышка) — обычная фраза из папки Error, голосом Алисы
             audioSource.Stop();
-            if (delay > 0f)
-                audioSource.PlayOneShot(errorClip);
             audioSource.clip = clip;
-            audioSource.PlayDelayed(delay);
+            audioSource.Play();
             WalkieTalkie.TransmitOneShotAudio(audioSource, clip);
-            talkUntil = Time.time + delay + clip.length;
+            talkUntil = Time.time + clip.length;
             nextExpression = 0f;
 
             // Шум слышат монстры; считаем его только у того, кто спросил, чтобы не дублировать

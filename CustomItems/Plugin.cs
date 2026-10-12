@@ -119,6 +119,12 @@ namespace CustomItems
                 .Split(',').Select(w => w.Trim()).Where(w => w.Length > 0).ToArray();
             new Harmony(PluginGuid + ".alisa").PatchAll(typeof(AliceShop));
 
+            YandexStationItem.SetNames(Config.Bind(section, "Names",
+                "Sidiusz=Daniil; Sinon=Andrey; Senya,Arseniy,Арсений,Shakabuy=Arseniy; Pavlezki,Pavel=Pavel",
+                "Друзья по нику Steam: «ник,ник=Папка» через точку с запятой. На «Алиса, как меня зовут?» колонка говорит фразу " +
+                "из Phrases/Names/<Папка> (незнакомому — из Names/Unknown), а при смерти игрока может сказать Events/PlayerDied/<Папка>. " +
+                "Ники сравниваются без регистра и значков, ник может быть длиннее (Sidiusz* подходит к Sidiusz)").Value);
+
             const string events = "Yandex Station Events";
             YandexStationItem.EventsEnabled = Config.Bind(events, "Enabled", true,
                 "Колонка сама изредка реагирует на то, что вокруг: монстр рядом, посадка, смерть игрока, ночь, мало заряда. " +

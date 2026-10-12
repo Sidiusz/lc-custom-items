@@ -92,6 +92,47 @@ namespace CustomItems.Items
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown";
         /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
         public static float GameAnswerSeconds = 10f;
+        public const string TopicNames = "Names/", TopicMyName = "#myname";
+
+        /// <summary>
+        /// Друзья по нику Steam: ник (без регистра и значков) → папка Names/&lt;Папка&gt;.
+        /// Задаётся в конфиге строкой «ник,ник=Папка; ...».
+        /// </summary>
+        public static readonly Dictionary<string, string> FriendNames = new Dictionary<string, string>();
+
+        public static void SetNames(string table)
+        {
+            FriendNames.Clear();
+            foreach (var entry in (table ?? "").Split(';'))
+            {
+                var eq = entry.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+                var folder = entry.Substring(eq + 1).Trim();
+                foreach (var nick in entry.Substring(0, eq).Split(','))
+                {
+                    var key = NormalizeNick(nick);
+                    if (key.Length > 0 && folder.Length > 0)
+                        FriendNames[key] = folder;
+                }
+            }
+        }
+
+        private static string NormalizeNick(string nick) =>
+            new string((nick ?? "").ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+        /// <summary>Папка имени по нику: точное совпадение, иначе ник начинается с известного («Sidiusz*»).</summary>
+        public static string NameFolder(string nick)
+        {
+            var key = NormalizeNick(nick);
+            if (key.Length == 0)
+                return null;
+            if (FriendNames.TryGetValue(key, out var folder))
+                return folder;
+            return FriendNames.Where(n => key.StartsWith(n.Key)).OrderByDescending(n => n.Key.Length)
+                .Select(n => n.Value).FirstOrDefault();
+        }
+
         /// <summary>Тот же вопрос в течение стольких секунд — колонка отвечает фразой из Repeat.</summary>
         public static float RepeatSeconds = 60f;
 
@@ -340,6 +381,13 @@ namespace CustomItems.Items
                 station.Say(TopicGameAsk);
                 station.gameAnswerUntil = station.talkUntil + GameAnswerSeconds;
             }
+            else if (topic == TopicMyName)
+            {
+                // Спрашивает локальный игрок: распознавание идёт у него
+                var me = GameNetworkManager.Instance?.localPlayerController;
+                var folder = me != null ? NameFolder(me.playerUsername) : null;
+                station.Say(folder != null && station.FindSet(TopicNames + folder) != null ? TopicNames + folder : TopicNames + "Unknown");
+            }
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
             else if (topic == TopicTime && station.SayTime())
@@ -410,6 +458,8 @@ namespace CustomItems.Items
             }
             if (Has("врем", "который час", "сколько час"))
                 return TopicTime;
+            if (Has("как меня зовут", "кто я", "мое имя", "знаешь меня"))
+                return TopicMyName;
             if (Has("сколько нас", "нас сколько", "сколько игроков"))
                 return TopicCount;
             if (Has("поиграем", "сыграем", "поиграть", "сыграть", "игру"))
@@ -758,6 +808,7 @@ namespace CustomItems.Items
         private static Terminal terminal;
         /// <summary>Столько скрапа на корабле — «ой, сколько предметов».</summary>
         public static int ManyItems = 20;
+        private readonly HashSet<ulong> deadIds = new HashSet<ulong>();
         private readonly HashSet<ulong> seenEnemies = new HashSet<ulong>();
         private readonly List<string> reasons = new List<string>();
 
@@ -814,11 +865,22 @@ namespace CustomItems.Items
             var dead = 0;
             foreach (var p in round.allPlayerScripts)
             {
-                if (p != null && p.isPlayerDead)
-                    dead++;
+                if (p == null || !p.isPlayerDead)
+                {
+                    if (p != null)
+                        deadIds.Remove(p.playerClientId);
+                    continue;
+                }
+                dead++;
+                // Умер именно этот: сначала его личная тема PlayerDied/<Имя>, потом общая
+                if (deadIds.Add(p.playerClientId) && !round.inShipPhase)
+                {
+                    var folder = NameFolder(p.playerUsername);
+                    if (folder != null)
+                        Reason("PlayerDied/" + folder);
+                    Reason("PlayerDied");
+                }
             }
-            if (dead > deadPlayers && !round.inShipPhase)
-                Reason("PlayerDied");
             deadPlayers = dead;
 
             var tod = TimeOfDay.Instance;

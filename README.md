@@ -96,6 +96,8 @@ lc-custom-items/
 
 `Time/<час>` (0–23) — время целой фразой («Три часа дня»), без папки на час колонка собирает время из чисел. `TimeError` — «который час» на луне со сбоем. `Game/Ask` — на «давай поиграем», потом 10 секунд любой ответ без «Алиса» получает `Game/Unknown`. `Love` — «ты меня любишь», `Refuse` — «сделай», «принеси», «помоги»…, `Ok` — «хорошо», «ладно» и фразы с «я»/«мы». События `Events/WhatIsThis` (рядом бросили или поднесли скрап) и `Events/Winston` (рядом Уинстон или им пищат).
 
+Друзья по нику Steam: таблица `Names` в секции `[Yandex Station]` конфига, «ник,ник=Папка» через `;`. На «Алиса, как меня зовут?» колонка говорит фразу из `Names/<Папка>` (незнакомому — `Names/Unknown`), а когда умирает знакомый игрок, сначала пробует `Events/PlayerDied/<Папка>`. Ники сравниваются без регистра и значков, `Sidiusz*` подходит к `Sidiusz`.
+
 Настройки в секции `[Yandex Station]` конфига: `VoiceCommands`, `WakeWord`, `HearingRadius`, `AllowInterrupt`, `JammingWeathers`, `UseGrammar`, `ExtraPhrases`.
 
 Фразы лежат по темам в подпапках `Assets/Sources/Art/Audio/YandexStation/Phrases/`. На тему можно положить сколько угодно `.wav` (моно, 44.1 кГц), колонка выбирает случайный. Список на префабе обновляется сам при открытии проекта, по **Create Missing Item Assets** и перед **Build AssetBundles**. Сейчас там `Alice*.wav`, озвученные Silero TTS (женский голос xenia) из списка `Tools/YandexStation/phrases.txt`: поправьте текст и запустите `python Tools/YandexStation/phrases.py` (нужны torch и ffmpeg), он перезапишет только `Alice*.wav`, свои записи не тронет. Другой голос: `python phrases.py baya` или `kseniya`.

@@ -10,6 +10,10 @@ namespace CustomItems.Items
     {
         public AudioClip voiceClip;
 
+        /// <summary>Сколько раз пищали Уинстоном и где последний раз (для Яндекс Колонки).</summary>
+        public static int Squeaks;
+        public static Vector3 LastSqueakAt;
+
         private const float NoiseRange = 10f;
         private const float NoiseLoudness = 0.5f;
 
@@ -21,6 +25,8 @@ namespace CustomItems.Items
 
             audioSource.pitch = Random.Range(0.95f, 1.05f);
             audioSource.PlayOneShot(voiceClip);
+            Squeaks++;
+            LastSqueakAt = transform.position;
             WalkieTalkie.TransmitOneShotAudio(audioSource, voiceClip);
 
             // Шум слышат монстры; считаем его только на владельце, чтобы не дублировать

@@ -88,7 +88,10 @@ namespace CustomItems.Items
         public static readonly List<YandexStationItem> All = new List<YandexStationItem>();
 
         public const string TopicGoodbye = "Goodbye", TopicRepeat = "Repeat", TopicCount = "#count",
-            TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro";
+            TopicNumbers = "Numbers/", TopicTimeIntro = "TimeIntro", TopicTimeError = "TimeError",
+            TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown";
+        /// <summary>Сколько секунд после «В какую игру хотите поиграть?» колонка ждёт ответ без «Алиса».</summary>
+        public static float GameAnswerSeconds = 10f;
         /// <summary>Тот же вопрос в течение стольких секунд — колонка отвечает фразой из Repeat.</summary>
         public static float RepeatSeconds = 60f;
 
@@ -291,6 +294,13 @@ namespace CustomItems.Items
             {
                 command = text;
             }
+            else if (Time.time < station.gameAnswerUntil && !station.IsTalking)
+            {
+                // Ответ на «В какую игру хотите поиграть?»: таких игр она не знает
+                station.gameAnswerUntil = 0f;
+                station.Say(station.IsJammed ? TopicError : TopicGameUnknown);
+                return;
+            }
             else
             {
                 return; // говорят не с колонкой
@@ -312,7 +322,7 @@ namespace CustomItems.Items
             if (topic == TopicUnknown)
                 topic = station.CustomTopic(known) ?? topic;
             if (station.IsJammed && topic != TopicStop)
-                topic = TopicError;
+                topic = topic == TopicTime && station.FindSet(TopicTimeError) != null ? TopicTimeError : TopicError;
 
             // Тот же вопрос второй раз за минуту: «Я уже отвечала»
             if (topic != TopicStop && topic == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
@@ -325,7 +335,12 @@ namespace CustomItems.Items
             station.lastAsked = topic;
             station.lastAskedAt = Time.time;
 
-            if (topic == TopicCount)
+            if (topic == TopicGameAsk)
+            {
+                station.Say(TopicGameAsk);
+                station.gameAnswerUntil = station.talkUntil + GameAnswerSeconds;
+            }
+            else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
             else if (topic == TopicTime && station.SayTime())
                 return;
@@ -334,6 +349,7 @@ namespace CustomItems.Items
         }
 
         private string lastAsked;
+        private float gameAnswerUntil;
         private float lastAskedAt;
 
         /// <summary>Есть ли рядом с локальным игроком включённая колонка (тогда плагин слушает голос).</summary>
@@ -396,6 +412,14 @@ namespace CustomItems.Items
                 return TopicTime;
             if (Has("сколько нас", "нас сколько", "сколько игроков"))
                 return TopicCount;
+            if (Has("поиграем", "сыграем", "поиграть", "сыграть", "игру"))
+                return TopicGameAsk;
+            if (Has("любишь", "люблю", "нравлюсь", "нравится"))
+                return "Love";
+            if (Has("сделай", "принеси", "помоги", "открой", "танцуй", "найди", "дай"))
+                return "Refuse";
+            if (Has("хорошо", "ладно", "понятно", "ясно", "окей") || Regex.IsMatch(command, @"^(я|мы|мне|нам)\s"))
+                return "Ok";
             if (Has("до свидания", "до встречи", "прощай", "увидимся") || Regex.IsMatch(command, @"(^|\s)пока(\s|$)"))
                 return TopicGoodbye;
             if (Has("привет", "здравств", "хай", "добр"))
@@ -542,6 +566,13 @@ namespace CustomItems.Items
             if (tod == null || !tod.currentDayTimeStarted)
                 return false;
             var minutes = (int)(tod.normalizedTimeOfDay * (60f * tod.numberOfHours)) + 360;
+            // Целой фразой на этот час: Time/15 — «Три часа дня»
+            var hourTopic = TopicTime + "/" + minutes / 60 % 24;
+            if (FindSet(hourTopic) != null)
+            {
+                Say(hourTopic);
+                return true;
+            }
             var topics = new List<string> { TopicTimeIntro };
             if (!AddNumber(topics, minutes / 60 % 24) || !AddNumber(topics, minutes % 60))
                 return false;
@@ -718,7 +749,10 @@ namespace CustomItems.Items
         private float nextEventCheck, eventFreeAt, nextIdle;
         private bool eventsReady, wasLanded, wasLeaving, wasHeld, wasNight, lowBatteryTold;
         private int deadPlayers, playersNear, sipsSeen = -1, shipScrap = -1, credits = -1;
-        private bool wasLate, wasMusic, wasWalkie;
+        private bool wasLate, wasMusic, wasWalkie, wasWinston;
+        private int squeaksSeen = -1;
+        private readonly HashSet<ulong> itemsNear = new HashSet<ulong>();
+        private bool itemsSeeded;
         private float nextScan;
         private readonly Dictionary<ulong, int> suits = new Dictionary<ulong, int>();
         private static Terminal terminal;
@@ -855,6 +889,14 @@ namespace CustomItems.Items
                 sipsSeen = DrinkAnimation.Sips;
             }
 
+            // Пищали Уинстоном рядом
+            if (WinstonItem.Squeaks != squeaksSeen)
+            {
+                if (squeaksSeen >= 0 && Vector3.Distance(WinstonItem.LastSqueakAt, transform.position) < EventRadius)
+                    Reason("Winston");
+                squeaksSeen = WinstonItem.Squeaks;
+            }
+
             // Смена костюма у игрока рядом
             foreach (var p in round.allPlayerScripts)
             {
@@ -896,6 +938,7 @@ namespace CustomItems.Items
             var scrap = 0;
             var music = false;
             var walkie = false;
+            var winston = false;
             var pos = transform.position;
             foreach (var item in FindObjectsOfType<GrabbableObject>())
             {
@@ -908,6 +951,19 @@ namespace CustomItems.Items
                     music = true;
                 if (close && item is WalkieTalkie && item.isBeingUsed && item.isHeld)
                     walkie = true;
+                if (close && item is WinstonItem)
+                    winston = true;
+
+                // Поднесли или бросили рядом скрап: «Что это?»
+                var id = item.NetworkObjectId;
+                var dist = Vector3.Distance(item.transform.position, pos);
+                if (item != this && item.itemProperties.isScrap && dist < 2.5f)
+                {
+                    if (itemsNear.Add(id) && itemsSeeded)
+                        Reason("WhatIsThis");
+                }
+                else if (dist > 5f)
+                    itemsNear.Remove(id);
             }
             if (shipScrap >= 0 && scrap > shipScrap && round.shipHasLanded)
                 Reason(scrap >= ManyItems && shipScrap < ManyItems ? "ManyItems" : "Work");
@@ -918,6 +974,10 @@ namespace CustomItems.Items
             if (walkie && !wasWalkie)
                 Reason("Walkie");
             wasWalkie = walkie;
+            if (winston && !wasWinston)
+                Reason("Winston");
+            wasWinston = winston;
+            itemsSeeded = true;
         }
 
         private static bool PlayerNear(YandexStationItem station, float radius)

@@ -53,12 +53,12 @@ MonoBehaviour:
   saveItemVariable: 1
   isDefensiveWeapon: 0
   toolTips: []
-  verticalOffset: 0.046
+  verticalOffset: 0.0035000034
   floorYOffset: 0
   allowDroppingAheadOfPlayer: 1
   restingRotation: {x: 0, y: 0, z: 0}
   rotationOffset: {x: 0, y: 0, z: 0}
-  positionOffset: {x: 0, y: 0, z: 0}
+  positionOffset: {x: 0, y: -0.042499997, z: 0}
   meshOffset: 0
   meshVariants: []
   materialVariants: []

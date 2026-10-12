@@ -50,6 +50,8 @@ namespace CustomItems
 
             foreach (var entry in registry.items)
                 Register(entry);
+            foreach (var entry in registry.furniture)
+                RegisterFurniture(entry);
 
             SetupItemTuner();
 
@@ -66,6 +68,7 @@ namespace CustomItems
             AdrenalineItem.HeartAttackChancePerSip = Config.Bind(adrenaline, "HeartAttackChancePerSip", 1f,
                 "Шанс сердечного приступа в процентах за каждый глоток за день: 1-й глоток 1%, 2-й 2%, 3-й 3%...").Value;
             SetupToyGun();
+            SetupYandexStation(dir);
 
             LoadRussianTranslation(Path.Combine(dir, "translations"));
 
@@ -102,6 +105,146 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
             if (!asScrap && !inShop)
                 LethalLib.Modules.Items.RegisterItem(item);
+        }
+
+        // ---- Мебель: покупается в Decor терминала, ставится через режим строительства (B) ----
+
+        private void RegisterFurniture(ItemRegistry.FurnitureEntry entry)
+        {
+            var prefab = entry.prefab;
+            if (prefab == null || prefab.GetComponent<NetworkObject>() == null || string.IsNullOrEmpty(entry.name))
+            {
+                Log.LogError($"Пропускаю мебель '{entry.name}' в ItemRegistry: нет префаба с NetworkObject или названия");
+                return;
+            }
+
+            var inShop = Config.Bind(entry.name, "InShop", true, "Продавать в разделе Decor терминала").Value;
+            var price = Config.Bind(entry.name, "Price", entry.price, "Цена в магазине").Value;
+            if (!inShop)
+                return;
+
+            PrepareFurniture(prefab);
+            LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(prefab);
+            var unlockable = new UnlockableItem
+            {
+                unlockableName = entry.name,
+                prefabObject = prefab,
+                unlockableType = 1, // предмет корабля, а не костюм
+                IsPlaceable = true,
+                spawnPrefab = true,
+                alwaysInStock = true, // в Decor не по ротации, а всегда
+                canBeStored = true,
+                maxNumber = 1,
+            };
+            LethalLib.Modules.Unlockables.RegisterUnlockable(unlockable, StoreType.Decor, null, null, null, price);
+        }
+
+        // Компоненты мебели игры навешиваем здесь, а не в Unity: так в проекте не нужны их
+        // заглушки с полями. В префабе из Unity есть дочерние PlacementCollider (за него
+        // хватает режим строительства) и InteractTrigger (E), оба с BoxCollider.
+        private static void PrepareFurniture(GameObject prefab)
+        {
+            var networkObject = prefab.GetComponent<NetworkObject>();
+            GlobalObjectIdHash?.SetValue(networkObject, StableHash(PluginGuid + "/" + prefab.name));
+
+            var parent = prefab.GetComponent<AutoParentToShip>() ?? prefab.AddComponent<AutoParentToShip>();
+
+            var placement = prefab.transform.Find("PlacementCollider");
+            var body = prefab.GetComponentsInChildren<MeshFilter>(true).FirstOrDefault(m => m.name == "Body")
+                       ?? prefab.GetComponentInChildren<MeshFilter>(true);
+            if (placement != null)
+            {
+                placement.gameObject.layer = Layer("PlaceableShipObjects", 26);
+                var placeable = placement.GetComponent<PlaceableShipObject>() ?? placement.gameObject.AddComponent<PlaceableShipObject>();
+                placeable.parentObject = parent;
+                placeable.mainMesh = body;
+                placeable.mainTransform = prefab.transform;
+                placeable.placeObjectCollider = placement.GetComponent<Collider>();
+                placeable.yOffset = HeightAboveFloor(prefab);
+                placeable.AllowPlacementOnCounters = true;
+            }
+            else
+            {
+                Log.LogError($"{prefab.name}: нет дочернего PlacementCollider, поставить через B не получится");
+            }
+
+            var interact = prefab.transform.Find("InteractTrigger");
+            if (interact != null)
+            {
+                interact.gameObject.layer = Layer("InteractableObject", 9);
+                interact.gameObject.tag = "InteractTrigger";
+                var trigger = interact.GetComponent<InteractTrigger>() ?? interact.gameObject.AddComponent<InteractTrigger>();
+                trigger.hoverTip = YandexStationItem.InteractTip;
+                trigger.interactable = true;
+                trigger.oneHandedItemAllowed = true;
+                trigger.twoHandedItemAllowed = true;
+                trigger.interactCooldown = true;
+                trigger.cooldownTime = 1f;
+                trigger.holdingInteractEvent = new InteractEventFloat();
+                trigger.onInteract = new InteractEvent();
+                trigger.onInteractEarly = new InteractEvent();
+                trigger.onInteractEarlyOtherClients = new InteractEvent();
+                trigger.onStopInteract = new InteractEvent();
+                trigger.onCancelAnimation = new InteractEvent();
+            }
+        }
+
+        // Режим строительства ставит центр префаба на высоту yOffset над полом
+        private static float HeightAboveFloor(GameObject prefab)
+        {
+            var min = float.MaxValue;
+            foreach (var mf in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf.sharedMesh == null)
+                    continue;
+                var b = mf.sharedMesh.bounds;
+                var p = prefab.transform.InverseTransformPoint(mf.transform.TransformPoint(b.min));
+                min = Mathf.Min(min, p.y);
+            }
+            return min == float.MaxValue ? 0.05f : -min;
+        }
+
+        private static int Layer(string name, int fallback)
+        {
+            var layer = LayerMask.NameToLayer(name);
+            return layer >= 0 ? layer : fallback;
+        }
+
+        private void SetupYandexStation(string dir)
+        {
+            const string section = "Yandex Station";
+            YandexStationItem.WakeWord = Config.Bind(section, "WakeWord", "алиса",
+                "Слово, на которое колонка откликается (как его пишет распознавание, строчными)").Value.Trim().ToLowerInvariant();
+            YandexStationItem.HearingRadius = Config.Bind(section, "HearingRadius", 8f,
+                "С какого расстояния (м) к колонке можно обращаться голосом").Value;
+            var voice = Config.Bind(section, "VoiceCommands", true,
+                "Распознавать голос («Алиса, какая погода?»). Распознаётся только у вас на компьютере, офлайн, " +
+                "и только пока рядом стоит колонка. Выключите, если не нужно или тормозит").Value;
+            if (!voice)
+                return;
+
+            var grammar = Config.Bind(section, "UseGrammar", true,
+                "Распознавать только известные фразы (имя, погода, квота, дедлайн, время, шутка...) и их сочетания. " +
+                "Так маленькая русская модель почти не ошибается. Выключите, чтобы распознавалось всё подряд").Value;
+            var extra = Config.Bind(section, "ExtraPhrases", "",
+                "Свои фразы для распознавания через запятую (для своих тем в Phrases), строчными").Value;
+            if (grammar)
+            {
+                AliceListener.Grammar = AliceListener.DefaultGrammar
+                    .Concat(new[] { YandexStationItem.WakeWord })
+                    .Concat(extra.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0))
+                    .Distinct().ToArray();
+            }
+
+            AliceListener.VoskDir = Path.Combine(dir, "vosk");
+            if (!Directory.Exists(Path.Combine(AliceListener.VoskDir, "model-ru")))
+            {
+                Log.LogWarning($"Алиса: нет модели распознавания в {AliceListener.VoskDir}/model-ru, голосовые команды выключены");
+                return;
+            }
+            var go = new GameObject("SidiuszCustomItems.AliceListener") { hideFlags = HideFlags.HideAndDontSave };
+            DontDestroyOnLoad(go);
+            go.AddComponent<AliceListener>();
         }
 
         private void SetupToyGun()
@@ -169,6 +312,7 @@ namespace CustomItems
             ToyGunItem.NoAmmoHeader = "Игрушечный пистолет";
             ToyGunItem.NoAmmoBody = "В инвентаре нет пулек. Их можно купить в магазине терминала.";
             ToyGunAmmoItem.TipFormat = "Пулек в пачке : {0}";
+            YandexStationItem.InteractTip = "Поговорить с Алисой : [E]";
 
             try
             {

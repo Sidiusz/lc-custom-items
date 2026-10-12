@@ -28,6 +28,9 @@
     <!-- Публицизированные библиотеки игры (Assembly-CSharp и т.д.), только для компиляции -->
     <PackageReference Include="LethalCompany.GameLibs.Steam" Version="81.0.5-ngd.0" PrivateAssets="all" />
     <PackageReference Include="Evaisa.LethalLib" Version="1.2.0" PrivateAssets="all" />
+    <!-- Офлайн-распознавание речи для Яндекс Станции. Нативные библиотеки берём сами (ниже), а не из build/ пакета:
+         тот кладёт их под ОС сборки, а игре нужны Windows x64 -->
+    <PackageReference Include="Vosk" Version="0.3.38" ExcludeAssets="build" GeneratePathProperty="true" />
   </ItemGroup>
 
   <!-- Скрипты предметов собираются отдельной сборкой SidiuszCustomItems.Items (см. Items/) -->
@@ -47,9 +50,36 @@
     <None Include="..\Bundles\sidiuszcustomitems" Condition="Exists('..\Bundles\sidiuszcustomitems')" CopyToOutputDirectory="PreserveNewest" Link="sidiuszcustomitems" />
   </ItemGroup>
 
-  <Target Name="CopyToPluginDir" AfterTargets="Build" Condition="'$(PluginDir)' != ''">
+  <!-- Vosk для Яндекс Станции: vosk/ рядом с DLL мода (нативные библиотеки Windows x64 и русская модель).
+       Модель (~45 МБ) скачивается один раз в obj/ при первой сборке. -->
+  <PropertyGroup>
+    <VoskModelName>vosk-model-small-ru-0.22</VoskModelName>
+    <VoskModelCache>$(MSBuildProjectDirectory)/obj/vosk</VoskModelCache>
+  </PropertyGroup>
+
+  <Target Name="FetchVoskModel" BeforeTargets="Build" Condition="!Exists('$(VoskModelCache)/$(VoskModelName)/am')">
+    <DownloadFile SourceUrl="https://alphacephei.com/vosk/models/$(VoskModelName).zip" DestinationFolder="$(VoskModelCache)" />
+    <Unzip SourceFiles="$(VoskModelCache)/$(VoskModelName).zip" DestinationFolder="$(VoskModelCache)" />
+    <Delete Files="$(VoskModelCache)/$(VoskModelName).zip" />
+  </Target>
+
+  <Target Name="CopyVosk" AfterTargets="Build">
+    <ItemGroup>
+      <VoskNative Include="$(PkgVosk)/build/lib/win-x64/*.dll" />
+      <VoskModel Include="$(VoskModelCache)/$(VoskModelName)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="$(PkgVosk)/lib/netstandard2.0/Vosk.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(VoskNative)" DestinationFolder="$(TargetDir)vosk" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(VoskModel)" DestinationFolder="$(TargetDir)vosk/model-ru/%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyToPluginDir" AfterTargets="CopyVosk" Condition="'$(PluginDir)' != ''">
     <MakeDir Directories="$(PluginDir)\$(AssemblyName)" />
-    <Copy SourceFiles="$(TargetPath);$(TargetDir)SidiuszCustomItems.Items.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)SidiuszCustomItems.Items.dll;$(TargetDir)Vosk.dll" DestinationFolder="$(PluginDir)\$(AssemblyName)" />
+    <ItemGroup>
+      <VoskFiles Include="$(TargetDir)vosk/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(VoskFiles)" DestinationFolder="$(PluginDir)\$(AssemblyName)\vosk\%(RecursiveDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(None->WithMetadataValue('Extension', '.txt'))" DestinationFolder="$(PluginDir)\$(AssemblyName)\translations" />
     <Copy SourceFiles="..\Bundles\sidiuszcustomitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\sidiuszcustomitems')" />
   </Target>

@@ -52,6 +52,7 @@ public static class ItemAssets
         public string Icon;                                          // путь к спрайту, необязательно
         public string Texture;                                       // текстура на все меши (HDRP/Lit), необязательно
         public (string field, string path)[] Clips = new (string, string)[0];
+        public (string field, string folder)[] ClipFolders = new (string, string)[0]; // массив AudioClip из всех звуков папки
         public Action<GameObject> Customize;                         // доп. настройка префаба
     }
 
@@ -121,6 +122,16 @@ public static class ItemAssets
             Texture = Art + "/Textures/Winston/Winston.png",
             ToolTips = new[] { "Talk : [LMB]" },
             Clips = new[] { ("voiceClip", Art + "/Audio/Winston/WinstonVoice.wav") },
+        },
+        new Spec
+        {
+            Name = "YandexStation", ItemName = "Yandex Station", Behaviour = "CustomItems.Items.YandexStationItem",
+            MinValue = 60, MaxValue = 150, Rarity = 25, Weight = 1.04f,
+            VerticalOffset = 0.045f, // половина высоты колонки 9 см
+            ToolTips = new[] { "Talk : [LMB]" },
+            // Свои фразы: любые .wav в эту папку, список на префабе обновится сам
+            ClipFolders = new[] { ("phrases", YandexPhrases) },
+            Customize = SetupYandexStation,
         },
     };
 
@@ -202,6 +213,7 @@ public static class ItemAssets
                 EditorUtility.SetDirty(item);
             }
 
+            SyncClipFolders(spec, prefab);
             AddToRegistry(registry, item, spec);
             MarkBundle(itemPath);
             MarkBundle(prefabPath);
@@ -300,6 +312,8 @@ public static class ItemAssets
                     Debug.LogWarning($"{spec.ItemName}: нет звука {clipPath}");
                 Set(behaviour, field, clip);
             }
+            foreach (var (field, folder) in spec.ClipFolders)
+                Set(behaviour, field, ClipsIn(folder));
 
             EnsureFolder(PrefabsDir);
             return PrefabUtility.SaveAsPrefabAsset(root, path);
@@ -343,6 +357,42 @@ public static class ItemAssets
         Set(entry, "price", spec.Price);
         list.Add(entry);
         EditorUtility.SetDirty(registry);
+    }
+
+    // ---------------- папки со звуками (Spec.ClipFolders)
+
+    private static AudioClip[] ClipsIn(string folder)
+    {
+        if (!AssetDatabase.IsValidFolder(folder))
+            return new AudioClip[0];
+        return AssetDatabase.FindAssets("t:AudioClip", new[] { folder })
+            .Select(AssetDatabase.GUIDToAssetPath).Distinct().OrderBy(p => p, StringComparer.Ordinal)
+            .Select(AssetDatabase.LoadAssetAtPath<AudioClip>).Where(c => c != null).ToArray();
+    }
+
+    // Звуки добавили или удалили: обновляем массив на уже готовом префабе (остальное в нём не трогаем)
+    private static void SyncClipFolders(Spec spec, GameObject prefab)
+    {
+        if (spec.ClipFolders.Length == 0)
+            return;
+        var behaviour = prefab.GetComponent(T(spec.Behaviour));
+        if (behaviour == null)
+            return;
+        var changed = false;
+        foreach (var (field, folder) in spec.ClipFolders)
+        {
+            var clips = ClipsIn(folder);
+            var current = Get(behaviour, field) as AudioClip[];
+            if (current != null && current.SequenceEqual(clips))
+                continue;
+            Set(behaviour, field, clips);
+            changed = true;
+            Debug.Log($"{spec.ItemName}: {field} из {folder}: {clips.Length} шт.");
+        }
+        if (!changed)
+            return;
+        EditorUtility.SetDirty(behaviour);
+        PrefabUtility.SavePrefabAsset(prefab);
     }
 
     // ---------------- текстура из Spec.Texture: материал HDRP/Lit в Art/Materials/<Name>/
@@ -410,6 +460,57 @@ public static class ItemAssets
         var muzzle = new GameObject("Muzzle");
         muzzle.transform.SetParent(root.transform, false);
         muzzle.transform.localPosition = ToyGunMuzzle;
+    }
+
+    // ---------------- Яндекс Станция: материалы по объектам модели, экран «12:35»
+
+    private const string YandexPhrases = Art + "/Audio/YandexStation/Phrases";
+    private const string YandexMaterials = Art + "/Materials/YandexStation/";
+
+    // Модель (Tools/YandexStation/model.py): Body, Trim, Marks, Ring и светящиеся
+    // Seg<0-3><a-g>, ColonTop/ColonBottom, Mouth*. Какие из них горят, решает
+    // YandexStationItem; в префабе включены «12:35», чтобы так выглядели иконка и превью.
+    private static void SetupYandexStation(GameObject root)
+    {
+        Material Mat(string name, Color color, float smoothness, Color emission)
+        {
+            var path = YandexMaterials + name + ".mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path) ?? NewLitMaterial(path, color, smoothness);
+            m.SetColor("_EmissiveColor", emission);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        var display = new Color(1f, 0.84f, 0.62f);
+        var ring = new Color(0.58f, 0.36f, 1f);
+        var mats = new Dictionary<string, Material>
+        {
+            { "Body", Mat("YandexStationBody", new Color(0.105f, 0.105f, 0.12f), 0.15f, Color.black) },
+            { "Trim", Mat("YandexStationTrim", new Color(0.035f, 0.035f, 0.04f), 0.3f, Color.black) },
+            { "Marks", Mat("YandexStationMarks", new Color(0.55f, 0.55f, 0.58f), 0.2f, Color.black) },
+            { "Ring", Mat("YandexStationRing", ring, 0.5f, ring * 3f) },
+            { "Display", Mat("YandexStationDisplay", display, 0.5f, display * 12f) },
+        };
+
+        // Чтобы переставить и выключить объекты модели, экземпляр FBX надо распаковать
+        var model = root.transform.Find("Model");
+        if (PrefabUtility.IsPartOfPrefabInstance(model.gameObject))
+            PrefabUtility.UnpackPrefabInstance(model.gameObject, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
+
+        var shown = new HashSet<string> { "ColonTop", "ColonBottom" };
+        foreach (var (d, segs) in new[] { (0, "bc"), (1, "abdeg"), (2, "abcdg"), (3, "acdfg") })
+            foreach (var s in segs)
+                shown.Add($"Seg{d}{s}");
+
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+        {
+            var glowing = r.name.StartsWith("Seg") || r.name.StartsWith("Colon") || r.name.StartsWith("Mouth");
+            r.sharedMaterial = glowing ? mats["Display"] : mats.TryGetValue(r.name, out var mat) ? mat : mats["Body"];
+            if (glowing)
+                r.gameObject.SetActive(shown.Contains(r.name));
+        }
+        // Корпус первым: его берёт mainObjectRenderer
+        model.Find("Body")?.SetAsFirstSibling();
     }
 
     // ---------------- Егермейстер: прозрачное стекло, сквозь которое видна жидкость

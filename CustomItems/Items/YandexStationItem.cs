@@ -324,16 +324,16 @@ namespace CustomItems.Items
         // ---- Голос ----
 
         /// <summary>
-        /// Распознанная фраза локального игрока из голосового чата (с главного потока).
-        /// Отвечает ближайшая включённая колонка: на «Алиса, …» сразу, после одного
+        /// Распознанная фраза игрока <paramref name="speaker"/> из голосового чата (с главного потока).
+        /// Отвечает ближайшая к нему включённая колонка: на «Алиса, …» сразу, после одного
         /// «Алиса» — сигнал и несколько секунд ждёт вопрос.
         /// </summary>
-        public static void OnLocalSpeech(string text)
+        public static void OnSpeech(GameNetcodeStuff.PlayerControllerB speaker, string text)
         {
             text = (text ?? "").Trim().ToLowerInvariant().Replace('ё', 'е');
-            if (text.Length == 0)
+            if (text.Length == 0 || speaker == null || speaker.isPlayerDead)
                 return;
-            var station = Nearest(HearingRadius);
+            var station = NearestTo(speaker.transform.position, HearingRadius);
             if (station == null)
                 return;
 
@@ -397,8 +397,7 @@ namespace CustomItems.Items
             else if (topic == TopicMyName || topic == TopicMyRole)
             {
                 // Спрашивает локальный игрок: распознавание идёт у него. «Кто я» — роль, без неё имя
-                var me = GameNetworkManager.Instance?.localPlayerController;
-                var folder = me != null ? NameFolder(me.playerUsername) : null;
+                var folder = NameFolder(speaker.playerUsername);
                 if (folder != null && topic == TopicMyRole && station.FindSet(TopicRoles + folder) != null)
                     station.Say(TopicRoles + folder);
                 else
@@ -428,15 +427,28 @@ namespace CustomItems.Items
         private float gameAnswerUntil;
         private float lastAskedAt;
 
-        /// <summary>Есть ли рядом с локальным игроком включённая колонка (тогда плагин слушает голос).</summary>
-        public static bool AnyNearLocalPlayer() => Nearest(HearingRadius) != null;
+        /// <summary>Есть ли рядом с живым игроком включённая колонка (тогда плагин слушает его голос).</summary>
+        public static bool NearPlayer(GameNetcodeStuff.PlayerControllerB player) =>
+            player != null && player.isPlayerControlled && !player.isPlayerDead && NearestTo(player.transform.position, HearingRadius) != null;
 
-        private static YandexStationItem Nearest(float radius)
+        /// <summary>
+        /// Стоит ли ответить на кусок фразы, не дожидаясь паузы: позвали «Алиса» и уже понятно о чём.
+        /// </summary>
+        public static bool IsCompleteCommand(string text)
         {
-            var player = GameNetworkManager.Instance?.localPlayerController;
-            if (player == null || player.isPlayerDead || All.Count == 0)
+            text = (text ?? "").ToLowerInvariant().Replace('ё', 'е');
+            var wake = text.IndexOf(WakeWord, StringComparison.Ordinal);
+            if (wake < 0)
+                return false;
+            var end = text.IndexOf(' ', wake);
+            var command = end < 0 ? "" : text.Substring(end + 1).Replace("[unk]", " ").Trim();
+            return command.Length > 0 && Topic(command) != TopicUnknown;
+        }
+
+        private static YandexStationItem NearestTo(Vector3 pos, float radius)
+        {
+            if (All.Count == 0)
                 return null;
-            var pos = player.transform.position;
             YandexStationItem best = null;
             var bestDist = radius * radius;
             foreach (var s in All)
@@ -467,7 +479,8 @@ namespace CustomItems.Items
         /// <summary>Тема ответа по тексту вопроса и состоянию игры.</summary>
         public static string Topic(string command)
         {
-            bool Has(params string[] words) => words.Any(w => command.Contains(w));
+            var tokens = command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            bool Has(params string[] words) => words.Any(w => command.Contains(w) || FuzzyHas(tokens, w));
 
             if (Has("стоп", "хватит", "замолчи", "тихо", "выключ"))
                 return TopicStop;
@@ -525,6 +538,67 @@ namespace CustomItems.Items
             if (Has("как дела", "как ты", "как жизнь"))
                 return "HowAreYou";
             return TopicUnknown;
+        }
+
+        /// <summary>
+        /// Нечёткое совпадение, когда точного нет: слова ключа идут по порядку (между ними можно
+        /// одно лишнее слово), каждое — начало слова фразы, с одной ошибкой от 5 букв. Слова до 3 букв
+        /// только целиком, а 4-буквенные без ошибок: иначе «кот» стал бы «квотой».
+        /// </summary>
+        private static bool FuzzyHas(string[] tokens, string key)
+        {
+            var words = key.Split(' ');
+            for (var start = 0; start < tokens.Length; start++)
+            {
+                int t = start, w = 0, gap = 0;
+                while (t < tokens.Length && w < words.Length)
+                {
+                    if (WordLike(tokens[t], words[w]))
+                    {
+                        w++;
+                        gap = 0;
+                    }
+                    else if (w == 0 || ++gap > 1)
+                        break;
+                    t++;
+                }
+                if (w == words.Length)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool WordLike(string token, string stem)
+        {
+            if (stem.Length <= 3)
+                return token == stem;
+            if (token.StartsWith(stem, StringComparison.Ordinal))
+                return true;
+            if (stem.Length < 5 || token.Length < stem.Length - 1)
+                return false;
+            // Начало слова той же длины, что ключ (или на букву длиннее/короче)
+            for (var len = stem.Length - 1; len <= stem.Length + 1; len++)
+            {
+                if (len <= token.Length && Levenshtein(token.Substring(0, len), stem) <= 1)
+                    return true;
+            }
+            return false;
+        }
+
+        private static int Levenshtein(string a, string b)
+        {
+            var prev = new int[b.Length + 1];
+            var cur = new int[b.Length + 1];
+            for (var j = 0; j <= b.Length; j++)
+                prev[j] = j;
+            for (var i = 1; i <= a.Length; i++)
+            {
+                cur[0] = i;
+                for (var j = 1; j <= b.Length; j++)
+                    cur[j] = Math.Min(Math.Min(cur[j - 1], prev[j]) + 1, prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+                (prev, cur) = (cur, prev);
+            }
+            return prev[b.Length];
         }
 
         /// <summary>

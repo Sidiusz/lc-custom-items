@@ -48,6 +48,58 @@ namespace CustomItems
             if (duck != null)
                 duck.squeakClip = bundle.LoadAsset<AudioClip>("Squeak");
 
+            var jager = Register<JagermeisterItem>(bundle, new CustomItemDef
+            {
+                Name = "Jagermeister",
+                ModelAsset = "Jagermeister",
+                TemplateItem = "Perfume bottle",
+                MinValue = 40,
+                MaxValue = 100,
+                DefaultRarity = 30,
+                Weight = 1.03f,
+                VerticalOffset = 0.125f, // центр модели на середине бутылки высотой 25 см
+                ToolTips = new[] { "Drink : [LMB]" },
+            });
+            if (jager != null)
+                jager.itemProperties.saveItemVariable = true; // сохранять оставшиеся глотки
+
+            var adrenaline = Register<AdrenalineItem>(bundle, new CustomItemDef
+            {
+                Name = "Adrenaline Game Fuel",
+                ModelAsset = "AdrenalineCan",
+                IconAsset = "AdrenalineCanIcon",
+                TemplateItem = "Red soda",
+                MinValue = 80,
+                MaxValue = 160,
+                DefaultRarity = 30,
+                Weight = 1.01f,
+                VerticalOffset = 0.084f, // центр модели на середине банки высотой 16.8 см
+                ToolTips = new[] { "Drink : [LMB]" },
+            });
+            if (adrenaline != null)
+            {
+                adrenaline.itemProperties.saveItemVariable = true; // пустая банка остаётся пустой после сохранения
+                AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
+                    "Ники через запятую: этих игроков энергетик не бодрит, а вырубает").Value.Split(',');
+                AdrenalineItem.BoostDuration = Config.Bind("Adrenaline Game Fuel", "BoostSeconds", 30f,
+                    "Сколько секунд стамина восстанавливается быстрее").Value;
+                AdrenalineItem.SleepDuration = Config.Bind("Adrenaline Game Fuel", "SleepSeconds", 10f,
+                    "Сколько секунд спит игрок из SleepyPlayers").Value;
+            }
+
+            Register<Monitor27Item>(bundle, new CustomItemDef
+            {
+                Name = "Computer monitor",
+                ModelAsset = "Monitor27",
+                TemplateItem = "Cash register", // двуручная анимация переноски
+                MinValue = 100,
+                MaxValue = 220,
+                DefaultRarity = 20,
+                Weight = 1.28f,
+                TwoHanded = true,
+                VerticalOffset = 0.24f, // половина высоты: модель стоит на подставке
+            });
+
             var toyGun = Register<ToyGunItem>(bundle, new CustomItemDef
             {
                 Name = "Toy gun",

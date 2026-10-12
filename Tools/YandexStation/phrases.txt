@@ -230,3 +230,22 @@ Roles/Pavel|Вы тестировщик!
 ItsMe|Это я!
 ItsYou|Это вы!
 Color/Purple|Фиолетовый!
+
+# Причина смерти: One — погиб один («его»), Many — несколько разом («их»). Папка по врагу рядом с телом
+Events/DeathCause/MouthDog/One|Его съела собака.
+Events/DeathCause/MouthDog/Many|Их съела собака.
+Events/DeathCause/Flowerman/One|Ему свернул шею брекен.
+Events/DeathCause/Flowerman/Many|Им свернул шею брекен.
+Events/DeathCause/ForestGiant/One|Его съел лесной болван.
+Events/DeathCause/ForestGiant/Many|Их съел лесной болван.
+Events/DeathCause/BushWolf/One|Его загрызла пантера.
+Events/DeathCause/BushWolf/Many|Их загрызла пантера.
+Events/DeathCause/Spring|Виноват пружинноголовый.
+Events/DeathCause/Unknown|Это была муха или... не знаю!
+Events/AllDead|Все мертвы, и вот я одна лечу в открытый космос.
+Events/ForgotSomeone|Вы кого-то забыли на луне.
+Events/ForgotSomeone|Вы забыли кого-то.
+AllClear|Вокруг чисто!
+EnemiesNear|Рядом есть враг!
+Game/Bored|Может, поиграем тогда?
+Events/Idle|Может, поиграем тогда?

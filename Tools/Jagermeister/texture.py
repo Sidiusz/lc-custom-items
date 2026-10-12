@@ -1,4 +1,4 @@
-"""Текстура бутылки Егермейстера (512x512) для Assets/Jagermeister.
+"""Текстура бутылки Егермейстера (512x512) для Assets/Sources/Art/Textures/Jagermeister.
 
 Запуск: python texture.py   (нужен Pillow: pip install pillow)
 
@@ -14,7 +14,7 @@ import random
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 SIZE = 512
-OUT = os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Jagermeister", "Jagermeister.png")
+OUT = os.path.join(os.path.dirname(__file__), "..", "..", "Assets", "Sources", "Art", "Textures", "Jagermeister", "Jagermeister.png")
 
 GLASS = (24, 52, 30)
 GLASS_LIGHT = (58, 96, 56)

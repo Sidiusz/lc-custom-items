@@ -5,7 +5,9 @@ using UnityEngine;
 namespace CustomItems.Items
 {
     /// <summary>
-    /// Игрушечный пистолет: по ЛКМ стреляет пулькой, которая летит по дуге.
+    /// Игрушечный пистолет: по ЛКМ стреляет пулькой из магазина, пулька летит по дуге.
+    /// Перезарядка (R, клавиша в конфиге, или E) пересыпает пульки в магазин из пачек
+    /// <see cref="ToyGunAmmoItem"/> в инвентаре; пустая пачка исчезает.
     ///
     /// Сеть: в ассете Item включён Sync Use Function, поэтому игра сама вызывает ItemActivate у всех игроков.
     /// Каждый клиент рисует свою копию пульки (траектория одна и та же: от камеры
@@ -16,13 +18,32 @@ namespace CustomItems.Items
     /// Урон в игре целочисленный (у игрока 100 HP, у монстров HP считается в ударах
     /// лопатой), поэтому 0.1 урона копится на каждой цели отдельно: каждые 10 попаданий
     /// в одну цель наносят ей 1 единицу урона.
+    ///
+    /// Патроны: стрельба и перезарядка приходят ко всем игрокам (Sync Use Function и
+    /// Sync Interact LR Function в Item), и каждый клиент одинаково считает магазин
+    /// и пачки по одинаковым у всех слотам инвентаря. Пустую пачку удаляет владелец
+    /// ванильным DestroyItemInSlotAndSync. Магазин сохраняется вместе с кораблём.
     /// </summary>
     public class ToyGunItem : CustomGrabbable
     {
         /// <summary>Урон за одну пульку (дробная часть копится). Задаётся из конфига.</summary>
         public static float DamagePerPellet = 0.1f;
 
+        /// <summary>Ёмкость магазина. Задаётся из конфига.</summary>
+        public static int MagazineSize = 12;
+        /// <summary>Клавиша перезарядки для подсказки (сама клавиша ловится в плагине).</summary>
+        public static string ReloadKeyName = "R";
+        /// <summary>Строка подсказки с патронами: {0} в магазине, {1} ёмкость. Плагин переводит её.</summary>
+        public static string AmmoTipFormat = "Pellets : {0}/{1}";
+        public static string NoAmmoHeader = "Toy gun";
+        public static string NoAmmoBody = "No pellets in inventory. Buy them in the terminal store.";
+
         public AudioClip shotClip;
+        public AudioClip reloadClip;
+        public AudioClip dryFireClip;
+
+        // -1: ещё не задано, в Start станет полным магазином (найденный на луне пистолет заряжен)
+        private int ammo = -1;
 
         private const float Cooldown = 0.2f;
         private const float NoiseRange = 10f;
@@ -38,6 +59,63 @@ namespace CustomItems.Items
             base.Start();
             useCooldown = Cooldown;
             muzzle = FindChild(transform, "Muzzle");
+            if (ammo < 0)
+                ammo = MagazineSize;
+        }
+
+        public override int GetItemDataToSave() => ammo;
+
+        public override void LoadItemSaveData(int saveData) => ammo = Mathf.Clamp(saveData, 0, MagazineSize);
+
+        public override void SetControlTipsForItem()
+        {
+            HUDManager.Instance.ChangeControlTipMultiple(new[]
+            {
+                "Shoot : [LMB]",
+                $"Reload : [{ReloadKeyName}]",
+                string.Format(AmmoTipFormat, Mathf.Max(ammo, 0), MagazineSize),
+            }, holdingItem: true, itemProperties);
+        }
+
+        private void RefreshTips()
+        {
+            if (IsOwner && isHeld && !isPocketed && playerHeldBy != null
+                && playerHeldBy == GameNetworkManager.Instance.localPlayerController)
+                SetControlTipsForItem();
+        }
+
+        /// <summary>Перезарядка (ПКМ-взаимодействие E или клавиша из конфига). Вызывается у всех игроков.</summary>
+        public override void ItemInteractLeftRight(bool right)
+        {
+            base.ItemInteractLeftRight(right);
+            if (!right || playerHeldBy == null)
+                return;
+
+            var need = MagazineSize - ammo;
+            var loaded = 0;
+            var slots = playerHeldBy.ItemSlots;
+            for (var i = 0; i < slots.Length && need > 0; i++)
+            {
+                if (!(slots[i] is ToyGunAmmoItem box) || box.pellets <= 0)
+                    continue;
+                var take = Mathf.Min(need, box.pellets);
+                box.pellets -= take;
+                ammo += take;
+                loaded += take;
+                need -= take;
+                if (box.pellets == 0 && IsOwner)
+                    playerHeldBy.DestroyItemInSlotAndSync(i);
+            }
+
+            var clip = loaded > 0 ? reloadClip : dryFireClip;
+            if (audioSource != null && clip != null)
+            {
+                audioSource.pitch = 1f;
+                audioSource.PlayOneShot(clip);
+            }
+            if (loaded == 0 && need > 0 && IsOwner)
+                HUDManager.Instance.DisplayTip(NoAmmoHeader, NoAmmoBody);
+            RefreshTips();
         }
 
         public override void ItemActivate(bool used, bool buttonDown = true)
@@ -45,6 +123,15 @@ namespace CustomItems.Items
             base.ItemActivate(used, buttonDown);
             if (!buttonDown || playerHeldBy == null)
                 return;
+
+            if (ammo <= 0)
+            {
+                if (audioSource != null && dryFireClip != null)
+                    audioSource.PlayOneShot(dryFireClip);
+                return;
+            }
+            ammo--;
+            RefreshTips();
 
             if (audioSource != null && shotClip != null)
             {

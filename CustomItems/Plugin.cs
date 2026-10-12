@@ -101,20 +101,17 @@ namespace CustomItems
             var api = System.AppDomain.CurrentDomain.GetAssemblies()
                 .Select(a => a.GetType("LethalRussian.Api", false))
                 .FirstOrDefault(t => t != null);
-            var load = api?.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .FirstOrDefault(m => m.Name == "LoadTranslations");
+            // LoadTranslations(string directory, Func<string, bool> isEnabled): грузит все *.txt
+            // из папки, isEnabled = null значит «включено всё» (переключатель заводит сам LethalRussian)
+            var load = api?.GetMethod("LoadTranslations", BindingFlags.Public | BindingFlags.Static,
+                null, new[] { typeof(string), typeof(System.Func<string, bool>) }, null);
             if (load == null)
                 return; // русификатора нет: остаётся английский
 
             try
             {
-                var args = load.GetParameters().Select(p =>
-                    p.ParameterType == typeof(string) ? translations :
-                    p.ParameterType == typeof(bool) ? true :
-                    p.ParameterType == typeof(System.Func<bool>) ? (object)(System.Func<bool>)(() => true) :
-                    p.HasDefaultValue ? p.DefaultValue : null).ToArray();
-                load.Invoke(null, args);
-                Log.LogInfo("Перевод для LethalRussian загружен");
+                var count = load.Invoke(null, new object[] { translations, null });
+                Log.LogInfo($"Перевод для LethalRussian загружен ({count})");
             }
             catch (System.Exception e)
             {

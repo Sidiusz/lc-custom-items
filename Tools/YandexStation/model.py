@@ -8,8 +8,7 @@
 #   Marks         «+», «−» и точки на крышке
 #   Ring          кольцо Алисы на крышке (светится, пульсирует, когда колонка говорит)
 #   Seg<цифра><a-g>  сегменты четырёх цифр часов, ColonTop/ColonBottom — двоеточие
-#   MouthSmile, MouthHalf, MouthOpen  рот мордочки (глаза рисуются сегментами цифр)
-# Что горит, решает YandexStationItem (время или мордочка).
+# Что горит, решает YandexStationItem: время или глаза (тоже из сегментов цифр).
 #
 # Запуск из корня репозитория (Blender или pip-пакет bpy):
 #   blender -b --factory-startup -P Tools/YandexStation/model.py
@@ -52,10 +51,8 @@ DIGITS = {
     0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg",
     5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg",
 }
-# Мордочка для превью (как в YandexStationItem): глаза-квадратики из сегментов и рот
+# Глаза для превью (как в YandexStationItem): FACE="abfg,,,abfg" — сегменты по цифрам
 FACE = ["abfg", "", "", "abfg"]
-FACE_MOUTH = "MouthHalf"
-MOUTH_V = -0.0075     # центр рта по высоте относительно центра цифр
 
 
 # ---------------------------------------------------------------- корпус
@@ -220,38 +217,6 @@ def circle(cu, cv, r, n=12):
     return [(cu + r * math.cos(2 * math.pi * k / n), cv + r * math.sin(2 * math.pi * k / n)) for k in range(n)]
 
 
-def build_stroke(bm, path, closed=False, t=SEG_T):
-    """Линия толщиной t по точкам (u, v), натянутая на цилиндр."""
-    n = len(path)
-    left, right = [], []
-    for i, (u, v) in enumerate(path):
-        p0 = path[i - 1] if (i > 0 or closed) else path[i]
-        p1 = path[(i + 1) % n] if (i < n - 1 or closed) else path[i]
-        du, dv = p1[0] - p0[0], p1[1] - p0[1]
-        ln = math.hypot(du, dv) or 1.0
-        nu, nv = -dv / ln * t / 2, du / ln * t / 2
-        left.append(bm.verts.new(to_surface(u + nu, v + nv)))
-        right.append(bm.verts.new(to_surface(u - nu, v - nv)))
-    for i in range(n if closed else n - 1):
-        j = (i + 1) % n
-        bm.faces.new((left[i], left[j], right[j], right[i]))
-
-
-def arc(cu, cv, ru, rv, a0, a1, n=16):
-    return [(cu + ru * math.cos(a0 + (a1 - a0) * k / n), cv + rv * math.sin(a0 + (a1 - a0) * k / n))
-            for k in range(n + 1)]
-
-
-def mouth_paths():
-    """Рот: улыбка, приоткрытый и открытый (кольца-овалы), центр между двумя средними цифрами."""
-    v = MOUTH_V
-    return {
-        "MouthSmile": (arc(0.0, v + 0.003, 0.0085, 0.0045, math.pi * 1.1, math.pi * 1.9), False),
-        "MouthHalf": (arc(0.0, v, 0.0075, 0.0028, 0, 2 * math.pi, 28)[:-1], True),
-        "MouthOpen": (arc(0.0, v - 0.0005, 0.0080, 0.0050, 0, 2 * math.pi, 28)[:-1], True),
-    }
-
-
 def build_segments():
     objs = {}
     for d, cu in enumerate(DIGIT_U):
@@ -262,9 +227,6 @@ def build_segments():
             objs[name].data.materials[0] = display_material()
     for name, v in (("ColonTop", 0.0055), ("ColonBottom", -0.0055)):
         objs[name] = make_object(name, lambda bm, v=v: build_flat(bm, circle(0.0, v, 0.0016)), DISPLAY_COLOR, 6.0)
-        objs[name].data.materials[0] = display_material()
-    for name, (path, closed) in mouth_paths().items():
-        objs[name] = make_object(name, lambda bm, p=path, c=closed: build_stroke(bm, p, c), DISPLAY_COLOR, 6.0)
         objs[name].data.materials[0] = display_material()
     return objs
 
@@ -282,7 +244,7 @@ def fix_normals_outward(obj):
     bm.from_mesh(me)
     for f in bm.faces:
         c = f.calc_center_median()
-        out = Vector((c.x, c.y, 0)) if obj.name.startswith(("Seg", "Colon", "Mouth")) else Vector((0, 0, 1))
+        out = Vector((c.x, c.y, 0)) if obj.name.startswith(("Seg", "Colon")) else Vector((0, 0, 1))
         if f.normal.dot(out) < 0:
             f.normal_flip()
     bm.to_mesh(me)
@@ -299,7 +261,7 @@ def build():
     }
     objs.update(build_segments())
     for name, o in objs.items():
-        if name in ("Marks", "Ring") or name.startswith(("Seg", "Colon", "Mouth")):
+        if name in ("Marks", "Ring") or name.startswith(("Seg", "Colon")):
             fix_normals_outward(o)
 
     bpy.ops.object.select_all(action="DESELECT")
@@ -329,13 +291,11 @@ def export():
     print("saved", path)
 
 
-def show_pattern(objs, patterns, colon, mouth=None):
+def show_pattern(objs, patterns, colon):
     for d in range(4):
         for s in "abcdefg":
             objs[f"Seg{d}{s}"].hide_render = s not in patterns[d]
     objs["ColonTop"].hide_render = objs["ColonBottom"].hide_render = not colon
-    for name in mouth_paths():
-        objs[name].hide_render = name != mouth
 
 
 def render_preview(objs, path, face=False, back=False):
@@ -345,7 +305,7 @@ def render_preview(objs, path, face=False, back=False):
         bsdf = bpy.data.materials["BodyMat"].node_tree.nodes["Principled BSDF"]
         bsdf.inputs["Base Color"].default_value = (*rgb, 1)
     if face:
-        show_pattern(objs, FACE, False, os.environ.get("MOUTH", FACE_MOUTH))
+        show_pattern(objs, os.environ["FACE"].split(",") if os.environ.get("FACE") else FACE, False)
     else:
         show_pattern(objs, [DIGITS[1], DIGITS[2], DIGITS[3], DIGITS[5]], True)
 

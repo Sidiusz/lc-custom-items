@@ -85,7 +85,7 @@ namespace CustomItems
             var price = Config.Bind(section, "Price", entry.price, "Цена в магазине").Value;
 
             if (Lang.Russian)
-                Translate(item, prefab, entry, inShop);
+                Translate(item, prefab, entry);
 
             var asScrap = item.isScrap && rarity > 0;
             if (asScrap)
@@ -96,13 +96,11 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterItem(item);
         }
 
-        private static void Translate(Item item, GameObject prefab, ItemRegistry.Entry entry, bool inShop)
+        private static void Translate(Item item, GameObject prefab, ItemRegistry.Entry entry)
         {
             if (!string.IsNullOrEmpty(entry.nameRu))
             {
-                // Из названия терминал делает команду buy, а кириллицу в нём не набрать
-                if (!inShop)
-                    item.itemName = entry.nameRu;
+                item.itemName = entry.nameRu;
                 foreach (var scan in prefab.GetComponentsInChildren<ScanNodeProperties>(true))
                     scan.headerText = entry.nameRu;
             }

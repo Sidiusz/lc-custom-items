@@ -65,7 +65,7 @@ lc-custom-items/
    - **ItemRegistry** (`Data`): какие предметы попадают в мод, редкость скрапа, продажа в магазине и цена.
 6. Меню **Lethal Company → Build AssetBundles**. Бандл окажется в `Bundles/customitems`, откуда его заберёт сборка мода.
 
-Язык: `[General] Language = ru` (по умолчанию) или `en` в конфиге. По-русски показываются названия и подсказки из `nameRu` / `toolTipsRu` в ItemRegistry и фразы из кода. У магазинных предметов название в терминале остаётся английским, чтобы его можно было набрать в `buy`.
+Язык: `[General] Language = ru` (по умолчанию) или `en` в конфиге. По-русски показываются названия и подсказки из `nameRu` / `toolTipsRu` в ItemRegistry и фразы из кода.
 
 Редкость, магазин и цена из ItemRegistry служат значениями по умолчанию для конфига BepInEx (`BepInEx/config/sidiusz.customitems.cfg`), так что их можно поменять и без пересборки. Если в конфиге уже есть строка, она важнее Unity: удалите её, чтобы взялось новое значение.
 
@@ -112,7 +112,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 1. В папке профиля должно быть `BepInEx/plugins/CustomItems/CustomItems.dll` и `.../CustomItems/customitems`.
 2. В `BepInEx/config/BepInEx.cfg` включите консоль: `[Logging.Console] Enabled = true`.
 3. Запустите игру через r2modman. В консоли должно быть `CustomItems 0.1.0 загружен` и никаких ошибок про AssetBundle или модель.
-4. Быстрый тест без поиска по карте: поставьте `InShop = true` в `BepInEx/config/sidiusz.customitems.cfg` (секция с названием предмета, например `[Winston plush]`), купите его в терминале (`buy winston plush`). Либо поставьте Imperium и заспавните предмет через его меню.
+4. Быстрый тест без поиска по карте: поставьте `InShop = true` в `BepInEx/config/sidiusz.customitems.cfg` (секция с названием предмета, например `[Winston plush]`), купите его в терминале (`buy плюшевый уинстон`, с `Language = en` — `buy winston plush`). Либо поставьте Imperium и заспавните предмет через его меню.
 5. Для теста как скрапа поднимите `Rarity` (например, 200) и слетайте на любую луну.
 6. Мультиплеер: проверьте с другом или двумя копиями игры (LAN-режим), что писк слышен второму игроку. У всех игроков мод должен быть одинаковой версии.
 

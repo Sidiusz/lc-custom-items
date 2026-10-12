@@ -3,10 +3,12 @@ using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Logging;
+using HarmonyLib;
 using CustomItems.Items;
 using LethalLib.Modules;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace CustomItems
 {
@@ -43,8 +45,13 @@ namespace CustomItems
                 return;
             }
 
+            // Настройки из игрового окна (BepInEx/config/SidiuszCustomItems.tuning.txt) поверх ассетов
+            ItemTuningStore.Load(Paths.ConfigPath);
+
             foreach (var entry in registry.items)
                 Register(entry);
+
+            SetupItemTuner();
 
             // Настройки поведения, которые не живут в ассетах: их удобно менять без пересборки
             AdrenalineItem.SleepyPlayers = Config.Bind("Adrenaline Game Fuel", "SleepyPlayers", "Sidiusz",
@@ -76,6 +83,7 @@ namespace CustomItems
             var section = item.itemName;
             PreparePrefab(prefab);
             LethalLib.Modules.NetworkPrefabs.RegisterNetworkPrefab(prefab);
+            ItemTuningStore.Register(item);
 
             // Значения из Unity служат умолчаниями, конфиг BepInEx их переопределяет
             var rarity = Config.Bind(section, "Rarity", entry.rarity,
@@ -90,6 +98,29 @@ namespace CustomItems
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
             if (!asScrap && !inShop)
                 LethalLib.Modules.Items.RegisterItem(item);
+        }
+
+        private void SetupItemTuner()
+        {
+            var enabled = Config.Bind("Item tuner", "Enabled", false,
+                "Окно настройки предметов прямо в игре: смещение и поворот в руке, наклон и высота на полу, размер. " +
+                "Сохранённое пишется в SidiuszCustomItems.tuning.txt рядом с этим конфигом").Value;
+            var keyName = Config.Bind("Item tuner", "Key", "F8",
+                "Клавиша, открывающая окно (имя из Unity Input System: F8, F9, Backquote, Insert...)").Value;
+            if (!enabled)
+                return;
+
+            if (System.Enum.TryParse<Key>(keyName, true, out var key))
+                ItemTuner.ToggleKey = key;
+            else
+                Log.LogWarning($"Не знаю клавишу '{keyName}', окно настройки открывается на {ItemTuner.ToggleKey}");
+
+            // Отдельный объект: объект BepInEx в Lethal Company уничтожается, и его Update не вызывается
+            var go = new GameObject("SidiuszCustomItems.ItemTuner") { hideFlags = HideFlags.HideAndDontSave };
+            DontDestroyOnLoad(go);
+            go.AddComponent<ItemTuner>();
+            new Harmony(PluginGuid + ".tuner").CreateClassProcessor(typeof(ItemTuner.BlockPlayerInput)).Patch();
+            Log.LogInfo($"Окно настройки предметов: {ItemTuner.ToggleKey}");
         }
 
         // Названия и подсказки в ассетах всегда английские: русификатор LethalRussian

@@ -124,6 +124,13 @@ namespace CustomItems
                 "Друзья по нику Steam: «ник,ник=Папка» через точку с запятой. На «Алиса, как меня зовут?» колонка говорит фразу " +
                 "из Phrases/Names/<Папка> (незнакомому — из Names/Unknown), а при смерти игрока может сказать Events/PlayerDied/<Папка>. " +
                 "Ники сравниваются без регистра и значков, ник может быть длиннее (Sidiusz* подходит к Sidiusz)").Value);
+            var spoken = Config.Bind(section, "SpokenNames",
+                "Daniil=даниил,даня,данил,сидиус; Andrey=андрей,андрюха; Arseniy=арсений,сеня; Pavel=павел,паша",
+                "Как друзей зовут вслух: «Папка=слово,слово» через точку с запятой. Для «Алиса, где Андрей?» " +
+                "(слова должны быть в словаре распознавания, строчными)").Value;
+            YandexStationItem.SetSpokenNames(spoken);
+            YandexStationItem.ShushSeconds = Config.Bind(section, "ShushSeconds", 60f,
+                "Столько секунд после «замолчи» колонка не говорит сама (события)").Value;
 
             const string events = "Yandex Station Events";
             YandexStationItem.EventsEnabled = Config.Bind(events, "Enabled", true,
@@ -160,6 +167,7 @@ namespace CustomItems
             {
                 AliceListener.Grammar = AliceListener.DefaultGrammar
                     .Concat(new[] { YandexStationItem.WakeWord })
+                    .Concat(YandexStationItem.SpokenNames.Values.SelectMany(n => n).Select(n => "где " + n))
                     .Concat(extra.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0))
                     .Distinct().ToArray();
             }

@@ -72,6 +72,7 @@ public static class ItemAssets
             ToolTips = new[] { "Drink : [LMB]" },
             SaveItemVariable = true, // сохранять оставшиеся глотки
             Clips = new[] { ("drinkClip", Art + "/Audio/Jagermeister/JagermeisterDrink.wav") },
+            DropSound = Art + "/Audio/Jagermeister/JagermeisterDrop.wav", // стеклянную бутылку ставят на пол
             Customize = SetupJagermeister,
         },
         new Spec

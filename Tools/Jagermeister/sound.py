@@ -1,7 +1,8 @@
 """
 Звук глотка Егермейстера -> Assets/Sources/Art/Audio/Jagermeister/JagermeisterDrink.wav
-Просто выдох после глотка: шум, окрашенный под шёпотное «ха-а», без голоса. Собирается целиком
-из шума, чтобы в звуке не было никаких голосовых призвуков. Нужен numpy.
+Два настоящих глотка (берутся из AdrenalineSip.wav, его собирает Tools/Adrenaline/sound.py,
+чуть ниже тоном: из бутылки глоток крупнее), потом выдох: шум, окрашенный под шёпотное «ха-а»,
+без голоса. Нужен numpy.
 
 Клип играет через 0.3 с после начала питья (JagermeisterItem.SoundDelay), бутылку опускают
 на 1.4 с, поэтому выдох начинается с паузой LEAD, когда бутылка уже ото рта.
@@ -18,6 +19,9 @@ OUT = os.path.join(ROOT, "Assets", "Sources", "Art", "Audio", "Jagermeister", "J
 
 RATE = 44100
 LEAD = 0.95     # пауза до выдоха, с
+GULPS = os.path.join(ROOT, "Assets", "Sources", "Art", "Audio", "Adrenaline", "AdrenalineSip.wav")
+GULPS_LENGTH = 0.8  # два первых глотка из трёх
+GULPS_PITCH = 0.94
 BREATH = 1.1    # длина выдоха, с
 
 
@@ -45,10 +49,25 @@ def breath(rng):
     return x
 
 
+def gulps():
+    with wave.open(GULPS) as w:
+        assert w.getframerate() == RATE and w.getnchannels() == 1 and w.getsampwidth() == 2
+        x = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(float) / 32767
+    x = x[:int(GULPS_LENGTH * RATE)]
+    # ниже тоном и чуть длиннее: читаем медленнее
+    t = np.arange(0, len(x) - 1, GULPS_PITCH)
+    x = np.interp(t, np.arange(len(x)), x)
+    fade = int(0.03 * RATE)
+    x[-fade:] *= np.linspace(1, 0, fade)
+    return x * 0.75 / np.max(np.abs(x))
+
+
 def main():
     rng = np.random.default_rng(1337)
     x = np.concatenate([np.zeros(int(LEAD * RATE)), breath(rng)])
     x *= 0.5 / np.max(np.abs(x))
+    g = gulps()
+    x[:len(g)] += g
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with wave.open(OUT, "wb") as w:
         w.setnchannels(1)

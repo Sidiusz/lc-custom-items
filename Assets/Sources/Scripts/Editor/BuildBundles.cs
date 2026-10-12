@@ -2,6 +2,7 @@
 // Бандлы собираются в папку Bundles/ в корне репозитория, откуда их берёт сборка мода.
 using System.IO;
 using UnityEditor;
+using UnityEngine;
 
 public static class BuildBundles
 {
@@ -10,12 +11,18 @@ public static class BuildBundles
     {
         // Без ассетов предметов бандл получится пустым для мода
         if (!ItemAssets.EnsureForBuild())
+        {
+            // В batchmode (-executeMethod BuildBundles.Build) сообщаем об ошибке кодом выхода
+            if (Application.isBatchMode)
+                EditorApplication.Exit(1);
             return;
+        }
 
         const string output = "Bundles";
         Directory.CreateDirectory(output);
         BuildPipeline.BuildAssetBundles(output, BuildAssetBundleOptions.ChunkBasedCompression,
             BuildTarget.StandaloneWindows64);
-        EditorUtility.RevealInFinder(output);
+        if (!Application.isBatchMode)
+            EditorUtility.RevealInFinder(output);
     }
 }

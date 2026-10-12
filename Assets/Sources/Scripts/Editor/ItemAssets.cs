@@ -443,11 +443,44 @@ public static class ItemAssets
 
     private static bool TypesReady(bool log)
     {
-        var missing = new[] { "Item", "GrabbableObject", "Unity.Netcode.NetworkObject", "CustomItems.ItemRegistry" }
+        var missing = new[] { "Item", "GrabbableObject", "ScanNodeProperties", "Unity.Netcode.NetworkObject", "CustomItems.ItemRegistry" }
             .Where(n => FindType(n) == null).ToArray();
+        if (missing.Length > 0)
+        {
+            if (log)
+                Debug.LogError("Нет типов " + string.Join(", ", missing) + ". DLL игры: Lethal Company → Setup → Import Game DLLs; " +
+                               "SidiuszCustomItems.Items.dll: соберите мод (dotnet build) и вернитесь в Unity.");
+            return false;
+        }
+        return ScriptsReady(log);
+    }
+
+    // Тип в домене ещё не значит, что у Unity есть для него MonoScript. Без MonoScript
+    // AddComponent/CreateAsset сохраняют m_Script: {fileID: 0}. Так бывает в batchmode
+    // (-executeMethod), пока скрипты Assembly-CSharp не импортированы: тогда ничего не
+    // создаём и не пересобираем, чтобы не испортить рабочие ассеты.
+    private static bool ScriptsReady(bool log)
+    {
+        var needed = new[] { "Item", "ScanNodeProperties", "Unity.Netcode.NetworkObject", "CustomItems.ItemRegistry" }
+            .Concat(Specs.Select(s => s.Behaviour))
+            .Select(FindType).Where(t => t != null).ToArray();
+
+        string[] Missing()
+        {
+            var known = new HashSet<Type>(MonoImporter.GetAllRuntimeMonoScripts()
+                .Where(m => m != null).Select(m => m.GetClass()).Where(c => c != null));
+            return needed.Where(t => !known.Contains(t)).Select(t => t.Name).ToArray();
+        }
+
+        var missing = Missing();
+        if (missing.Length > 0 && Application.isBatchMode)
+        {
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            missing = Missing();
+        }
         if (missing.Length > 0 && log)
-            Debug.LogError("Нет типов " + string.Join(", ", missing) + ". DLL игры: Lethal Company → Setup → Import Game DLLs; " +
-                           "SidiuszCustomItems.Items.dll: соберите мод (dotnet build) и вернитесь в Unity.");
+            Debug.LogError("У Unity ещё нет скриптов для " + string.Join(", ", missing) +
+                           ": ассеты предметов не трогаю. Дождитесь окончания компиляции и импорта и повторите.");
         return missing.Length == 0;
     }
 

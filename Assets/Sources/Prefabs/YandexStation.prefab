@@ -1055,78 +1055,12 @@ MonoBehaviour:
   - name: Events/Drink
     clips:
     - {fileID: 8300000, guid: 2c7d6d9f279739d42a8a2dd1f6afb1ca, type: 3}
-  - name: Events/Enemy/Baboon hawk
-    clips:
-    - {fileID: 8300000, guid: 7e5606c414096ca46a9f0a891d9c9033, type: 3}
-  - name: Events/Enemy/Blob
-    clips:
-    - {fileID: 8300000, guid: 3c19400147b9906458f65c7c2c424e89, type: 3}
-  - name: Events/Enemy/Bunker Spider
-    clips:
-    - {fileID: 8300000, guid: f64054daa6693214f9b029f9f6fe59eb, type: 3}
-  - name: Events/Enemy/Bush Wolf
-    clips:
-    - {fileID: 8300000, guid: 7ba424d90c1ebea4ebb0dc0c3f6bd14e, type: 3}
-  - name: Events/Enemy/Butler
-    clips:
-    - {fileID: 8300000, guid: 4afea7fcb1cefea469bfb226af9249c9, type: 3}
-  - name: Events/Enemy/Centipede
-    clips:
-    - {fileID: 8300000, guid: f8562ca2fefdf0549b5a53b4bfd9957b, type: 3}
-  - name: Events/Enemy/Clay Surgeon
-    clips:
-    - {fileID: 8300000, guid: 8f0e74fbf46c85f4488c296f95509089, type: 3}
-  - name: Events/Enemy/Crawler
-    clips:
-    - {fileID: 8300000, guid: 3262d593494436146a114600793214a2, type: 3}
-  - name: Events/Enemy/Earth Leviathan
-    clips:
-    - {fileID: 8300000, guid: 7ca99073c691f084fa59f6fdc6e39ccf, type: 3}
-  - name: Events/Enemy/Flowerman
-    clips:
-    - {fileID: 8300000, guid: dc61c1e0ce9390942b244baa34a8ccca, type: 3}
-  - name: Events/Enemy/ForestGiant
-    clips:
-    - {fileID: 8300000, guid: d340c7629086c1e46918d4c3872d35da, type: 3}
-  - name: Events/Enemy/Girl
-    clips:
-    - {fileID: 8300000, guid: 4102a3df65eb1894e985cd7b9c48ab0d, type: 3}
-  - name: Events/Enemy/Hoarding bug
-    clips:
-    - {fileID: 8300000, guid: 0bc3805ff90ba8a449a7736b10f5095f, type: 3}
-  - name: Events/Enemy/Jester
-    clips:
-    - {fileID: 8300000, guid: 7ea7e8d1f3da6a34eb3a1b5e95a83046, type: 3}
-  - name: Events/Enemy/Manticoil
-    clips:
-    - {fileID: 8300000, guid: 9f1c6e986a4a7384093ecda1af5e8f00, type: 3}
-  - name: Events/Enemy/Masked
-    clips:
-    - {fileID: 8300000, guid: 9052c071b69f4e64690ab400ded80dd7, type: 3}
   - name: Events/Enemy/MouthDog
     clips:
     - {fileID: 8300000, guid: dba0570693cf3c9409176814dee99691, type: 3}
     - {fileID: 8300000, guid: 479828d690613fd448cb5a040e0becac, type: 3}
     - {fileID: 8300000, guid: 61aef90774aa25c40a9de3d81acc0b2a, type: 3}
     - {fileID: 8300000, guid: f9abe8f72b3616747b46c0d8ec14adda, type: 3}
-  - name: Events/Enemy/Nutcracker
-    clips:
-    - {fileID: 8300000, guid: c9495fd78b9b6a94dbe1618262f74de9, type: 3}
-  - name: Events/Enemy/Puffer
-    clips:
-    - {fileID: 8300000, guid: af269ae5cd0b49e4a9c4b9841b76d93c, type: 3}
-  - name: Events/Enemy/RadMech
-    clips:
-    - {fileID: 8300000, guid: 179833f84fa0dfd468384df3f891a287, type: 3}
-  - name: Events/Enemy/Red Locust Bees
-    clips:
-    - {fileID: 8300000, guid: 722b11cf84a4be1449877f04aaa315bf, type: 3}
-  - name: Events/Enemy/Spring
-    clips:
-    - {fileID: 8300000, guid: 0e2a6ab11d51b8141b146a05c63e0ef0, type: 3}
-  - name: Events/Enemy/Tulip Snake
-    clips:
-    - {fileID: 8300000, guid: 7f7a25f2d8035ad4786e6492c5bfbcc5, type: 3}
   - name: Events/Flashlight
     clips:
     - {fileID: 8300000, guid: c81523bd63f5864419979f6f3c628b52, type: 3}
@@ -1164,8 +1098,9 @@ MonoBehaviour:
     - {fileID: 8300000, guid: eaa8cd91f5b5bf9408027803d96a2fdb, type: 3}
   - name: Events/Landed
     clips:
-    - {fileID: 8300000, guid: c58be9862f919fa40976ff2dc33c9786, type: 3}
-    - {fileID: 8300000, guid: c9b125c2f7df0ae469c501ade4e275e4, type: 3}
+    - {fileID: 8300000, guid: 9e6e217243a8ab44bb9774b94827dd27, type: 3}
+    - {fileID: 8300000, guid: ae6a3b547013b9f488fb27deb3ae4ba7, type: 3}
+    - {fileID: 8300000, guid: ab610c6bae7e0a74194304cfe5e97001, type: 3}
   - name: Events/LateDay
     clips:
     - {fileID: 8300000, guid: dfb97cdef258eec47a00e348477ff744, type: 3}
@@ -1173,17 +1108,7 @@ MonoBehaviour:
   - name: Events/Leaving
     clips:
     - {fileID: 8300000, guid: 8e6a1002391d1174d93e84a349a106b7, type: 3}
-    - {fileID: 8300000, guid: 4a3e2d5cbd52a0648816f71363e43d3f, type: 3}
-    - {fileID: 8300000, guid: 93a13f4794ad46c4690f42a3141af0e1, type: 3}
-    - {fileID: 8300000, guid: a69a5e09fb0e4774ba2081eb5016720c, type: 3}
     - {fileID: 8300000, guid: b264cf239bf0aac4a985a3b4af05fd39, type: 3}
-    - {fileID: 8300000, guid: 4795f065973e95647baebd39d01be72d, type: 3}
-    - {fileID: 8300000, guid: c64eefeb84081a34dbf21c4737ffec8b, type: 3}
-    - {fileID: 8300000, guid: 3dd779dab647a61458e8f033be77404e, type: 3}
-    - {fileID: 8300000, guid: 38db091653d6941429288cf2421efdc5, type: 3}
-    - {fileID: 8300000, guid: 68311700492426e4eb5a337d7834fdfb, type: 3}
-    - {fileID: 8300000, guid: cfeb46352c04daa48b1911f2ac307f9d, type: 3}
-    - {fileID: 8300000, guid: a90e1bc87a5ba3f468e2c670022bde47, type: 3}
   - name: Events/LeftBehind
     clips:
     - {fileID: 8300000, guid: 45edea4072d6c274aa5ffe260d03d784, type: 3}
@@ -1217,14 +1142,14 @@ MonoBehaviour:
     - {fileID: 8300000, guid: a19c093f127ef1443b3ab0e525a6b6f8, type: 3}
   - name: Events/Night
     clips:
-    - {fileID: 8300000, guid: daa853a39bb7f2049b13c4084c0bc477, type: 3}
+    - {fileID: 8300000, guid: 20af66caf628dd94da051a5ca73ac3b9, type: 3}
+    - {fileID: 8300000, guid: 2d09d57f4766757458c566c596a981a7, type: 3}
   - name: Events/Panic
     clips:
     - {fileID: 8300000, guid: 32e2f226540876c42b869a8fa6c4caaa, type: 3}
   - name: Events/PickedUp
     clips:
-    - {fileID: 8300000, guid: 3dcf488e989e4ce419665c9c861a0e3b, type: 3}
-    - {fileID: 8300000, guid: ad3e92f9c4a10d546947d03f7fa213ab, type: 3}
+    - {fileID: 8300000, guid: 9a3bb79d150693f46a9aadbf66840dd0, type: 3}
   - name: Events/PlayerDied
     clips:
     - {fileID: 8300000, guid: 7ccfffeaf7b01ff42a9f0942cbc98b49, type: 3}
@@ -1343,6 +1268,18 @@ MonoBehaviour:
     clips:
     - {fileID: 8300000, guid: 02e0823a522b6a8408fdec46f8376118, type: 3}
     - {fileID: 8300000, guid: 40f07055068535e4bb8ee6300d615c40, type: 3}
+  - name: Moon
+    clips:
+    - {fileID: 8300000, guid: 4795f065973e95647baebd39d01be72d, type: 3}
+    - {fileID: 8300000, guid: a69a5e09fb0e4774ba2081eb5016720c, type: 3}
+    - {fileID: 8300000, guid: c64eefeb84081a34dbf21c4737ffec8b, type: 3}
+    - {fileID: 8300000, guid: 3dd779dab647a61458e8f033be77404e, type: 3}
+    - {fileID: 8300000, guid: 38db091653d6941429288cf2421efdc5, type: 3}
+    - {fileID: 8300000, guid: 68311700492426e4eb5a337d7834fdfb, type: 3}
+    - {fileID: 8300000, guid: cfeb46352c04daa48b1911f2ac307f9d, type: 3}
+    - {fileID: 8300000, guid: a90e1bc87a5ba3f468e2c670022bde47, type: 3}
+    - {fileID: 8300000, guid: 4a3e2d5cbd52a0648816f71363e43d3f, type: 3}
+    - {fileID: 8300000, guid: 93a13f4794ad46c4690f42a3141af0e1, type: 3}
   - name: Mumble
     clips:
     - {fileID: 8300000, guid: 0cb20fd8ea029834396fe2aeb6071989, type: 3}
@@ -1470,9 +1407,11 @@ MonoBehaviour:
     - {fileID: 8300000, guid: d6eeca27b66eb15498058c89fea325bb, type: 3}
   - name: Time
     clips:
-    - {fileID: 8300000, guid: cbc6e593aa8839140a2a1de558ca1923, type: 3}
-    - {fileID: 8300000, guid: 722321354d7bd7648ad49123a90e04f0, type: 3}
-    - {fileID: 8300000, guid: f9706165bb2c5c04bb0883f8a897cdc1, type: 3}
+    - {fileID: 8300000, guid: 6de9fcd19d95e57488d0150995bec6fd, type: 3}
+    - {fileID: 8300000, guid: 529cefc3277e74d41bd00f272191dee4, type: 3}
+  - name: Time/10
+    clips:
+    - {fileID: 8300000, guid: d9d862d70475ec347a7bfe2f8bf8d9e9, type: 3}
   - name: Time/12
     clips:
     - {fileID: 8300000, guid: 5febd99d30ab09d45b462c6b8e1a79b0, type: 3}
@@ -1512,7 +1451,6 @@ MonoBehaviour:
   - name: Time/9
     clips:
     - {fileID: 8300000, guid: e88de20d904cb324d8b78d2d350717d1, type: 3}
-    - {fileID: 8300000, guid: d9d862d70475ec347a7bfe2f8bf8d9e9, type: 3}
   - name: TimeError
     clips:
     - {fileID: 8300000, guid: 53b66b4391a55844a934b71d49b8cc86, type: 3}
@@ -1578,16 +1516,10 @@ MonoBehaviour:
     - {fileID: 8300000, guid: f0369df1bbfe87d47b2174384a9302da, type: 3}
     - {fileID: 8300000, guid: 446e3bd611d7c4f46b2006cdeede62f7, type: 3}
     - {fileID: 8300000, guid: 27008c66a23be7940ad019809e96e99a, type: 3}
-  - name: Weather/Snowfall
-    clips:
-    - {fileID: 8300000, guid: 8409ca9b68433d94986d4b4b8168d4a8, type: 3}
   - name: Weather/Stormy
     clips:
     - {fileID: 8300000, guid: 6fb21ba15036bf84e9607497728e4e1d, type: 3}
     - {fileID: 8300000, guid: 6b243522b672c0b4daf4feab6b99a27e, type: 3}
-  - name: Weather/Toxic Smog
-    clips:
-    - {fileID: 8300000, guid: 9071fad096dd744478614faab8d010a4, type: 3}
   - name: Weather/Windy
     clips:
     - {fileID: 8300000, guid: 8238cc0b29e10eb408679ef5f8ebfb66, type: 3}

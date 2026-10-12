@@ -178,3 +178,14 @@ Ok|Понятно.
 Ok|Ясно.
 Events/WhatIsThis|Что это?
 Events/Winston|Уинстон!
+
+# Друзья по нику Steam (таблица в конфиге, [Yandex Station] Names): «Алиса, как меня зовут?»
+Names/Daniil|Ты Даниил. Или Сидиус.
+Names/Andrey|Ты Андрей. Он же Синон.
+Names/Arseniy|Ты Арсений. Сеня. Шакабуй.
+Names/Pavel|Ты Павел. Паша. Павлецки.
+Names/Unknown|Я тебя не знаю. Но ты мне уже нравишься.
+Events/PlayerDied/Daniil|Даниил! Нет!
+Events/PlayerDied/Andrey|Андрей, ну как так.
+Events/PlayerDied/Arseniy|Сеня! Сеня?
+Events/PlayerDied/Pavel|Паша всё.

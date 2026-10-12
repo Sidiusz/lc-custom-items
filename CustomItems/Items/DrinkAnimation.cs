@@ -21,13 +21,18 @@ namespace CustomItems.Items
         public static int Sips;
         public static Vector3 LastSipAt;
 
+        /// <summary>Отметить глоток для колонки, если анимацию ставит сам предмет (Егермейстер).</summary>
+        public static void CountSip(PlayerControllerB player)
+        {
+            if (player == null)
+                return;
+            Sips++;
+            LastSipAt = player.transform.position;
+        }
+
         public static void Play(PlayerControllerB player, float seconds = 1.2f)
         {
-            if (player != null)
-            {
-                Sips++;
-                LastSipAt = player.transform.position;
-            }
+            CountSip(player);
             var animator = player != null ? player.playerBodyAnimator : null;
             if (animator == null || !animator.parameters.Any(p => p.nameHash == ParameterHash))
                 return;

@@ -135,7 +135,7 @@ public static class ItemAssets
             ToolTips = new[] { "Turn on/off : [LMB]", "Talk : [E]" },
             BatterySeconds = 1800f,     // полный заряд на 30 минут работы, заряжается на зарядке корабля
             SaveItemVariable = true,    // цвет и «включена»
-            SyncInteract = true,        // E меняет цвет у всех
+            SyncInteract = true,        // E: поболтать (фразу выбирает держащий)
             Phrases = true,
             Clips = new[]
             {

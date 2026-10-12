@@ -289,6 +289,7 @@ namespace CustomItems
 
             // Строки с числами по точному тексту не переводятся, их переводим сами
             ToyGunItem.AmmoTipFormat = "Пульки : {0}/{1}";
+            ToyGunItem.ReloadTipFormat = "Перезарядить : [{0}]";
             ToyGunItem.NoAmmoHeader = "Игрушечный пистолет";
             ToyGunItem.NoAmmoBody = "В инвентаре нет пулек. Их можно купить в магазине терминала.";
             ToyGunAmmoItem.TipFormat = "Пулек в пачке : {0}";

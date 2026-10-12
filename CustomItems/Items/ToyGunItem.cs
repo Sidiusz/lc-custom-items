@@ -35,6 +35,8 @@ namespace CustomItems.Items
         public static string ReloadKeyName = "R";
         /// <summary>Строка подсказки с патронами: {0} в магазине, {1} ёмкость. Плагин переводит её.</summary>
         public static string AmmoTipFormat = "Pellets : {0}/{1}";
+        /// <summary>Подсказка перезарядки: {0} клавиша из конфига. Плагин переводит её.</summary>
+        public static string ReloadTipFormat = "Reload : [{0}]";
         public static string NoAmmoHeader = "Toy gun";
         public static string NoAmmoBody = "No pellets in inventory. Buy them in the terminal store.";
 
@@ -72,7 +74,7 @@ namespace CustomItems.Items
             HUDManager.Instance.ChangeControlTipMultiple(new[]
             {
                 "Shoot : [LMB]",
-                $"Reload : [{ReloadKeyName}]",
+                string.Format(ReloadTipFormat, ReloadKeyName),
                 string.Format(AmmoTipFormat, Mathf.Max(ammo, 0), MagazineSize),
             }, holdingItem: true, itemProperties);
         }

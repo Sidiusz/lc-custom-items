@@ -14,17 +14,20 @@ using Vosk;
 namespace CustomItems
 {
     /// <summary>
-    /// Распознаёт, что локальный игрок говорит в голосовой чат, пока рядом включённая
-    /// Яндекс Станция: офлайн, Vosk с маленькой русской моделью. Распознанный текст
-    /// уходит в <see cref="YandexStationItem.OnLocalSpeech"/>, которая и решает,
-    /// обращались ли к Алисе.
+    /// Распознаёт, что игроки говорят в голосовой чат рядом с включённой Яндекс Станцией:
+    /// офлайн, Vosk с маленькой русской моделью. Текст уходит в
+    /// <see cref="YandexStationItem.OnSpeech"/>, которая и решает, обращались ли к Алисе.
     ///
-    /// Звук берётся у голосового чата игры (Dissonance, подписка на записанный микрофон),
-    /// а фраза засчитывается, только если в это время игрока было слышно в чате: с
-    /// выключенным микрофоном или не нажатой кнопкой рации (push-to-talk) колонка не
-    /// слышит. Каждый игрок распознаёт свою речь у себя, в фоновом потоке, другим по
-    /// сети уходит лишь выбранная колонкой фраза. Так колонка слышит всех игроков чата
-    /// рядом с собой, а звук чужих голосов никуда не пересылается.
+    /// По умолчанию (<see cref="HostListens"/>) слушает только хост, и сразу всех: свой
+    /// микрофон (подписка Dissonance) и голоса остальных, которые и так приходят к нему по
+    /// голосовому чату (фильтр на AudioSource голоса каждого игрока). Так колонка понимает
+    /// любого игрока, даже если у него распознавание не завелось, а ответ один на всех.
+    /// Иначе — по-старому: каждый распознаёт свой микрофон у себя.
+    ///
+    /// Звук идёт в распознавание, только пока игрока слышно в чате (push-to-talk нажат) и
+    /// ещё чуть-чуть после, и только рядом с колонкой. У каждого игрока свой распознаватель.
+    /// Ответ приходит не после паузы, а как только в куске фразы есть «Алиса» и понятный
+    /// вопрос (два одинаковых промежуточных результата подряд).
     ///
     /// Vosk лежит рядом с DLL мода: Vosk.dll, папка vosk/ с нативными библиотеками
     /// (Windows x64) и моделью vosk/model-ru/. Всё это кладёт туда сборка (csproj).
@@ -33,9 +36,14 @@ namespace CustomItems
     {
         public static string VoskDir;
 
+        /// <summary>Распознаёт хост голоса всех игроков (true) или каждый свой микрофон (false).</summary>
+        public static bool HostListens = true;
+
         /// <summary>
         /// Фразы, которые распознаются (режим грамматики Vosk): с ними маленькая модель почти
         /// не ошибается, всё остальное становится [unk]. null — свободное распознавание.
+        /// В грамматику идут и фразы целиком, и каждое их слово отдельно: так разбираются
+        /// и вопросы своими словами («алиса а что там с погодой»).
         /// </summary>
         public static string[] Grammar;
 
@@ -68,59 +76,154 @@ namespace CustomItems
         };
 
         private static readonly Regex TextField = new Regex("\"text\"\\s*:\\s*\"([^\"]*)\"");
+        private static readonly Regex PartialField = new Regex("\"partial\"\\s*:\\s*\"([^\"]*)\"");
+
+        // После конца речи в чате ещё столько секунд кормим распознавание (оно ждёт паузу)
+        private const float Tail = 1.2f;
+        // Промежуточный результат спрашиваем не чаще, чем раз в столько звука
+        private const float PartialEvery = 0.2f;
+        private const int Mic = -1;
 
         private object subscribedTo;
-        private float lastHeardInChat = -100f;
-
-        // Фраза распознаётся после паузы, поэтому смотрим, звучал ли игрок в чате недавно
-        private const float HeardWindow = 3f;
-        private volatile bool active;
         private volatile bool stopping;
         private volatile bool failed;
 
         private readonly object gate = new object();
-        private readonly Queue<short[]> chunks = new Queue<short[]>();
-        private readonly Queue<string> results = new Queue<string>();
-        private int sampleRate;
+        private readonly Queue<Chunk> chunks = new Queue<Chunk>();
+        private readonly Queue<Heard> results = new Queue<Heard>();
+        private readonly HashSet<int> resetRequests = new HashSet<int>();
         private Thread worker;
+
+        // Кто сейчас слушается: игрок → до какого времени (говорил + хвост)
+        private readonly Dictionary<int, float> hearUntil = new Dictionary<int, float>();
+        private readonly Dictionary<int, string> lastPartial = new Dictionary<int, string>();
+        private readonly HashSet<int> answered = new HashSet<int>();
+        private volatile bool micOn;
+        private volatile int micPlayer;
+        private int outputRate;
+
+        internal struct Chunk
+        {
+            public int Player, Rate;
+            public short[] Pcm; // null — игрок замолчал, дожать фразу
+        }
+
+        internal struct Heard
+        {
+            public int Player;
+            public string Text; // null — распознаватель сброшен после ответа на кусок фразы
+            public bool Partial;
+        }
 
         private void Update()
         {
             if (failed)
                 return;
+            outputRate = AudioSettings.outputSampleRate;
 
             // Голосовой чат пересоздаётся при каждом входе в лобби
-            var comms = StartOfRound.Instance != null ? StartOfRound.Instance.voiceChatModule : null;
+            var round = StartOfRound.Instance;
+            var comms = round != null ? round.voiceChatModule : null;
             if (comms != null && !ReferenceEquals(comms, subscribedTo))
             {
                 comms.SubscribeToRecordedAudio(this);
                 subscribedTo = comms;
             }
 
-            active = comms != null && !comms.IsMuted && YandexStationItem.AnyNearLocalPlayer();
-            if (active)
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            var listen = comms != null && round.allPlayerScripts != null
+                         && (!HostListens || nm != null && nm.IsServer);
+            var any = false;
+            if (listen)
             {
-                var me = comms.LocalPlayerName != null ? comms.FindPlayer(comms.LocalPlayerName) : null;
-                if (me != null && me.IsSpeaking)
-                    lastHeardInChat = Time.time;
+                var local = GameNetworkManager.Instance?.localPlayerController;
+                for (var i = 0; i < round.allPlayerScripts.Length; i++)
+                {
+                    var p = round.allPlayerScripts[i];
+                    if (p == null)
+                        continue;
+                    var isLocal = p == local;
+                    if (!isLocal && !HostListens)
+                        continue;
+                    var state = isLocal
+                        ? comms.LocalPlayerName != null ? comms.FindPlayer(comms.LocalPlayerName) : null
+                        : p.voicePlayerState;
+                    var speaking = state != null && state.IsSpeaking && (!isLocal || !comms.IsMuted);
+                    if (speaking && YandexStationItem.NearPlayer(p))
+                        hearUntil[i] = Time.time + Tail;
+                    var on = hearUntil.TryGetValue(i, out var until) && Time.time < until;
+                    if (!on && hearUntil.Remove(i))
+                        Push(new Chunk { Player = i }); // замолчал: пусть распознавание закончит фразу
+                    any |= on;
+
+                    if (isLocal)
+                    {
+                        micPlayer = i;
+                        micOn = on;
+                    }
+                    else if (p.currentVoiceChatAudioSource != null)
+                    {
+                        var tap = p.currentVoiceChatAudioSource.GetComponent<VoiceTap>()
+                                  ?? p.currentVoiceChatAudioSource.gameObject.AddComponent<VoiceTap>();
+                        tap.Listener = this;
+                        tap.Player = i;
+                        tap.Rate = outputRate;
+                        tap.On = on;
+                    }
+                }
             }
-            if (active && worker == null)
+            else
+            {
+                micOn = false;
+                hearUntil.Clear();
+            }
+            if (any && worker == null)
                 StartWorker();
 
             while (true)
             {
-                string text;
+                Heard heard;
                 lock (gate)
                 {
                     if (results.Count == 0)
                         break;
-                    text = results.Dequeue();
+                    heard = results.Dequeue();
                 }
-                if (Time.time - lastHeardInChat > HeardWindow)
-                    continue; // говорил мимо чата (push-to-talk не нажат)
-                Plugin.Log.LogDebug("Алиса услышала: " + text);
-                YandexStationItem.OnLocalSpeech(text);
+                Handle(heard, round);
             }
+        }
+
+        private void Handle(Heard heard, StartOfRound round)
+        {
+            if (heard.Text == null)
+            {
+                answered.Remove(heard.Player); // распознаватель сброшен, дальше новая фраза
+                return;
+            }
+            var player = round != null && heard.Player >= 0 && heard.Player < round.allPlayerScripts.Length
+                ? round.allPlayerScripts[heard.Player] : null;
+            if (player == null)
+                return;
+
+            if (heard.Partial)
+            {
+                // Ответить можно уже по куску: «алиса какая погода» дважды подряд — дальше не ждём
+                lastPartial.TryGetValue(heard.Player, out var before);
+                lastPartial[heard.Player] = heard.Text;
+                if (answered.Contains(heard.Player) || heard.Text != before || !YandexStationItem.IsCompleteCommand(heard.Text))
+                    return;
+                answered.Add(heard.Player);
+                lock (gate)
+                    resetRequests.Add(heard.Player);
+            }
+            else
+            {
+                lastPartial.Remove(heard.Player);
+                if (answered.Contains(heard.Player))
+                    return; // на эту фразу уже ответили по куску
+            }
+            Plugin.Log.LogDebug($"Алиса услышала {player.playerUsername}: {heard.Text}");
+            YandexStationItem.OnSpeech(player, heard.Text);
         }
 
         private void OnDestroy()
@@ -133,30 +236,63 @@ namespace CustomItems
         // Вызывает Dissonance (может быть не с главного потока): только копируем звук в очередь
         public void ReceiveMicrophoneData(ArraySegment<float> buffer, WaveFormat format)
         {
-            if (!active || buffer.Array == null)
+            if (!micOn || buffer.Array == null)
                 return;
             var pcm = new short[buffer.Count];
             for (var i = 0; i < buffer.Count; i++)
-                pcm[i] = (short)Mathf.Clamp(buffer.Array[buffer.Offset + i] * 32767f, -32768f, 32767f);
-            lock (gate)
-            {
-                sampleRate = format.SampleRate;
-                if (chunks.Count < 200) // ~4 с при кадрах по 20 мс; если не успеваем, старое выбрасываем
-                    chunks.Enqueue(pcm);
-                Monitor.Pulse(gate);
-            }
+                pcm[i] = ToShort(buffer.Array[buffer.Offset + i]);
+            Push(new Chunk { Player = micPlayer, Rate = format.SampleRate, Pcm = pcm });
         }
 
         public void Reset()
         {
+        }
+
+        internal static short ToShort(float v) => (short)Mathf.Clamp(v * 32767f, -32768f, 32767f);
+
+        internal void Push(Chunk chunk)
+        {
             lock (gate)
-                chunks.Clear();
+            {
+                if (chunks.Count < 400) // ~4 с на двоих при кадрах по 20 мс; если не успеваем, новое выбрасываем
+                    chunks.Enqueue(chunk);
+                Monitor.Pulse(gate);
+            }
+        }
+
+        /// <summary>
+        /// Голос другого игрока, как его слышит хост: висит на AudioSource голоса после
+        /// Dissonance и забирает первый канал. Звук не меняет.
+        /// </summary>
+        public class VoiceTap : MonoBehaviour
+        {
+            internal AliceListener Listener;
+            internal volatile bool On;
+            internal int Player, Rate;
+
+            private void OnAudioFilterRead(float[] data, int channels)
+            {
+                var listener = Listener;
+                if (!On || listener == null || Rate <= 0 || channels <= 0)
+                    return;
+                var pcm = new short[data.Length / channels];
+                for (var i = 0; i < pcm.Length; i++)
+                    pcm[i] = ToShort(data[i * channels]);
+                listener.Push(new Chunk { Player = Player, Rate = Rate, Pcm = pcm });
+            }
         }
 
         private void StartWorker()
         {
             worker = new Thread(Work) { IsBackground = true, Name = "SidiuszCustomItems.Alice" };
             worker.Start();
+        }
+
+        private class Stream
+        {
+            public VoskRecognizer Recognizer;
+            public int Rate;
+            public int SinceSamples;
         }
 
         private void Work()
@@ -176,37 +312,59 @@ namespace CustomItems
                 return;
             }
 
-            VoskRecognizer recognizer = null;
-            var rate = 0;
+            var grammar = Grammar != null && Grammar.Length > 0 ? GrammarJson() : null;
+            var streams = new Dictionary<int, Stream>();
             while (!stopping)
             {
-                short[] pcm;
+                Chunk chunk;
+                bool reset;
                 lock (gate)
                 {
                     while (chunks.Count == 0 && !stopping)
                         Monitor.Wait(gate, 500);
                     if (stopping)
                         break;
-                    pcm = chunks.Dequeue();
-                    if (rate != sampleRate)
-                    {
-                        rate = sampleRate;
-                        recognizer?.Dispose();
-                        recognizer = Grammar != null && Grammar.Length > 0
-                            ? new VoskRecognizer(model, rate, GrammarJson())
-                            : new VoskRecognizer(model, rate);
-                    }
+                    chunk = chunks.Dequeue();
+                    reset = resetRequests.Remove(chunk.Player);
                 }
 
                 try
                 {
-                    if (!recognizer.AcceptWaveform(pcm, pcm.Length))
-                        continue;
-                    var match = TextField.Match(recognizer.Result());
-                    if (match.Success && match.Groups[1].Value.Length > 0)
+                    streams.TryGetValue(chunk.Player, out var stream);
+                    if (reset && stream != null)
                     {
-                        lock (gate)
-                            results.Enqueue(match.Groups[1].Value);
+                        stream.Recognizer.Reset();
+                        Emit(chunk.Player, null, false);
+                    }
+                    if (chunk.Pcm == null)
+                    {
+                        // Игрок замолчал: дожимаем фразу
+                        if (stream != null && !reset)
+                            Emit(chunk.Player, Text(TextField, stream.Recognizer.FinalResult()), false);
+                        continue;
+                    }
+                    if (stream == null || stream.Rate != chunk.Rate)
+                    {
+                        stream?.Recognizer.Dispose();
+                        stream = new Stream
+                        {
+                            Rate = chunk.Rate,
+                            Recognizer = grammar != null
+                                ? new VoskRecognizer(model, chunk.Rate, grammar)
+                                : new VoskRecognizer(model, chunk.Rate),
+                        };
+                        streams[chunk.Player] = stream;
+                    }
+
+                    if (stream.Recognizer.AcceptWaveform(chunk.Pcm, chunk.Pcm.Length))
+                    {
+                        stream.SinceSamples = 0;
+                        Emit(chunk.Player, Text(TextField, stream.Recognizer.Result()), false);
+                    }
+                    else if ((stream.SinceSamples += chunk.Pcm.Length) >= stream.Rate * PartialEvery)
+                    {
+                        stream.SinceSamples = 0;
+                        Emit(chunk.Player, Text(PartialField, stream.Recognizer.PartialResult()), true);
                     }
                 }
                 catch (Exception e)
@@ -214,8 +372,23 @@ namespace CustomItems
                     Plugin.Log.LogWarning("Алиса: ошибка распознавания: " + e.Message);
                 }
             }
-            recognizer?.Dispose();
+            foreach (var stream in streams.Values)
+                stream.Recognizer.Dispose();
             model.Dispose();
+        }
+
+        private static string Text(Regex field, string json)
+        {
+            var match = field.Match(json ?? "");
+            return match.Success ? match.Groups[1].Value : "";
+        }
+
+        private void Emit(int player, string text, bool partial)
+        {
+            if (text != null && text.Trim().Length == 0)
+                return;
+            lock (gate)
+                results.Enqueue(new Heard { Player = player, Text = text, Partial = partial });
         }
 
         private static string GrammarJson()
@@ -224,12 +397,9 @@ namespace CustomItems
             lock (YandexStationItem.CustomTopics)
                 custom = YandexStationItem.CustomTopics.ToArray();
             var phrases = new List<string>();
-            foreach (var p in Grammar.Concat(custom))
-            {
-                var t = p.Trim().ToLowerInvariant().Replace("\"", "");
-                if (t.Length > 0)
-                    phrases.Add("\"" + t + "\"");
-            }
+            var all = Grammar.Concat(custom).Select(p => p.Trim().ToLowerInvariant().Replace("\"", "")).Where(p => p.Length > 0).ToList();
+            foreach (var t in all.Concat(all.SelectMany(p => p.Split(' '))).Where(w => w.Length > 0).Distinct())
+                phrases.Add("\"" + t + "\"");
             phrases.Add("\"[unk]\"");
             return "[" + string.Join(", ", phrases) + "]";
         }

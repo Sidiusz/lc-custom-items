@@ -141,7 +141,7 @@ lc-custom-items/
 
 «Стоп», «хватит», «замолчи» обрывают ответ.
 
-Распознавание лежит рядом с DLL мода: `Vosk.dll` и папка `vosk/` (нативные библиотеки Windows x64 и модель `model-ru`). Модель — vosk-model-small-ru-0.22 как есть (около 90 МБ, Apache 2.0), лежит в репозитории, `CustomItems/Vosk/model-ru`; `dotnet build` кладёт её в папку сборки и в `PluginDir`. Раньше там была своя модель на большой акустике vosk-model-ru-0.42 (`Tools/YandexStation/model/build.sh` собирает её до сих пор), но у большой акустики слова появляются на 1,5–2 с позже, чем сказаны, а точный текст вопроса всё равно даёт Whisper.
+Распознавание лежит рядом с DLL мода: `Vosk.dll` и папка `vosk/` (нативные библиотеки Windows x64 и модель `model-ru`). Модель — vosk-model-small-ru-0.22 без языковой модели: вместо неё список слов `words.json` как грамматика Vosk (около 60 МБ, Apache 2.0, ужимает `Tools/YandexStation/model/small-gr.py`), лежит в репозитории, `CustomItems/Vosk/model-ru`; `dotnet build` кладёт её в папку сборки и в `PluginDir`. Раньше там была своя модель на большой акустике vosk-model-ru-0.42 (`Tools/YandexStation/model/build.sh` собирает её до сих пор), но у большой акустики слова появляются на 1,5–2 с позже, чем сказаны, а точный текст вопроса всё равно даёт Whisper.
 
 Вопросы колонка понимает и по смыслу, а не только по словам: «сколько у нас бабла» = «сколько денег», «кто-нибудь откинулся» = «кто умер». Это `CustomItems/AliceSemantic.cs`: маленькая русская модель [rubert-mini-frida](https://huggingface.co/sergeyzh/rubert-mini-frida) (MIT, 68 МБ, лежит в репозитории, `CustomItems/AliceSemantic/`) считает вектор смысла вопроса и сравнивает с примерами intents.txt и текстами записей; работает через llama.cpp (`llama.dll` из пакета `LLamaSharp.Backend.Cpu`) на процессоре, около 5 мс на вопрос. При первом запуске векторы примеров считаются в фоне (пара секунд) и кешируются в `BepInEx/cache`. Совпадение по словам по-прежнему главное; смысл подключается, когда по словам не нашлось или нашлось слабо. `dotnet build` кладёт всё в папку `alice-semantic/` рядом с DLL. Нужен Microsoft Visual C++ Redistributable 2015–2022 x64 (есть почти у всех; без него Алиса понимает только по словам). Выключить — `UnderstandMeaning = false` в конфиге. Проверка на своих вопросах — `Tools/AliceSemantic/run.sh`.
 
@@ -220,7 +220,7 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/`, `vosk/`, `alice-semantic/` и `whisper/` (около 530 МБ: модель Vosk около 45 МБ, модель смысла и llama.cpp около 72 МБ, модель Whisper 264 МБ, Vulkan-библиотека Whisper 58 МБ; модели zip почти не сжимает). Проверьте лимит размера пакета и актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/`, `vosk/`, `alice-semantic/` и `whisper/` (около 515 МБ: модель Vosk около 32 МБ, модель смысла и llama.cpp около 72 МБ, модель Whisper 264 МБ, Vulkan-библиотека Whisper 58 МБ; модели zip почти не сжимает). Проверьте лимит размера пакета и актуальные версии зависимостей в `manifest.json` на Thunderstore.
 
 ## Благодарности
 

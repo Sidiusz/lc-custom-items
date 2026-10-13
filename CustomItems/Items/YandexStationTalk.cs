@@ -81,6 +81,16 @@ namespace CustomItems.Items
                 case TopicNotYou:
                     SayFirst("Wake/NotMe", "Ok");
                     return true;
+                case "Snitch":
+                    // Жалоба на друга: его имя, потом «Он сейчас все ваши вещи стащит»; без имени — просто фраза
+                    var thief = NamePiece(AliceIntents.NameIn(known));
+                    if (FindSet("Snitch") == null)
+                        SayFirst("Ok", TopicUnknown);
+                    else if (thief != null)
+                        SaySequence(new List<string> { thief, "Snitch" });
+                    else
+                        Say("Snitch");
+                    return true;
                 case TopicMistake:
                     // «Ты заказала не то» — «Простите, я ошиблась», а не «Ладно, прощаю» из той же папки
                     var sorry = FindSet("Sorry");

@@ -114,6 +114,12 @@ namespace CustomItems
                 "Слово, на которое колонка откликается (как его пишет распознавание, строчными)").Value.Trim().ToLowerInvariant();
             YandexStationItem.HearingRadius = Config.Bind(section, "HearingRadius", 8f,
                 "С какого расстояния (м) к колонке можно обращаться голосом").Value;
+            YandexStationItem.ShipHearingRadius = Config.Bind(section, "ShipHearingRadius", 20f,
+                "Колонка на корабле слышит всех на корабле и снаружи не дальше стольких метров от корабля (не из комплекса)").Value;
+            var launchConfirm = Config.Bind(section, "LaunchConfirm", true,
+                "Спрашивать «Вы уверены?» перед взлётом. Голосом: «Алиса, убери/включи подтверждение взлёта»");
+            YandexStationItem.LaunchConfirmOn = launchConfirm.Value;
+            YandexStationItem.SaveLaunchConfirm = on => launchConfirm.Value = on;
             YandexStationItem.ListenSilence = Config.Bind(section, "ListenSilence", 3f,
                 "Сколько секунд тишины после «Алиса» (или вопроса колонки) она ждёт, потом выключается сигналом. Пока говорят — ждёт").Value;
             YandexStationItem.ListenMax = Config.Bind(section, "ListenMax", 12f,

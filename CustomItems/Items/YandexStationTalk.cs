@@ -392,6 +392,19 @@ namespace CustomItems.Items
         }
 
         // Встречает, когда группа вошедших собралась и колонка свободна (решает хост)
+        /// <summary>Шанс промолчать, когда вернулись на корабль.</summary>
+        public static float ArriveSilentChance = 0.25f;
+        /// <summary>Шанс «А где ваши друзья?», если кто-то правда далеко (иначе приветствие или про лут).</summary>
+        public static float ArriveOthersChance = 0.3f;
+
+        // «Привет!», «О, привет!», «Вы вернулись», «Рада вас видеть» — без «чем помочь», «чего надо» и «все вернулись»
+        private static bool IsArrivalGreeting(string clip)
+        {
+            var lower = clip.ToLowerInvariant();
+            return (lower.Contains("привет") || lower.Contains("вернулись") || lower.Contains("рада вас"))
+                   && !lower.Contains("всие") && !lower.Contains("наконец");
+        }
+
         private void UpdateArrivals()
         {
             if (arrivals.Count == 0 || !IsServer || Time.time < firstArrivalAt + ArriveGroupSeconds)
@@ -417,25 +430,38 @@ namespace CustomItems.Items
                                                              && (o.isInsideFactory || Vector3.Distance(o.transform.position, transform.position) > OthersFarMeters));
             var topics = new List<string>();
             var ask = false;
-            if (outside > 0)
+            // Не каждый раз: иногда молча, иногда «Андрей, привет!», с лутом — «Андрей! Ого, сколько всего»,
+            // «А где ваши друзья?» — редко и только если кто-то правда далеко
+            var pick = Random.value;
+            if (pick < ArriveSilentChance)
+                return;
+            var loot = came.Sum(p => p.ItemSlots == null ? 0 : p.ItemSlots.Count(i => i != null && i.itemProperties != null && i.itemProperties.isScrap));
+            var greeting = FindSet("Greeting");
+            var hello = greeting != null ? PickIndex(greeting, IsArrivalGreeting) : -1;
+            var names0 = names.Select(n => TopicCall + n).ToList();
+            if (outside > 0 && pick > 1f - ArriveOthersChance)
             {
-                // Кто-то ещё гуляет: «О, Андрей! А остальные где?» или «Андрей и Паша! А остальные где?»
-                if (names.Count == 1 && FindSet(EventsFolder + "FirstBack/" + names[0]) != null && FindSet("Back/Others") == null)
-                {
+                // Кто-то ещё гуляет: «О, Андрей! А остальные где?» или «Андрей и Паша! А где ваши друзья?»
+                if (names.Count == 1 && FindSet(EventsFolder + "FirstBack/" + names[0]) != null && Random.value < 0.5f)
                     topics.Add(EventsFolder + "FirstBack/" + names[0]);
-                    ask = true;
-                }
                 else
                 {
-                    AddList(topics, names.Select(n => TopicCall + n).ToList());
-                    if (FindSet("Back/Others") != null)
-                    {
-                        topics.Add("Back/Others");
-                        ask = true;
-                    }
-                    else
-                        topics.Add(EventsFolder + "Back");
+                    AddList(topics, names0);
+                    topics.Add(FindSet("Back/Others") != null ? "Back/Others" : EventsFolder + "Back");
                 }
+                ask = true;
+            }
+            else if (loot >= 2 && names.Count > 0 && FindSet(EventsFolder + "ManyItems") != null && Random.value < 0.4f)
+            {
+                AddList(topics, names0);
+                topics.Add(EventsFolder + "ManyItems"); // «Андрей! Ого, сколько всего»
+            }
+            else if (outside > 0 || hello >= 0 && names.Count > 0 && Random.value < 0.6f)
+            {
+                // «Андрей, привет!» или «Андрей! Вот и вы»
+                AddList(topics, names0);
+                topics.Add(hello >= 0 && (Random.value < 0.7f || FindSet(EventsFolder + "Back") == null)
+                    ? greeting.name + "\t" + hello : EventsFolder + "Back");
             }
             else
             {
@@ -450,7 +476,7 @@ namespace CustomItems.Items
                         ? "Back/AllHere" : EventsFolder + "Back");
                 }
             }
-            topics = topics.Where(t => FindSet(t) != null).ToList();
+            topics = topics.Where(t => FindSet(t.Split('\t')[0]) != null).ToList();
             if (topics.Count == 0)
                 return;
             eventFreeAt = Mathf.Max(eventFreeAt, Time.time + EventCooldown);

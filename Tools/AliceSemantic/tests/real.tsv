@@ -60,3 +60,10 @@
 сколько процентов	#battery
 ты заряжена	#battery
 какой у тебя заряд	#battery
+убери подтверждение взлёта	#confirmoff
+отключи подтверждение	#confirmoff
+взлетай без вопросов	#confirmoff
+включи подтверждение взлёта	#confirmon
+верни подтверждение	#confirmon
+взлетаем	#launch
+полетели	#launch|#route

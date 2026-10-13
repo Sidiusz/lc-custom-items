@@ -116,6 +116,14 @@ namespace CustomItems
                 "С какого расстояния (м) к колонке можно обращаться голосом").Value;
             YandexStationItem.ShipHearingRadius = Config.Bind(section, "ShipHearingRadius", 20f,
                 "Колонка на корабле слышит всех на корабле и снаружи не дальше стольких метров от корабля (не из комплекса)").Value;
+            if (Config.Bind(section, "LogUnknown", true,
+                    "Записывать вопросы, которые колонка не поняла или поняла с натяжкой, в BepInEx/config/alice-unknown.txt " +
+                    "(пришлите его после игры — по нему пополняются примеры)").Value)
+            {
+                var unknownPath = Path.Combine(Paths.ConfigPath, "alice-unknown.txt");
+                YandexStationItem.UnknownLog = line => File.AppendAllText(unknownPath,
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "\t" + line.Replace('\n', ' ') + "\n");
+            }
             var launchConfirm = Config.Bind(section, "LaunchConfirm", true,
                 "Спрашивать «Вы уверены?» перед взлётом. Голосом: «Алиса, убери/включи подтверждение взлёта»");
             YandexStationItem.LaunchConfirmOn = launchConfirm.Value;

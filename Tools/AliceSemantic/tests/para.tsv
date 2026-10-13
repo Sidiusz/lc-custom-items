@@ -1,0 +1,112 @@
+куда арсений пошёл	#whereis
+куда арсений делся	#whereis
+а паша где	#whereis|#andname
+паша вообще где шляется	#whereis
+куда пропал андрюха	#whereis
+где даня бля	#whereis
+где сеня ходит	#whereis
+андрей куда ушёл	#whereis
+скажи где паша	#whereis
+ты не знаешь где андрей	#whereis
+где все наши	#whereis
+где остальные ребята	#whereis
+андрей там живой	#isalive
+паша жив вообще	#isalive
+сеню убили	#isalive
+даня сдох что ли	#isalive
+андрюха помер	#isalive
+жив ли арсений	#isalive
+кто сдох	#whodied
+кто-то сдох	#whodied
+все живые	#whodied
+мы кого-то потеряли	#whodied
+кто погиб сегодня	#whodied
+сколько времени	#time
+который час	#time
+сколько щас времени	#time
+скок времени	#time
+время скажи	#time
+сколько до конца дня	#timeleft|Deadline
+сколько у нас денег	#credits
+сколько бабок	#credits
+скок денег	#credits
+сколько на счету	#credits
+какой баланс	#credits
+сколько лута на корабле	#loot
+сколько мы натаскали	#loot
+на сколько у нас лута	#loot
+сколько стоит всё на корабле	#loot
+сколько предметов на корабле	#itemcount
+сколько вещей мы принесли	#itemcount
+сколько до квоты	#quotaleft
+сколько осталось до квоты	#quotaleft
+сколько нам ещё собрать	#quotaleft
+хватает на квоту	#quotaleft|Quota
+какая квота	Quota
+сколько дней осталось	Deadline
+когда сдавать	Deadline
+взлетаем	#launch
+взлетай	#launch
+поехали отсюда	#launch
+валим отсюда	#launch
+улетаем	#launch
+давай взлетай уже	#launch
+закрой двери	#doorsclose
+закрывай дверь	#doorsclose
+открой двери	#doorsopen
+открывай двери	#doorsopen
+включи свет	#lightson
+вруби свет	#lightson
+выключи свет	#lightsoff
+выруби свет	#lightsoff
+купи фонарик	#buy
+закажи лопату	#buy
+купи два про фонарика	#buy
+купи нам рацию	#buy
+полетели на титан	#route
+поставь курс на рен	#route
+летим на ассуранс	#route
+какая погода	Weather
+что с погодой	Weather
+есть монстры рядом	#enemies
+тут враги есть	#enemies
+тут кто-то есть	#enemies|#whoinside
+кто в комплексе	#whoinside
+кто на корабле	#whoonship
+сколько нас	#count
+расскажи анекдот	Joke
+пошути	Joke
+рассказывай шутку	Joke
+мяу	Meow|Kitty
+помяукай	Meow
+заткнись	#shush
+помолчи	#shush
+стоп	#stop
+хватит	#stop
+сколько у тебя заряда	#battery
+сколько зарядки	#battery
+спасибо	Thanks
+спасибо алиса	Thanks
+привет	Greeting
+здарова	Greeting
+пока	Goodbye
+кто ты	WhoAreYou
+что ты умеешь	Skills
+как дела	HowAreYou
+как меня зовут	#myname
+где я	#whereami
+просканируй	#scanmoon
+сканируй	#scanmoon
+сколько осталось лута на луне	#scanmoon
+что у меня в руке	#inhand
+сколько стоит что у меня в руках	#inhand
+веди к кораблю	#navship
+как выйти	#navexit
+ты заказала не то	#mistake
+ты ошиблась	#mistake
+арсений кота ворует	Snitch
+убери подтверждение взлёта	#confirmoff
+включи подтверждение взлёта	#confirmon
+мы богаты	#credits
+сделай громче	#louder
+тише	#quieter

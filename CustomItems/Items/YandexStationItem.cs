@@ -547,6 +547,18 @@ namespace CustomItems.Items
                 topic = Topic(known, out why);
             }
             Debug.Log($"[Алиса] {speaker.playerUsername}: «{text}» → вопрос «{known}» → {topic ?? "слушаю"} ({why})");
+            // Не поняла или поняла только по смыслу/с натяжкой — в alice-unknown.txt, чтобы пополнять примеры
+            if (topic == TopicUnknown || topic == TopicMumble || topic != null && lastWordScore < WeakScore)
+            {
+                try
+                {
+                    UnknownLog?.Invoke($"{known}\t{topic}\t{why}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[Алиса] alice-unknown.txt: " + e.Message);
+                }
+            }
 
             // Каждый шаг (позвали, спросили) начинает распознавание заново: следующая фраза не склеится с этой
             ResetHearing?.Invoke(speaker);
@@ -1097,6 +1109,12 @@ namespace CustomItems.Items
 
         private static bool IsCustom(string name) => name != null && name.Any(c => c >= 'а' && c <= 'я' || c >= 'А' && c <= 'Я');
 
+        /// <summary>Записать непонятый вопрос («текст\tтема\tпочему») в alice-unknown.txt; ставит плагин.</summary>
+        public static Action<string> UnknownLog;
+        // Похожесть по словам последнего вопроса: ниже WeakScore — тему выбрал смысл или совпало слабо
+        private static float lastWordScore = 1f;
+        private const float WeakScore = 0.8f;
+
         /// <summary>Тема ответа по тексту вопроса и состоянию игры.</summary>
         public static string Topic(string command) => Topic(command, out _);
 
@@ -1104,6 +1122,7 @@ namespace CustomItems.Items
         public static string Topic(string command, out string why)
         {
             // «Открой дверь бэ четыре», «отключи турель a2»: код как в терминале
+            lastWordScore = 1f;
             var codes = CodesIn(command);
             if (codes.Count > 0)
             {
@@ -1114,6 +1133,7 @@ namespace CustomItems.Items
             command = string.Join(" ", command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct());
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out var score, out var example);
+            lastWordScore = score;
             why = example != null
                 ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
                 : "нет примеров";

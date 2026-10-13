@@ -436,7 +436,32 @@ namespace CustomItems.Items
                 }
             }
             example = best?.Text;
-            return best != null && score >= Threshold ? best.Topic : null;
+            if (best != null && score >= Threshold)
+                return best.Topic;
+            // Примеры не подошли, но назван друг и спрошено «где/куда» или «жив/умер»: «куда Арсений пошёл»,
+            // «Паша вообще где шляется», «Андрей там живой?» — вопрос про него, как бы ни сказали
+            var about = AboutFriend(words, route);
+            if (about != null)
+            {
+                score = Threshold;
+                example = "{name} + " + about;
+                return about;
+            }
+            return null;
+        }
+
+        private static readonly string[] WhereWords = { "где", "куда", "откуда", "делся", "делась", "подевался", "пропал", "запропастился", "шляется", "носит" };
+        private static readonly string[] DeadStems = { "умер", "погиб", "мертв", "сдох", "помер", "убил", "убит", "жив" };
+
+        private static string AboutFriend(string[] words, bool route)
+        {
+            if (route || !words.Any(t => NameOf(t) != null))
+                return null;
+            if (words.Any(t => DeadStems.Any(t.StartsWith)))
+                return "#isalive";
+            if (words.Any(t => WhereWords.Contains(t)))
+                return "#whereis";
+            return null;
         }
 
         private static bool IsSlot(string token) => token == NameSlot || token == MoonSlot || token == ItemSlot || token == NumberSlot;

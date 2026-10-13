@@ -567,6 +567,41 @@ namespace CustomItems.Items
             return options[Random.Range(0, options.Count)];
         }
 
+        /// <summary>
+        /// «Привет» — приветствие, а не замечание: «Мы на орбите, можно отдохнуть» или «Скоро стемнеет» звучат только
+        /// после приветствия («Привет! Мы на орбите…»). Записи для событий («Вы вернулись», «Ну наконец-то,
+        /// я уже думала, что одна полечу») на «привет» не отвечают.
+        /// </summary>
+        private bool SayGreeting(PlayerControllerB speaker)
+        {
+            var greeting = FindSet("Greeting");
+            var index = greeting != null ? PickIndex(greeting, IsPlainGreeting) : -1;
+            if (index < 0)
+                return false;
+            var flavor = Flavor("Greeting", speaker);
+            if (flavor != "Greeting" && (flavor.EndsWith("/Again") || !SituationFlavors.Any(f => flavor.EndsWith("/" + f))))
+            {
+                Say(flavor); // «Мы уже здоровались!», «Привет, Паша!» — сами приветствие
+                return true;
+            }
+            var parts = new List<string> { greeting.name + "\t" + index };
+            if (flavor != "Greeting" && FindSet(flavor) is { } extra)
+                parts.Add(extra.name + "\t" + NextIndex(extra));
+            askedLocally = true;
+            var topic = SeqPrefix + string.Join("\n", parts);
+            Speak(topic, 0);
+            SendSpeak(topic, 0);
+            return true;
+        }
+
+        private static readonly string[] SituationFlavors = { "Morning", "Day", "Evening", "Night", "Orbit", "Sad", "Happy" };
+
+        private static bool IsPlainGreeting(string clip)
+        {
+            var lower = clip.ToLowerInvariant();
+            return !lower.Contains("вернулись") && !lower.Contains("наконец");
+        }
+
         private static string DayPart()
         {
             var tod = TimeOfDay.Instance;

@@ -622,13 +622,24 @@ namespace CustomItems.Items
             // После ответа на вопрос колонка какое-то время сама не болтает (не перебьёт «Сегодня без…»)
             station.eventFreeAt = Mathf.Max(station.eventFreeAt, Time.time + 20f);
 
+            // Каприз: «Нет связи с сервером» или «Не хочу». Не «Я попробовала, не получилось» (это про дверь или
+            // маршрут, на вопрос звучит бессмыслицей) и не «Не поняла» на понятый вопрос; на «привет» и «спасибо» — никогда
             if (topic != TopicStop && topic != TopicShush && topic != TopicError && topic != TopicTimeError
-                && Random.value < WhimChance)
+                && !NoWhim.Contains(topic) && Random.value < WhimChance)
             {
-                var whims = new[] { TopicError, TopicRefuse, TopicMumble, TopicUnknown }.Where(t => station.FindSet(t) != null).ToArray();
-                if (whims.Length > 0)
+                var error = station.FindSet(TopicError);
+                var errorIndex = error != null ? station.PickIndex(error, IsServerError) : -1;
+                var refuse = station.FindSet(TopicRefuse) != null;
+                if (errorIndex >= 0 && (!refuse || Random.value < 0.5f))
                 {
-                    station.Say(whims[Random.Range(0, whims.Length)]);
+                    station.askedLocally = true;
+                    station.Speak(error.name, errorIndex);
+                    station.SendSpeak(error.name, errorIndex);
+                    return;
+                }
+                if (refuse)
+                {
+                    station.Say(TopicRefuse);
                     return;
                 }
             }
@@ -758,6 +769,8 @@ namespace CustomItems.Items
             }
             else
             {
+                if (topic == "Greeting" && station.SayGreeting(speaker))
+                    return;
                 // Вариант под того, кто спросил, время суток, настроение дня (YandexStationContext.Flavor)
                 var said = station.Flavor(topic, speaker);
                 station.Say(said);
@@ -1173,6 +1186,29 @@ namespace CustomItems.Items
         // и новый круг не начинается с той, что была последней
         private static readonly Dictionary<string, List<int>> Bags = new Dictionary<string, List<int>>();
         private static readonly Dictionary<string, int> LastFromBag = new Dictionary<string, int>();
+
+        // Темы, на которые колонка не капризничает: поздороваться, поблагодарить, попрощаться
+        private static readonly HashSet<string> NoWhim = new HashSet<string> { "Greeting", "Thanks", "Goodbye" };
+
+        // Ошибка связи («Нет связи с сервером», «Попробуйте позже»), а не «не получилось» про действие
+        private static bool IsServerError(string clip) =>
+            clip.IndexOf("попробовала", StringComparison.OrdinalIgnoreCase) < 0
+            && clip.IndexOf("старалась", StringComparison.OrdinalIgnoreCase) < 0;
+
+        /// <summary>Следующая по кругу запись темы, подходящая по тексту (имя записи — её текст); -1 — ни одной.</summary>
+        private int PickIndex(PhraseSet set, Func<string, bool> ok)
+        {
+            var good = Enumerable.Range(0, set.clips.Length).Where(i => set.clips[i] != null && ok(set.clips[i].name)).ToList();
+            if (good.Count == 0)
+                return -1;
+            for (var tries = 0; tries < set.clips.Length; tries++)
+            {
+                var i = NextIndex(set);
+                if (good.Contains(i))
+                    return i;
+            }
+            return good[Random.Range(0, good.Count)];
+        }
 
         private static int NextIndex(PhraseSet set)
         {

@@ -436,8 +436,9 @@ namespace CustomItems.Items
                 }
             }
             example = best?.Text;
+            // «Как помер Паша?» похоже на «Паша помер?», но спрашивают, как именно
             if (best != null && score >= Threshold)
-                return best.Topic;
+                return best.Topic == "#isalive" && AsksHow(words) ? "#howdied" : best.Topic;
             // Примеры не подошли, но назван друг и спрошено «где/куда» или «жив/умер»: «куда Арсений пошёл»,
             // «Паша вообще где шляется», «Андрей там живой?» — вопрос про него, как бы ни сказали
             var about = AboutFriend(words, route);
@@ -451,6 +452,12 @@ namespace CustomItems.Items
         }
 
         private static readonly string[] WhereWords = { "где", "куда", "откуда", "делся", "делась", "подевался", "пропал", "запропастился", "шляется", "носит", "потерялся", "потерялась", "заблудился", "заблудилась" };
+        private static readonly string[] HowWords = { "как", "отчего", "почему", "причина", "кто", "чего", "чем" };
+
+        // Спрашивают, как погиб: «как», «отчего», «кто убил», «что его убило» — но не «жив?» и не «что, умер?»
+        private static bool AsksHow(string[] words) =>
+            words.Any(t => DeadStems.Any(t.StartsWith)) && !words.Any(t => t.StartsWith("жив"))
+            && (words.Any(t => HowWords.Contains(t)) || words.Contains("что") && words.Any(t => t.StartsWith("убил")));
         private static readonly string[] DeadStems = { "умер", "погиб", "мертв", "сдох", "помер", "убил", "убит", "жив" };
 
         private static string AboutFriend(string[] words, bool route)
@@ -458,7 +465,7 @@ namespace CustomItems.Items
             if (route || !words.Any(t => NameOf(t) != null))
                 return null;
             if (words.Any(t => DeadStems.Any(t.StartsWith)))
-                return "#isalive";
+                return AsksHow(words) ? "#howdied" : "#isalive";
             if (words.Any(t => WhereWords.Contains(t)))
                 return "#whereis";
             return null;

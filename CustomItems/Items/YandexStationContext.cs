@@ -54,7 +54,7 @@ namespace CustomItems.Items
         // Вопросы о том, что можно проверить по игре: на «точно?» колонка перепроверяет
         private static readonly HashSet<string> Checkable = new HashSet<string>
         {
-            TopicWhereIs, TopicIsAlive, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot, TopicItemCount,
+            TopicWhereIs, TopicIsAlive, TopicHowDied, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot, TopicItemCount,
             TopicScanMoon, TopicQuotaLeft, TopicCredits, TopicHealth,
         };
 
@@ -274,6 +274,8 @@ namespace CustomItems.Items
                     return SayWhereIsGlued(speaker, known);
                 case TopicIsAlive:
                     return SayIsAlive(speaker, known);
+                case TopicHowDied:
+                    return SayHowDied(speaker, known);
                 case TopicQuotaLeft:
                     SayQuotaLeft(null);
                     return true;
@@ -810,6 +812,75 @@ namespace CustomItems.Items
             else
                 topics.Add(whole);
             SaySequence(topics);
+            return true;
+        }
+
+        // Причины, которые важнее ближайшего монстра: упал, утонул, взорвался — монстр рядом тут ни при чём
+        private static readonly HashSet<string> OwnCauses = new HashSet<string>
+        {
+            "Gravity", "Drowning", "Blast", "Electrocution", "Abandoned", "Fan", "Inertia", "Burning", "Teamkill",
+        };
+
+        /// <summary>
+        /// «Как умер Андрей?», «что его убило?» — причина: «Андрей…» + «Его съела собака» (Events/DeathCause/&lt;Враг&gt;/One),
+        /// «Упал с высоты» (HowDied/&lt;CauseOfDeath&gt;), иначе «Это была муха или… не знаю». Без имени — последний погибший.
+        /// Жив — как на «Андрей умер?»: «Нет, живой! Андрей где-то в комплексе». Никто не погиб — как на «кто умер?».
+        /// </summary>
+        private bool SayHowDied(PlayerControllerB speaker, string known)
+        {
+            var named = FriendNamed(known);
+            var round = StartOfRound.Instance;
+            PlayerControllerB who = null;
+            if (round != null)
+            {
+                var players = round.allPlayerScripts.Where(p => p != null && p != speaker && (p.isPlayerControlled || p.isPlayerDead)).ToList();
+                who = named != null
+                    ? players.FirstOrDefault(p => NameFolder(p.playerUsername) == named)
+                    : players.Where(p => p.isPlayerDead)
+                        .OrderByDescending(p => DeathTimes.TryGetValue(p.playerClientId, out var t) ? t : 0f).FirstOrDefault();
+            }
+            if (who == null || !who.isPlayerDead)
+            {
+                if (named != null)
+                    return SayIsAlive(speaker, known);
+                SayWhoDied(speaker, known);
+                return true;
+            }
+
+            var id = who.playerClientId;
+            DeathKinds.TryGetValue(id, out var kind);
+            kind = kind ?? who.causeOfDeath.ToString();
+            DeathCauses.TryGetValue(id, out var enemy);
+            var options = new List<string>();
+            var own = FindSet("HowDied/" + kind) != null ? "HowDied/" + kind : null;
+            if (enemy != null && enemy != "Unknown" && !OwnCauses.Contains(kind))
+            {
+                var c = EventsFolder + "DeathCause/" + enemy;
+                if (FindSet(c + "/One") != null)
+                    options.Add(c + "/One");
+                else if (FindSet(c) != null)
+                    options.Add(c);
+            }
+            if (options.Count == 0 && own != null)
+                options.Add(own);
+            if (options.Count == 0)
+                options.AddRange(Existing(EventsFolder + "DeathCause/Unknown", "HowDied/Unknown"));
+            if (options.Count == 0)
+            {
+                SayIsAlive(speaker, known);
+                return true;
+            }
+            var topics = new List<string>();
+            // «Андрей…» перед причиной, если спросили по имени и кусок с именем есть
+            var name = NamePiece(NameFolder(who.playerUsername));
+            if (name != null && Random.value < 0.5f)
+                topics.Add(name);
+            topics.Add(options[Random.Range(0, options.Count)]);
+            Debug.Log($"[Алиса] как погиб {who.playerUsername}: {kind}, рядом {enemy ?? "никого"} → {string.Join(" + ", topics)}");
+            if (topics.Count == 1)
+                Say(topics[0]);
+            else
+                SaySequence(topics);
             return true;
         }
 

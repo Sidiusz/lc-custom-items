@@ -711,7 +711,7 @@ namespace CustomItems.Items
             else if (topic == TopicWhoDied)
                 station.SayWhoDied(speaker, known);
             else if (topic == TopicLightsOn || topic == TopicLightsOff)
-                station.SayFirst(Lights != null ? Lights(topic == TopicLightsOn) : new[] { TopicRefuse });
+                station.SayDone(Lights != null ? Lights(topic == TopicLightsOn) : new[] { TopicRefuse });
             else if (topic == TopicBattery)
                 station.Say(station.BatteryTopic() ?? TopicUnknown);
             else if (topic == TopicColor)
@@ -754,7 +754,7 @@ namespace CustomItems.Items
                     station.Ask(AskLaunch, null, LaunchConfirm);
             }
             else if (topic == TopicDoorsOpen || topic == TopicDoorsClose)
-                station.SayFirst(Doors != null ? Doors(topic == TopicDoorsClose) : new[] { TopicRefuse });
+                station.SayDone(Doors != null ? Doors(topic == TopicDoorsClose) : new[] { TopicRefuse });
             else if (topic == TopicBuy)
             {
                 // «Купи про-фонарик» — «Сколько?»; «купи два фонарика» — сразу
@@ -1204,6 +1204,19 @@ namespace CustomItems.Items
         {
             var lower = clip.ToLowerInvariant();
             return !lower.Contains("программе") && !lower.Contains("это вы мне");
+        }
+
+        /// <summary>Шанс, что простое действие (свет, двери) колонка выполнит молча: ответ тут не обязателен.</summary>
+        public static float SilentDoneChance = 0.5f;
+
+        // Сделала (свет включён, двери закрыты) — иногда молча, только огоньком; отказ и ошибку говорит всегда
+        private void SayDone(string[] topics)
+        {
+            var done = topics.Length > 0 && (topics[0] == "Lights/On" || topics[0] == "Lights/Off"
+                                             || topics[0] == "Doors/Closed" || topics[0] == "Doors/Opened");
+            if (done && Random.value < SilentDoneChance)
+                return;
+            SayFirst(topics);
         }
 
         // Темы, на которые колонка не капризничает: поздороваться, поблагодарить, попрощаться

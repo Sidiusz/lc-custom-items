@@ -315,13 +315,21 @@ namespace CustomItems.Items
             Ask(AskLost, null, FindSet("Nav/Lost") != null ? "Nav/Lost" : mine);
         }
 
+        // Торопят: «быстрее», «срочно», ругаются
+        private static readonly string[] HurryStems =
+        {
+            "быстр", "срочн", "живо", "немедлен", "сейчас", "скорее", "сука", "суки", "епт", "ёпт", "черт", "чёрт", "блин", "нахуй", "нахер",
+        };
         // Команду на взлёт повторили в одной фразе: «взлетай взлетай», «погнали погнали»
         private static readonly string[] LaunchStems = { "взлет", "взлёт", "погнал", "полетел", "поехал", "запуск", "запуст", "улета", "лет", "сади", "приземл", "дёрн", "дерн", "валим", "гони" };
 
         private static bool Hurried(string command)
         {
             var words = (command ?? "").ToLowerInvariant().Split(new[] { ' ', ',', '!', '.' }, System.StringSplitOptions.RemoveEmptyEntries);
-            return words.Count(w => LaunchStems.Any(w.StartsWith)) >= 2;
+            // «Взлетай взлетай!», а ещё мат или «быстрее» рядом со взлётом: «взлетаем, блядь» — без «Вы уверены?»
+            var launch = words.Count(w => LaunchStems.Any(w.StartsWith));
+            return launch >= 2 || launch >= 1 && words.Any(w => HurryStems.Any(w.StartsWith) || w.StartsWith("бля") || w.Contains("хуй")
+                                                                  || w.Contains("пизд") || w.Contains("ёб") || w.StartsWith("еба") || w.StartsWith("заеб"));
         }
 
         // ---- Встреча на корабле ----

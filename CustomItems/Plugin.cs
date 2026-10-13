@@ -166,6 +166,8 @@ namespace CustomItems
                 "Time/Hours, Time/Minutes). Не хватает куска или false — словами из Time/<час> («Почти семь»)").Value;
             YandexStationItem.ListenVoiceChance = Config.Bind(section, "ListenVoiceChance", 0.3f,
                 "Шанс (0..1) на «Алиса» без вопроса ответить «Слушаю!» (папка Listen), а не сигналом").Value;
+            YandexStationItem.SilentDoneChance = Config.Bind(section, "SilentDoneChance", 0.5f,
+                "Шанс (0..1), что свет или двери колонка переключит молча, без ответа").Value;
             YandexStationItem.WhimChance = Config.Bind(section, "WhimChance", 0.15f,
                 "Шанс (0..1), что колонка капризничает вместо ответа: «Нет связи с сервером» (Error), «Не хочу» (Refuse), " +
                 "«Вы что-то бормочете?» (Mumble) или «Не поняла» (Unknown). На солнечной вспышке ошибка всегда").Value;

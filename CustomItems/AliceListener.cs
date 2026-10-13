@@ -37,9 +37,9 @@ namespace CustomItems
     /// целиком, и колонка получает его текст. Не успел за <see cref="AliceWhisper.TimeoutSeconds"/>,
     /// не загрузился или написал мусор — текст Vosk.
     ///
-    /// «Алиса» ловит отдельная маленькая модель (vosk/model-wake, vosk-model-small-ru-0.22): у большой
-    /// акустики слова появляются в промежуточном результате на 1,5–2 с позже, чем сказаны, а маленькая
-    /// отдаёт «алиса» через ~0,2 с после конца слова. Нет маленькой — просыпается по большой, как раньше.
+    /// Модель — маленькая vosk-model-small-ru-0.22: отдаёт «алиса» через ~0,2 с после конца слова (у большой
+    /// акустики слова появлялись на 1,5–2 с позже). «Алиса» ловит отдельный распознаватель на той же модели,
+    /// его не сбрасывают шаги разговора; черновой текст фразы — основной, точный — Whisper.
     ///
     /// Простой детектор речи по громкости (<see cref="Vad"/>) отличает слова от тишины и шума: после «Алиса»
     /// вопросом считается только то, где наберётся хотя бы <see cref="MinSpeech"/> с речи, конец вопроса —
@@ -701,7 +701,7 @@ namespace CustomItems
 
         private void Work()
         {
-            Model model, wakeModel = null;
+            Model model;
             try
             {
                 LoadNatives();
@@ -714,18 +714,6 @@ namespace CustomItems
                 failed = true;
                 Plugin.Log.LogError("Алиса: не удалось загрузить Vosk, голосовые команды выключены. " + e);
                 return;
-            }
-            try
-            {
-                var wakeDir = Path.Combine(VoskDir, "model-wake");
-                if (Directory.Exists(wakeDir))
-                    wakeModel = new Model(wakeDir);
-                else
-                    Plugin.Log.LogWarning($"Алиса: нет {wakeDir}, «{YandexStationItem.WakeWord}» слышу по большой модели (с задержкой)");
-            }
-            catch (Exception e)
-            {
-                Plugin.Log.LogWarning("Алиса: не загрузилась модель для «Алиса», слышу его по большой модели: " + e.Message);
             }
 
             var grammar = Grammar != null && Grammar.Length > 0 ? GrammarJson() : null;
@@ -772,7 +760,7 @@ namespace CustomItems
                             Recognizer = grammar != null
                                 ? new VoskRecognizer(model, chunk.Rate, grammar)
                                 : new VoskRecognizer(model, chunk.Rate),
-                            Wake = wakeModel != null ? new VoskRecognizer(wakeModel, chunk.Rate) : null,
+                            Wake = new VoskRecognizer(model, chunk.Rate),
                         };
                         streams[chunk.Player] = stream;
                     }
@@ -802,8 +790,7 @@ namespace CustomItems
                     else if ((stream.WakeAt >= 0 || listening) && stream.Speech >= stream.Rate * MinSpeech
                              && stream.Silence >= stream.Rate * EndPause)
                     {
-                        // Вопрос к колонке кончился паузой: не ждём, пока большая модель сама дойдёт до конца фразы
-                        // (она отстаёт на 1,5–2 с), а дожимаем её сейчас
+                        // Вопрос к колонке кончился паузой: не ждём правил конца фразы Vosk, дожимаем сейчас
                         stream.SinceSamples = 0;
                         Finish(chunk.Player, stream);
                     }
@@ -824,7 +811,6 @@ namespace CustomItems
                 stream.Wake?.Dispose();
             }
             model.Dispose();
-            wakeModel?.Dispose();
         }
 
         private void Finish(int player, Stream stream)

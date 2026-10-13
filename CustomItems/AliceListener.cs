@@ -716,7 +716,13 @@ namespace CustomItems
                 return;
             }
 
-            var grammar = Grammar != null && Grammar.Length > 0 ? GrammarJson() : null;
+            // У модели нет языковой модели, только словарь (words.json, Tools/YandexStation/model/small-gr.py):
+            // он и есть грамматика. «Алиса» слышно так же, а весит на 30 МБ меньше
+            string words = null;
+            var wordsFile = Path.Combine(VoskDir, "model-ru", "words.json");
+            if (File.Exists(wordsFile))
+                words = File.ReadAllText(wordsFile);
+            var grammar = Grammar != null && Grammar.Length > 0 ? GrammarJson() : words;
             var streams = new Dictionary<int, Stream>();
             while (!stopping)
             {
@@ -760,7 +766,7 @@ namespace CustomItems
                             Recognizer = grammar != null
                                 ? new VoskRecognizer(model, chunk.Rate, grammar)
                                 : new VoskRecognizer(model, chunk.Rate),
-                            Wake = new VoskRecognizer(model, chunk.Rate),
+                            Wake = words != null ? new VoskRecognizer(model, chunk.Rate, words) : new VoskRecognizer(model, chunk.Rate),
                         };
                         streams[chunk.Player] = stream;
                     }

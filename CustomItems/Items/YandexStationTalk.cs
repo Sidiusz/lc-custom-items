@@ -344,6 +344,9 @@ namespace CustomItems.Items
 
         // ---- Встреча на корабле ----
 
+        /// <summary>Дальше скольких метров от колонки игрок вне корабля считается «где-то гуляет».</summary>
+        public static float OthersFarMeters = 25f;
+
         /// <summary>Сколько секунд надо пробыть вне корабля, чтобы на возвращение колонка сказала «Андрей! Вот и вы».</summary>
         public static float AwaySeconds = 20f;
         /// <summary>Вошедших с разницей не больше стольких секунд встречает вместе («Андрей и Паша!»).</summary>
@@ -408,7 +411,10 @@ namespace CustomItems.Items
 
             var names = came.Select(p => NameFolder(p.playerUsername)).Where(f => f != null && FindSet(TopicCall + f) != null)
                 .Distinct().ToList();
-            var outside = round.allPlayerScripts.Count(o => o != null && !came.Contains(o) && o.isPlayerControlled && !o.isPlayerDead && !o.isInHangarShipRoom);
+            // «А остальные где?» — только если кто-то правда далеко: стоящие у двери или рядом с колонкой не в счёт
+            var outside = round.allPlayerScripts.Count(o => o != null && !came.Contains(o) && o.isPlayerControlled && !o.isPlayerDead
+                                                             && !o.isInHangarShipRoom
+                                                             && (o.isInsideFactory || Vector3.Distance(o.transform.position, transform.position) > OthersFarMeters));
             var topics = new List<string>();
             var ask = false;
             if (outside > 0)

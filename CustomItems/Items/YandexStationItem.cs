@@ -1271,6 +1271,11 @@ namespace CustomItems.Items
                 topics = new[] { lead }.Concat(topics).ToList();
             foreach (var t in topics)
             {
+                if (t.Contains("\t"))
+                {
+                    parts.Add(t); // уже выбранная запись: «тема\tномер»
+                    continue;
+                }
                 var set = FindSet(t);
                 if (set != null)
                     parts.Add(set.name + "\t" + NextIndex(set));
@@ -1329,6 +1334,19 @@ namespace CustomItems.Items
         }
 
         /// <summary>Перечисление: «Паша и Андрей», «Паша, Андрей и ещё Сеня» (And — «и», And/Also — «и ещё», «а также»).</summary>
+        /// <summary>
+        /// Друг полным именем («Арсений», а не «Арсюха»): запись Call/&lt;Папка&gt; с первым именем из SpokenNames,
+        /// для SaySequence как «тема\tномер». Нет такой записи — любая из Call/&lt;Папка&gt;.
+        /// </summary>
+        private string FormalCall(string folder)
+        {
+            var set = FindSet(TopicCall + folder);
+            if (set == null || !SpokenNames.TryGetValue(folder, out var names) || names.Length == 0)
+                return TopicCall + folder;
+            var index = Array.FindIndex(set.clips, c => c != null && c.name.ToLowerInvariant().Replace('ё', 'е') == names[0]);
+            return index < 0 ? TopicCall + folder : set.name + "\t" + index;
+        }
+
         private void AddList(List<string> topics, List<string> items)
         {
             for (var i = 0; i < items.Count; i++)
@@ -1485,7 +1503,7 @@ namespace CustomItems.Items
             var dead = round == null ? new List<string>() : round.allPlayerScripts
                 .Where(p => p != null && p.isPlayerDead)
                 .Select(p => NameFolder(p.playerUsername)).Where(f => f != null && FindSet(TopicCall + f) != null)
-                .Distinct().Select(f => TopicCall + f).ToList();
+                .Distinct().Select(FormalCall).ToList();
             if (dead.Count == 0)
             {
                 // «Проверяю… Я проверила. Все живы и здоровы»

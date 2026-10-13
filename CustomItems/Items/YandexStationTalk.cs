@@ -18,12 +18,12 @@ namespace CustomItems.Items
         private const string AskWake = "wake", AskOthers = "others", AskMissing = "missing";
 
         /// <summary>
-        /// «Я уже отвечала» — только на вопросы, ответ на которые не меняется. Анекдот, «мяу», «спасибо»,
-        /// время, заряд, «кто умер» и прочее можно спрашивать сколько угодно.
+        /// «Я уже отвечала» — только на болтовню о ней самой. Вопросы о деле (погода, квота, заряд, время, «кто умер»)
+        /// можно спрашивать сколько угодно: отвечает снова.
         /// </summary>
         private static readonly HashSet<string> RepeatTopics = new HashSet<string>
         {
-            "WhoAreYou", "Skills", "FavoriteColor", "Sigurd", "Weather", "Moon", "Deadline", "Quota", "#myname", "#myrole", "#color",
+            "WhoAreYou", "Skills", "FavoriteColor", "Sigurd", "#myname", "#myrole",
         };
 
         /// <summary>Как часто колонка после «Алиса» и тишины спрашивает «Это вы мне?» вместо сигнала.</summary>

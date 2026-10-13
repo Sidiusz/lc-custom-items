@@ -60,7 +60,8 @@ namespace CustomItems.Items
 
         // Вопрос о деле (сколько денег, кто умер, время, квота): на него не капризничает
         private static bool IsFactual(string topic) =>
-            Checkable.Contains(topic) || topic == TopicTime || topic == TopicTimeLeft || topic == "Quota" || topic == "Deadline";
+            Checkable.Contains(topic) || topic == TopicTime || topic == TopicTimeLeft || topic == "Quota" || topic == "Deadline"
+            || topic == TopicBattery || topic == "Weather" || topic == "Moon" || topic == TopicColor;
 
         // ---- Что помнит ----
 

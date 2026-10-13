@@ -159,7 +159,7 @@ namespace CustomItems
                 "Как далеко монстры слышат реплику на событие (м). Слепая собака прибежит на голос").Value;
             YandexStationItem.IdleSeconds = Rarer(Config.Bind(events, "IdleSeconds", 0f,
                 "Примерно раз во столько секунд колонка может поболтать сама без повода (тема Idle), если рядом игрок. 0 — никогда"), 120f, 240f);
-            YandexStationItem.RepeatChance = Config.Bind(section, "RepeatChance", 0.5f,
+            YandexStationItem.RepeatChance = Config.Bind(section, "RepeatChance", 0.25f,
                 "Шанс (0..1) «Я уже отвечала» на тот же вопрос второй раз за минуту; иначе отвечает снова").Value;
             YandexStationItem.TimeInNumbers = Config.Bind(section, "TimeInNumbers", true,
                 "«Который час» числами из кусков: «На часах пятнадцать часов тридцать минут» (Time/Intro, Numbers, " +

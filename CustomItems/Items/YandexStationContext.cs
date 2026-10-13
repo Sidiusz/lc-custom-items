@@ -783,11 +783,16 @@ namespace CustomItems.Items
                 return true;
             }
             // Жив: «умер?» — «нет», «жив?» — «да»
-            var answer = AsksDead(known) && !AsksAlive(known) ? "Ball/No" : "Ball/Yes";
+            // Свои записи «Живой!» / «Нет, живой» (IsAlive/Yes, IsAlive/No), без них — да или нет из Ball
+            var dead = AsksDead(known) && !AsksAlive(known);
+            var own = dead ? "IsAlive/No" : "IsAlive/Yes";
+            var answer = dead ? "Ball/No" : "Ball/Yes";
             var set = FindSet(answer);
             var index = set != null ? PickIndex(set, IsPlainYesNo) : -1;
             var topics = new List<string>();
-            if (index >= 0)
+            if (FindSet(own) != null)
+                topics.Add(own);
+            else if (index >= 0)
                 topics.Add(set.name + "\t" + index);
             if (FindSet(Glue + "Place/" + place) != null)
             {

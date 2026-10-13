@@ -264,6 +264,8 @@ namespace CustomItems.Items
         private float talkUntil;
         private bool clockWhileTalking;
         private float listenUntil, listenStartedAt;
+        // Кто разбудил колонку: пока она слушает, вопрос без «Алиса» принимается только от него
+        private GameNetcodeStuff.PlayerControllerB wokeBy;
         private string lastTopic;
         private int lastIndex = -1;
         private int expression;
@@ -466,6 +468,7 @@ namespace CustomItems.Items
                     return;
                 station.listenUntil = Time.time + ListenSilence; // это был вопрос: разбираем как после «Алиса»
                 station.listenStartedAt = Time.time;
+                station.wokeBy = speaker;
                 answering = false;
             }
             if (answering)
@@ -485,6 +488,9 @@ namespace CustomItems.Items
 
             // Уже проснулась (ждёт вопрос после «Алиса») — сразу думает; иначе сначала просыпается
             var listening = Time.time < station.listenUntil;
+            // Проснулась на другого: слова без «Алиса» — не ей (говорят между собой)
+            if (wake < 0 && listening && !station.ListensTo(speaker))
+                return;
             string command;
             if (wake >= 0)
             {
@@ -546,6 +552,7 @@ namespace CustomItems.Items
                 if (listening)
                 {
                     station.listenUntil = Mathf.Max(station.listenUntil, Time.time + ListenSilence);
+                    station.wokeBy = speaker;
                     return;
                 }
                 if (station.FindSet(TopicListenVoice) != null && Random.value < ListenVoiceChance)
@@ -556,6 +563,7 @@ namespace CustomItems.Items
                 }
                 else
                     station.Say(SoundListen);
+                station.wokeBy = speaker;
                 return;
             }
             if (topic == TopicUnknown)
@@ -599,7 +607,12 @@ namespace CustomItems.Items
                 || station.IsTalking || station.pendingAnswer != null || Time.time < station.thinkUntil)
                 return;
             station.Say(SoundListen);
+            station.wokeBy = speaker;
         }
+
+        /// <summary>Слушает ли колонка слова <paramref name="speaker"/> без «Алиса»: не разбудил ли её кто-то другой.</summary>
+        private bool ListensTo(GameNetcodeStuff.PlayerControllerB speaker) =>
+            wokeBy == null || wokeBy == speaker || wokeBy.isPlayerDead || !wokeBy.isPlayerControlled;
 
         // Обычные ответы; память разговора и переспросы — Answer в YandexStationContext.cs
         private static void AnswerCore(YandexStationItem station, GameNetcodeStuff.PlayerControllerB speaker, string topic, string known)
@@ -891,7 +904,7 @@ namespace CustomItems.Items
             var station = NearestTo(speaker.transform.position, HearingRadius);
             if (station == null)
                 return;
-            if (station.listenUntil > 0f && Time.time < station.listenUntil)
+            if (station.listenUntil > 0f && Time.time < station.listenUntil && station.ListensTo(speaker))
                 station.listenUntil = Mathf.Min(station.listenStartedAt + ListenMax, Mathf.Max(station.listenUntil, Time.time + ListenSilence));
             if (station.asking != null && Time.time < station.askUntil)
                 station.askUntil = Mathf.Min(station.askStartedAt + ListenMax, Mathf.Max(station.askUntil, Time.time + ListenSilence));
@@ -2249,6 +2262,7 @@ namespace CustomItems.Items
             if (listenUntil > 0f && Time.time > listenUntil)
             {
                 listenUntil = 0f;
+                wokeBy = null;
                 if (askedLocally && IsOn && !IsJammed && !AskIfMe())
                     Say(SoundTimeout);
             }

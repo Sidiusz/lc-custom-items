@@ -53,7 +53,8 @@
 
   <!-- Vosk для Яндекс Станции: vosk/ рядом с DLL мода (нативные библиотеки Windows x64 и русская модель).
        Модель своя, в Vosk/model-ru (собирает Tools/YandexStation/model/build.sh): акустика vosk-model-ru-0.42
-       и граф со словами Алисы. final.mdl лежит в zip (53 МБ вместо 118), сборка распаковывает его. -->
+       и граф со словами Алисы. final.mdl лежит в zip (53 МБ вместо 118), сборка распаковывает его.
+       Vosk/model-wake — vosk-model-small-ru-0.22 как есть: только чтобы сразу слышать «Алиса» (большая отстаёт). -->
   <ItemGroup>
     <None Remove="Vosk/**" />
   </ItemGroup>
@@ -65,11 +66,13 @@
     <ItemGroup>
       <VoskNative Include="$(PkgVosk)/build/lib/win-x64/*.dll" />
       <VoskModel Include="Vosk/model-ru/**/*" Exclude="Vosk/model-ru/am/final.mdl.zip" />
+      <VoskWakeModel Include="Vosk/model-wake/**/*" />
     </ItemGroup>
     <Copy SourceFiles="$(PkgVosk)/lib/netstandard2.0/Vosk.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(VoskNative)" DestinationFolder="$(TargetDir)vosk" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(VoskModel)" DestinationFolder="$(VoskModelOut)/%(RecursiveDir)" SkipUnchangedFiles="true" />
     <Unzip SourceFiles="Vosk/model-ru/am/final.mdl.zip" DestinationFolder="$(VoskModelOut)/am" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(VoskWakeModel)" DestinationFolder="$(TargetDir)vosk/model-wake/%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
   <!-- Понимание вопросов Алисы по смыслу (AliceSemantic.cs): alice-semantic/ рядом с DLL мода.

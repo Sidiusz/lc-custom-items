@@ -35,7 +35,19 @@ namespace CustomItems
     /// Vosk быстрый, но знает мало слов. Поэтому фразу, обращённую к колонке (есть «Алиса» или
     /// колонка ждёт ответа), ещё раз распознаёт Whisper (<see cref="AliceWhisper"/>) по её звуку
     /// целиком, и колонка получает его текст. Не успел за <see cref="AliceWhisper.TimeoutSeconds"/>,
-    /// не загрузился или написал мусор — текст Vosk. Просыпается колонка по-прежнему сразу, по Vosk.
+    /// не загрузился или написал мусор — текст Vosk.
+    ///
+    /// «Алиса» ловит отдельная маленькая модель (vosk/model-wake, vosk-model-small-ru-0.22): у большой
+    /// акустики слова появляются в промежуточном результате на 1,5–2 с позже, чем сказаны, а маленькая
+    /// отдаёт «алиса» через ~0,2 с после конца слова. Нет маленькой — просыпается по большой, как раньше.
+    ///
+    /// Простой детектор речи по громкости (<see cref="Vad"/>) отличает слова от тишины и шума: после «Алиса»
+    /// вопросом считается только то, где наберётся хотя бы <see cref="MinSpeech"/> с речи, конец вопроса —
+    /// пауза <see cref="EndPause"/> с, а колонка ждёт, пока звучит речь, а не пока Vosk пишет слова из шума.
+    ///
+    /// Несколько игроков: голос каждого приходит отдельно (свой микрофон хоста и голос каждого игрока из
+    /// чата), у каждого свой распознаватель. Проснувшись, колонка слушает того, кто сказал «Алиса»
+    /// (<see cref="YandexStationItem.IsHearing"/>): фразы остальных без «Алиса» в это время не вопрос.
     /// </summary>
     public class AliceListener : MonoBehaviour, IMicrophoneSubscriber
     {
@@ -55,6 +67,17 @@ namespace CustomItems
         /// <summary>Уточнять фразы для колонки через Whisper (если он лежит рядом с модом).</summary>
         public static bool UseWhisper = true;
 
+        /// <summary>Сколько секунд речи (по громкости) нужно после «Алиса», чтобы это был вопрос, а не шум.</summary>
+        public static float MinSpeech = 0.3f;
+        /// <summary>Пауза (секунды), которой кончается вопрос после «Алиса» или ответ на вопрос колонки.</summary>
+        public static float EndPause = 0.8f;
+
+        // Междометия и обрывки, которые Vosk пишет на шум и дыхание: одни они — не вопрос
+        private static readonly HashSet<string> Fillers = new HashSet<string>
+        {
+            "а", "и", "э", "ээ", "м", "мм", "ммм", "ну", "о", "у", "ох", "ах", "эх", "хм", "аа", "ы", "ой", "ага", "угу",
+        };
+
         private static readonly Regex TextField = new Regex("\"text\"\\s*:\\s*\"([^\"]*)\"");
         private static readonly Regex PartialField = new Regex("\"partial\"\\s*:\\s*\"([^\"]*)\"");
 
@@ -72,6 +95,8 @@ namespace CustomItems
         private readonly Queue<Chunk> chunks = new Queue<Chunk>();
         private readonly Queue<Heard> results = new Queue<Heard>();
         private readonly HashSet<int> resetRequests = new HashSet<int>();
+        // Чьих слов колонка сейчас ждёт без «Алиса» (проснулась на него, спросила): им вопрос кончается паузой
+        private readonly HashSet<int> hearing = new HashSet<int>();
         private Thread worker;
 
         // Кто сейчас слушается: игрок → до какого времени (говорил + хвост)
@@ -82,6 +107,8 @@ namespace CustomItems
         // Фразы, которые ждут Whisper (и всё, что тот же игрок сказал после них, — по порядку)
         private readonly List<Pending> pending = new List<Pending>();
         private volatile bool micOn;
+        private bool micWasOn;
+        private readonly PreRoll micPre = new PreRoll();
         private volatile int micPlayer;
         private int outputRate;
 
@@ -91,11 +118,22 @@ namespace CustomItems
             public short[] Pcm; // null — игрок замолчал, дожать фразу
         }
 
+        internal enum HeardKind
+        {
+            Text,
+            Reset, // распознаватель сброшен после ответа на кусок фразы
+            Wake,  // маленькая модель услышала «Алиса»
+            Voice, // слышна речь (по громкости): человек ещё говорит
+        }
+
         internal struct Heard
         {
             public int Player;
-            public string Text; // null — распознаватель сброшен после ответа на кусок фразы
+            public HeardKind Kind;
+            public string Text;
             public bool Partial;
+            // Секунд речи во фразе и после «Алиса» (-1 — «Алиса» в этой фразе маленькая модель не слышала)
+            public float Speech, SpeechAfterWake;
             // Звук этой фразы с начала (с прошлого сброса или конца прошлой фразы): первые AudioCount
             // отсчётов, частота Rate. Массив дальше не меняется, его можно читать с любого потока
             public short[] Audio;
@@ -130,6 +168,11 @@ namespace CustomItems
                 "Выключите, если игра падает или тормозит после включения колонки").Value;
             AliceWhisper.TimeoutSeconds = Mathf.Clamp(plugin.Config.Bind(section, "WhisperTimeout", 3f,
                 "Сколько секунд ждать Whisper; не успел — колонка отвечает по тексту Vosk").Value, 0.5f, 10f);
+            MinSpeech = Mathf.Clamp(plugin.Config.Bind(section, "MinSpeech", 0.3f,
+                "Сколько секунд речи нужно после «Алиса», чтобы колонка сочла это вопросом. Тишина, шум и «э-э» короче — " +
+                "не вопрос: колонка ждёт дальше, а через ListenSilence секунд выключается").Value, 0.1f, 2f);
+            EndPause = Mathf.Clamp(plugin.Config.Bind(section, "EndPause", 0.8f,
+                "Пауза (секунды), после которой вопрос к колонке считается законченным").Value, 0.3f, 3f);
         }
 
         // Модель Whisper большая (~264 МБ): грузим в фоне, когда впервые включили колонку
@@ -202,6 +245,8 @@ namespace CustomItems
                          && (!HostListens || nm != null && nm.IsServer);
             var any = false;
             touchedTaps.Clear();
+            lock (gate)
+                hearing.Clear();
             if (listen)
             {
                 var local = GameNetworkManager.Instance?.localPlayerController;
@@ -223,6 +268,11 @@ namespace CustomItems
                     if (!on && hearUntil.Remove(i))
                         Push(new Chunk { Player = i }); // замолчал: пусть распознавание закончит фразу
                     any |= on;
+                    if (on && YandexStationItem.IsHearing(p))
+                    {
+                        lock (gate)
+                            hearing.Add(i);
+                    }
 
                     if (isLocal)
                     {
@@ -275,7 +325,7 @@ namespace CustomItems
 
         private void Handle(Heard heard, StartOfRound round)
         {
-            if (heard.Text == null)
+            if (heard.Kind == HeardKind.Reset)
             {
                 answered.Remove(heard.Player); // распознаватель сброшен, дальше новая фраза
                 return;
@@ -285,9 +335,17 @@ namespace CustomItems
             if (player == null)
                 return;
 
-            // Слышны слова — человек ещё говорит: колонка подождёт с выключением
-            if (heard.Text.Length > 0)
-                YandexStationItem.OnVoice(player);
+            switch (heard.Kind)
+            {
+                case HeardKind.Voice:
+                    // Слышна речь — человек ещё говорит: колонка подождёт с выключением (шум и тишина не продлевают)
+                    YandexStationItem.OnVoice(player);
+                    return;
+                case HeardKind.Wake:
+                    Plugin.Log.LogDebug($"Алиса: {player.playerUsername} позвал(а) «{YandexStationItem.WakeWord}»");
+                    YandexStationItem.OnPartial(player, YandexStationItem.WakeWord);
+                    return;
+            }
 
             if (heard.Partial)
             {
@@ -319,9 +377,12 @@ namespace CustomItems
         private void Deliver(Heard heard, GameNetcodeStuff.PlayerControllerB player)
         {
             var wake = heard.Text.Contains(YandexStationItem.WakeWord);
+            if (!Speech(ref heard, player, wake))
+                return;
             AliceWhisper.Job job = null;
-            // Одно короткое «Алиса» Whisper не уточнит: колонка и так проснётся
-            var onlyWake = heard.Text.Trim() == YandexStationItem.WakeWord && heard.AudioCount < heard.Rate * 1.2f;
+            // Одно «Алиса» Whisper не уточнит: колонка и так проснётся. Без речи после «Алиса» (тишина, шум)
+            // он бы дописал что-нибудь своё, поэтому в Whisper — только фразы с вопросом
+            var onlyWake = heard.Text.Trim() == YandexStationItem.WakeWord;
             if (UseWhisper && AliceWhisper.Ready && heard.Audio != null && !onlyWake
                 && (wake || YandexStationItem.IsHearing(player)))
                 job = AliceWhisper.Start(heard.Audio, heard.AudioCount, heard.Rate);
@@ -338,6 +399,37 @@ namespace CustomItems
                 Job = job,
                 GiveUpAt = Time.realtimeSinceStartup + AliceWhisper.TimeoutSeconds,
             });
+        }
+
+        /// <summary>
+        /// Есть ли во фразе речь, а не шум. Шум после «Алиса» отрезается (колонка слышит одно «Алиса» и ждёт дальше),
+        /// фраза без «Алиса» из одного шума выбрасывается.
+        /// </summary>
+        private static bool Speech(ref Heard heard, GameNetcodeStuff.PlayerControllerB player, bool wake)
+        {
+            var words = heard.Text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var wakeAt = Array.IndexOf(words, YandexStationItem.WakeWord);
+            var rest = words.Skip(wakeAt + 1).Where(w => w != "[unk]" && !Fillers.Contains(w)).ToArray();
+            var after = heard.SpeechAfterWake >= 0f ? heard.SpeechAfterWake : heard.Speech;
+            if (wake)
+            {
+                if (rest.Length == 0)
+                    heard.Text = YandexStationItem.WakeWord;
+                else if (after < MinSpeech && heard.Audio != null)
+                {
+                    Plugin.Log.LogDebug($"Алиса: после «{YandexStationItem.WakeWord}» у {player.playerUsername} только шум " +
+                                        $"({after:0.00} с речи, Vosk «{heard.Text}»), жду вопрос");
+                    heard.Text = YandexStationItem.WakeWord;
+                }
+                return true;
+            }
+            if (rest.Length == 0 || heard.Audio != null && heard.Speech < MinSpeech)
+            {
+                if (YandexStationItem.IsHearing(player))
+                    Plugin.Log.LogDebug($"Алиса: {player.playerUsername}: «{heard.Text}» — шум, а не речь ({heard.Speech:0.00} с), пропускаю");
+                return false;
+            }
+            return true;
         }
 
         // Готовые фразы из Whisper → колонке, по порядку для каждого игрока. Не успел — текст Vosk
@@ -398,14 +490,60 @@ namespace CustomItems
         }
 
         // Вызывает Dissonance (может быть не с главного потока): только копируем звук в очередь
+        // Пока игрок молчит, звук не распознаётся, но последние доли секунды хранятся: чат замечает речь
+        // с опозданием, и без них начало «Алиса» терялось бы
         public void ReceiveMicrophoneData(ArraySegment<float> buffer, WaveFormat format)
         {
-            if (!micOn || buffer.Array == null)
+            if (buffer.Array == null)
                 return;
             var pcm = new short[buffer.Count];
             for (var i = 0; i < buffer.Count; i++)
                 pcm[i] = ToShort(buffer.Array[buffer.Offset + i]);
+            if (!micOn)
+            {
+                micWasOn = false;
+                micPre.Keep(pcm, format.SampleRate);
+                return;
+            }
+            if (!micWasOn)
+            {
+                micWasOn = true;
+                micPre.Flush(this, micPlayer, format.SampleRate);
+            }
             Push(new Chunk { Player = micPlayer, Rate = format.SampleRate, Pcm = pcm });
+        }
+
+        /// <summary>Последние <see cref="Seconds"/> секунды звука до того, как игрок «заговорил» в чате.</summary>
+        internal class PreRoll
+        {
+            private const float Seconds = 0.4f;
+            private readonly Queue<short[]> parts = new Queue<short[]>();
+            private int count, rate;
+
+            public void Keep(short[] pcm, int sampleRate)
+            {
+                if (sampleRate != rate)
+                {
+                    parts.Clear();
+                    count = 0;
+                    rate = sampleRate;
+                }
+                parts.Enqueue(pcm);
+                count += pcm.Length;
+                while (parts.Count > 1 && count - parts.Peek().Length >= rate * Seconds)
+                    count -= parts.Dequeue().Length;
+            }
+
+            public void Flush(AliceListener listener, int player, int sampleRate)
+            {
+                if (sampleRate == rate)
+                {
+                    foreach (var pcm in parts)
+                        listener.Push(new Chunk { Player = player, Rate = rate, Pcm = pcm });
+                }
+                parts.Clear();
+                count = 0;
+            }
         }
 
         public void Reset()
@@ -433,15 +571,28 @@ namespace CustomItems
             internal AliceListener Listener;
             internal volatile bool On;
             internal int Player, Rate;
+            private bool wasOn;
+            private readonly PreRoll pre = new PreRoll();
 
             private void OnAudioFilterRead(float[] data, int channels)
             {
                 var listener = Listener;
-                if (!On || listener == null || Rate <= 0 || channels <= 0)
+                if (listener == null || Rate <= 0 || channels <= 0)
                     return;
                 var pcm = new short[data.Length / channels];
                 for (var i = 0; i < pcm.Length; i++)
                     pcm[i] = ToShort(data[i * channels]);
+                if (!On)
+                {
+                    wasOn = false;
+                    pre.Keep(pcm, Rate);
+                    return;
+                }
+                if (!wasOn)
+                {
+                    wasOn = true;
+                    pre.Flush(listener, Player, Rate);
+                }
                 listener.Push(new Chunk { Player = Player, Rate = Rate, Pcm = pcm });
             }
         }
@@ -455,11 +606,18 @@ namespace CustomItems
         private class Stream
         {
             public VoskRecognizer Recognizer;
+            // Маленькая модель только для «Алиса» (null — её нет)
+            public VoskRecognizer Wake;
             public int Rate;
-            public int SinceSamples;
+            public int SinceSamples, WakeSinceSamples;
             // Звук текущей фразы для Whisper. Новая фраза — новый массив: старый остаётся тому, кто его взял
             public short[] Audio;
             public int AudioCount;
+            public readonly Vad Vad = new Vad();
+            // Речь во фразе, отсчётов: всего и после «Алиса»; где во фразе прозвучало «Алиса» (-1 — не звучало)
+            public int Speech, SpeechAfterWake, WakeAt = -1;
+            // Отсчётов тишины после последней речи и с прошлого сигнала «говорит»
+            public int Silence, SinceVoice = int.MaxValue / 2;
 
             public void Append(short[] pcm)
             {
@@ -482,6 +640,58 @@ namespace CustomItems
             {
                 Audio = null;
                 AudioCount = 0;
+                Speech = SpeechAfterWake = 0;
+                WakeAt = -1;
+            }
+        }
+
+        /// <summary>
+        /// Речь или нет — по громкости кадров по 20 мс: речь, если кадр заметно громче фона (шум микрофона, гул)
+        /// и не совсем тихий. Фон следит за самыми тихими кадрами: вниз сразу, вверх медленно.
+        /// </summary>
+        internal class Vad
+        {
+            private const float Above = 3.2f;   // ≈ +10 дБ над фоном
+            private const float MinLevel = 200f; // ≈ −44 дБ: тише — не речь, как бы ни было тихо вокруг
+            private float floor = -1f;
+            private double sum;
+            private int filled;
+
+            /// <summary>Сколько отсчётов уже услышанного куска звука — речь (по нынешнему фону, не меняя его).</summary>
+            public int Count(short[] audio, int from, int to, int rate)
+            {
+                var frame = Math.Max(1, rate / 50);
+                var voiced = 0;
+                for (var start = from; start + frame <= to; start += frame)
+                {
+                    double sq = 0;
+                    for (var i = start; i < start + frame; i++)
+                        sq += audio[i] * (double)audio[i];
+                    var rms = (float)Math.Sqrt(sq / frame);
+                    if (rms > MinLevel && rms > Math.Max(floor, 0f) * Above)
+                        voiced += frame;
+                }
+                return voiced;
+            }
+
+            /// <summary>Сколько отсчётов <paramref name="pcm"/> пришлось на речь.</summary>
+            public int Voiced(short[] pcm, int rate)
+            {
+                var frame = Math.Max(1, rate / 50);
+                var voiced = 0;
+                foreach (var v in pcm)
+                {
+                    sum += v * (double)v;
+                    if (++filled < frame)
+                        continue;
+                    var rms = (float)Math.Sqrt(sum / filled);
+                    floor = floor < 0f || rms < floor ? Math.Max(rms, 30f) : floor + (rms - floor) * 0.002f;
+                    if (rms > MinLevel && rms > floor * Above)
+                        voiced += filled;
+                    sum = 0;
+                    filled = 0;
+                }
+                return voiced;
             }
         }
 
@@ -489,7 +699,7 @@ namespace CustomItems
 
         private void Work()
         {
-            Model model;
+            Model model, wakeModel = null;
             try
             {
                 LoadNatives();
@@ -503,13 +713,25 @@ namespace CustomItems
                 Plugin.Log.LogError("Алиса: не удалось загрузить Vosk, голосовые команды выключены. " + e);
                 return;
             }
+            try
+            {
+                var wakeDir = Path.Combine(VoskDir, "model-wake");
+                if (Directory.Exists(wakeDir))
+                    wakeModel = new Model(wakeDir);
+                else
+                    Plugin.Log.LogWarning($"Алиса: нет {wakeDir}, «{YandexStationItem.WakeWord}» слышу по большой модели (с задержкой)");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Алиса: не загрузилась модель для «Алиса», слышу его по большой модели: " + e.Message);
+            }
 
             var grammar = Grammar != null && Grammar.Length > 0 ? GrammarJson() : null;
             var streams = new Dictionary<int, Stream>();
             while (!stopping)
             {
                 Chunk chunk;
-                bool reset;
+                bool reset, listening;
                 lock (gate)
                 {
                     while (chunks.Count == 0 && !stopping)
@@ -518,6 +740,7 @@ namespace CustomItems
                         break;
                     chunk = chunks.Dequeue();
                     reset = resetRequests.Remove(chunk.Player);
+                    listening = hearing.Contains(chunk.Player);
                 }
 
                 try
@@ -527,37 +750,60 @@ namespace CustomItems
                     {
                         stream.Recognizer.Reset();
                         stream.NewPhrase();
-                        Emit(chunk.Player, null, false);
+                        Emit(new Heard { Player = chunk.Player, Kind = HeardKind.Reset });
                     }
                     if (chunk.Pcm == null)
                     {
                         // Игрок замолчал: дожимаем фразу
                         if (stream != null && !reset)
-                        {
-                            Emit(chunk.Player, Text(TextField, stream.Recognizer.FinalResult()), false, stream);
-                            stream.NewPhrase();
-                        }
+                            Finish(chunk.Player, stream);
+                        stream?.Wake?.Reset();
                         continue;
                     }
                     if (stream == null || stream.Rate != chunk.Rate)
                     {
                         stream?.Recognizer.Dispose();
+                        stream?.Wake?.Dispose();
                         stream = new Stream
                         {
                             Rate = chunk.Rate,
                             Recognizer = grammar != null
                                 ? new VoskRecognizer(model, chunk.Rate, grammar)
                                 : new VoskRecognizer(model, chunk.Rate),
+                            Wake = wakeModel != null ? new VoskRecognizer(wakeModel, chunk.Rate) : null,
                         };
                         streams[chunk.Player] = stream;
                     }
 
                     stream.Append(chunk.Pcm);
+                    var voiced = stream.Vad.Voiced(chunk.Pcm, stream.Rate);
+                    stream.Speech += voiced;
+                    if (stream.WakeAt >= 0)
+                        stream.SpeechAfterWake += voiced;
+                    stream.Silence = voiced > 0 ? 0 : stream.Silence + chunk.Pcm.Length;
+                    stream.SinceVoice += chunk.Pcm.Length;
+                    if (voiced > 0 && stream.SinceVoice >= stream.Rate / 4)
+                    {
+                        stream.SinceVoice = 0;
+                        Emit(new Heard { Player = chunk.Player, Kind = HeardKind.Voice });
+                    }
+
+                    if (stream.Wake != null)
+                        ListenWake(chunk, stream);
+
                     if (stream.Recognizer.AcceptWaveform(chunk.Pcm, chunk.Pcm.Length))
                     {
                         stream.SinceSamples = 0;
                         Emit(chunk.Player, Text(TextField, stream.Recognizer.Result()), false, stream);
                         stream.NewPhrase();
+                    }
+                    else if ((stream.WakeAt >= 0 || listening) && stream.Speech >= stream.Rate * MinSpeech
+                             && stream.Silence >= stream.Rate * EndPause)
+                    {
+                        // Вопрос к колонке кончился паузой: не ждём, пока большая модель сама дойдёт до конца фразы
+                        // (она отстаёт на 1,5–2 с), а дожимаем её сейчас
+                        stream.SinceSamples = 0;
+                        Finish(chunk.Player, stream);
                     }
                     else if ((stream.SinceSamples += chunk.Pcm.Length) >= stream.Rate * PartialEvery)
                     {
@@ -571,9 +817,45 @@ namespace CustomItems
                 }
             }
             foreach (var stream in streams.Values)
+            {
                 stream.Recognizer.Dispose();
+                stream.Wake?.Dispose();
+            }
             model.Dispose();
+            wakeModel?.Dispose();
         }
+
+        private void Finish(int player, Stream stream)
+        {
+            Emit(player, Text(TextField, stream.Recognizer.FinalResult()), false, stream);
+            stream.NewPhrase();
+        }
+
+        // «Алиса» по маленькой модели: как только слово есть в промежуточном результате — будим колонку
+        private void ListenWake(Chunk chunk, Stream stream)
+        {
+            string text;
+            if (stream.Wake.AcceptWaveform(chunk.Pcm, chunk.Pcm.Length))
+                text = Text(TextField, stream.Wake.Result());
+            else if ((stream.WakeSinceSamples += chunk.Pcm.Length) >= stream.Rate * WakeEvery)
+                text = Text(PartialField, stream.Wake.PartialResult());
+            else
+                return;
+            stream.WakeSinceSamples = 0;
+            if (Array.IndexOf(text.Split(' '), YandexStationItem.WakeWord) < 0)
+                return;
+            stream.Wake.Reset(); // одно «Алиса» — один раз
+            // Модель отдаёт слово чуть позже его конца: речь после «Алиса» считаем с запасом назад
+            if (stream.WakeAt < 0)
+            {
+                stream.WakeAt = Math.Max(0, stream.AudioCount - (int)(stream.Rate * WakeLag));
+                stream.SpeechAfterWake = stream.Vad.Count(stream.Audio, stream.WakeAt, stream.AudioCount, stream.Rate);
+            }
+            Emit(new Heard { Player = chunk.Player, Kind = HeardKind.Wake });
+        }
+
+        // Как часто спрашивать маленькую модель про «Алиса» и на сколько она отстаёт от конца слова
+        private const float WakeEvery = 0.1f, WakeLag = 0.2f;
 
         private static string Text(Regex field, string json)
         {
@@ -581,17 +863,28 @@ namespace CustomItems
             return match.Success ? match.Groups[1].Value : "";
         }
 
-        private void Emit(int player, string text, bool partial, Stream stream = null)
+        private void Emit(int player, string text, bool partial, Stream stream)
         {
-            if (text != null && text.Trim().Length == 0)
+            if (text.Trim().Length == 0)
                 return;
             var heard = new Heard { Player = player, Text = text, Partial = partial };
-            if (stream != null && stream.AudioCount > 0)
+            if (stream.AudioCount > 0)
             {
                 heard.Audio = stream.Audio;
                 heard.AudioCount = stream.AudioCount;
                 heard.Rate = stream.Rate;
+                heard.Speech = stream.Speech / (float)stream.Rate;
+                heard.SpeechAfterWake = stream.WakeAt >= 0 ? stream.SpeechAfterWake / (float)stream.Rate : -1f;
             }
+            else
+            {
+                heard.SpeechAfterWake = -1f;
+            }
+            Emit(heard);
+        }
+
+        private void Emit(Heard heard)
+        {
             lock (gate)
                 results.Enqueue(heard);
         }

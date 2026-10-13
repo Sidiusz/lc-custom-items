@@ -7,14 +7,15 @@ namespace CustomItems.Items
     {
         /// <summary>
         /// Ждёт ли ближайшая к игроку колонка его слов без «Алиса»: проснулась и слушает, задала вопрос
-        /// («Вы уверены?») или ждёт, во что играть. Такую фразу плагин распознаёт точнее (Whisper), как и с «Алиса».
+        /// («Вы уверены?») или ждёт, во что играть. Проснулась на «Алиса» другого игрока — этого не ждёт.
+        /// Такую фразу плагин распознаёт точнее (Whisper), как и с «Алиса».
         /// </summary>
         public static bool IsHearing(PlayerControllerB speaker)
         {
             if (speaker == null)
                 return false;
             var station = NearestTo(speaker.transform.position, HearingRadius);
-            return station != null && (Time.time < station.listenUntil
+            return station != null && (Time.time < station.listenUntil && station.ListensTo(speaker)
                                        || station.asking != null && Time.time < station.askUntil
                                        || Time.time < station.gameAnswerUntil
                                        || Time.time < station.followUntil); // «а Паша?» сразу после ответа

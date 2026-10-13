@@ -64,6 +64,15 @@ namespace CustomItems.Items
             return true;
         }
 
+        private const string TopicMistake = "#mistake";
+
+        // Извиняется сама («Простите», «Извините», «Не хотела»), а не прощает
+        private static bool IsOwnApology(string clip)
+        {
+            var lower = clip.ToLowerInvariant();
+            return lower.Contains("прост") || lower.Contains("извин") || lower.Contains("не хотела");
+        }
+
         /// <summary>Темы разговора. false — тема не отсюда.</summary>
         private bool AnswerTalk(PlayerControllerB speaker, string topic, string known)
         {
@@ -71,6 +80,19 @@ namespace CustomItems.Items
             {
                 case TopicNotYou:
                     SayFirst("Wake/NotMe", "Ok");
+                    return true;
+                case TopicMistake:
+                    // «Ты заказала не то» — «Простите, я ошиблась», а не «Ладно, прощаю» из той же папки
+                    var sorry = FindSet("Sorry");
+                    var index = sorry != null ? PickIndex(sorry, IsOwnApology) : -1;
+                    if (index < 0)
+                    {
+                        SayFirst("Sorry", TopicUnknown);
+                        return true;
+                    }
+                    askedLocally = true;
+                    Speak(sorry.name, index);
+                    SendSpeak(sorry.name, index);
                     return true;
                 case TopicHere:
                     // «Ты тут?» — «Слушаю» / «Если что, я здесь, слушаю и молчу»

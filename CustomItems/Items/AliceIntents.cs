@@ -450,7 +450,7 @@ namespace CustomItems.Items
             return null;
         }
 
-        private static readonly string[] WhereWords = { "где", "куда", "откуда", "делся", "делась", "подевался", "пропал", "запропастился", "шляется", "носит" };
+        private static readonly string[] WhereWords = { "где", "куда", "откуда", "делся", "делась", "подевался", "пропал", "запропастился", "шляется", "носит", "потерялся", "потерялась", "заблудился", "заблудилась" };
         private static readonly string[] DeadStems = { "умер", "погиб", "мертв", "сдох", "помер", "убил", "убит", "жив" };
 
         private static string AboutFriend(string[] words, bool route)

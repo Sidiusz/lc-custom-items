@@ -1,0 +1,62 @@
+куда паша свалил	#whereis
+где сейчас андрей	#whereis
+а где наш арсений	#whereis|#andname
+даня потерялся	#whereis
+паша не умер	#isalive
+андрей ещё живой	#isalive
+кто-нибудь помер	#whodied
+есть погибшие среди нас	#whodied
+сколько сейчас времени	#time
+подскажи время	#time
+сколько часов	#time
+сколько у нас кредитов	#credits
+сколько денег на счету	#credits
+сколько бабла у нас	#credits
+сколько добра на корабле	#loot
+на какую сумму лут	#loot
+сколько мы насобирали	#loot
+сколько штук на корабле	#itemcount
+сколько ещё до квоты	#quotaleft
+сколько не хватает до квоты	#quotaleft
+улетаем отсюда	#launch
+всё взлетаем	#launch
+давай улетать	#launch
+закрой дверь	#doorsclose
+дверь закрой	#doorsclose
+открой дверь	#doorsopen
+дверь открой	#doorsopen
+включи лампу	#lightson
+свет включай	#lightson
+погаси свет	#lightsoff
+выключай свет	#lightsoff
+купи мне лопату	#buy
+закажи две рации	#buy
+лети на титан	#route
+погода какая	Weather
+что там с погодой	Weather
+рядом монстры есть	#enemies
+расскажи шутку	Joke
+расскажи анекдотик	Joke
+мяукни	Meow
+молчи	#shush
+замолкни	#shush
+стоп хватит	#stop
+сколько у тебя батареи	#battery
+благодарю	Thanks
+спасибочки	Thanks
+приветик	Greeting
+доброе утро	Greeting
+до встречи	Goodbye
+ты кто такая	WhoAreYou
+что умеешь	Skills
+как ты	HowAreYou
+как поживаешь	HowAreYou
+как я зовусь	#myname
+где я сейчас	#whereami
+сканируй луну	#scanmoon
+что я держу	#inhand
+веди на корабль	#navship
+где выход	#navexit
+ты не то купила	#mistake
+громче	#louder
+потише	#quieter

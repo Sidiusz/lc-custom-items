@@ -54,7 +54,7 @@ namespace CustomItems.Items
         // Вопросы о том, что можно проверить по игре: на «точно?» колонка перепроверяет
         private static readonly HashSet<string> Checkable = new HashSet<string>
         {
-            TopicWhereIs, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot,
+            TopicWhereIs, TopicIsAlive, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot,
             TopicScanMoon, TopicQuotaLeft, TopicCredits, TopicHealth,
         };
 
@@ -264,6 +264,8 @@ namespace CustomItems.Items
                     return SayMath(known);
                 case TopicWhereIs:
                     return SayWhereIsGlued(speaker, known);
+                case TopicIsAlive:
+                    return SayIsAlive(speaker, known);
                 case TopicQuotaLeft:
                     SayQuotaLeft(null);
                     return true;
@@ -337,6 +339,8 @@ namespace CustomItems.Items
                         : TopicWhereIs;
                     if (name == null)
                         next = TopicWhereIs;
+                    else if (AsksDead(known) || AsksAlive(known) || fresh && ctxTopic == TopicIsAlive)
+                        next = TopicIsAlive;
                     break;
                 case TopicAndHim:
                     next = fresh && (ctxTopic == TopicInHand || ctxTopic == TopicEarned || ctxTopic == TopicEarnedBy) ? ctxTopic : TopicWhereIs;
@@ -737,6 +741,65 @@ namespace CustomItems.Items
                 topics.Add(Glue + "Unit/" + unit);
         }
 
+        private static string PlaceOf(string whereIs) =>
+            whereIs.Contains("NotHere") ? "NotHere" : whereIs.Contains("PlayerDied") || whereIs.Contains("DeathCause") ? "Dead"
+            : whereIs.Contains("/AFK") ? "AFK" : whereIs.Contains("/Inside") ? "Inside" : whereIs.Contains("/Outside") ? "Outside"
+            : whereIs.Contains("/Lost") ? "Lost" : whereIs.Contains("/Ship") ? "Ship" : null;
+
+        private static readonly string[] DeadStems = { "умер", "умир", "погиб", "мертв", "мёртв", "сдох", "помер", "убил", "убит" };
+
+        private static bool AsksDead(string text) =>
+            (text ?? "").Split(new[] { ' ', ',', '?', '!', '.' }, StringSplitOptions.RemoveEmptyEntries)
+            .Any(w => DeadStems.Any(w.StartsWith));
+
+        private static bool AsksAlive(string text) =>
+            (text ?? "").Split(new[] { ' ', ',', '?', '!', '.' }, StringSplitOptions.RemoveEmptyEntries)
+            .Any(w => w.StartsWith("жив") || w == "цел" || w == "целый");
+
+        // Да или нет без «Звёзды говорят»: на вопрос о друге гадать не к месту
+        private static bool IsPlainYesNo(string clip) => !clip.Contains("Звёзды") && !clip.Contains("Спросите");
+
+        /// <summary>
+        /// «Андрей жив?» / «Андрей умер?» — сначала да или нет, потом где он: «Конечно! Андрей где-то в комплексе».
+        /// Погиб — «Андрей, к сожалению, погиб» (или его личная фраза о смерти).
+        /// </summary>
+        private bool SayIsAlive(PlayerControllerB speaker, string known)
+        {
+            var named = FriendNamed(known);
+            var whole = WhereIsTopic(speaker, known);
+            var place = PlaceOf(whole);
+            var name = NamePiece(named);
+            if (named == null || place == null || name == null)
+            {
+                Say(whole);
+                return true;
+            }
+            if (place == "Dead" || place == "NotHere")
+            {
+                if (place == "Dead" && Random.value < 0.35f && FindSet(whole) != null || FindSet(Glue + "Place/" + place) == null)
+                    Say(whole);
+                else
+                    SaySequence(new List<string> { name, Glue + "Place/" + place });
+                return true;
+            }
+            // Жив: «умер?» — «нет», «жив?» — «да»
+            var answer = AsksDead(known) && !AsksAlive(known) ? "Ball/No" : "Ball/Yes";
+            var set = FindSet(answer);
+            var index = set != null ? PickIndex(set, IsPlainYesNo) : -1;
+            var topics = new List<string>();
+            if (index >= 0)
+                topics.Add(set.name + "\t" + index);
+            if (FindSet(Glue + "Place/" + place) != null)
+            {
+                topics.Add(name);
+                topics.Add(Glue + "Place/" + place);
+            }
+            else
+                topics.Add(whole);
+            SaySequence(topics);
+            return true;
+        }
+
         // «Где Паша?» кусками: «Паша…» + «…в комплексе.»; нет кусков — целая фраза WhereIs/…
         private bool SayWhereIsGlued(PlayerControllerB speaker, string known)
         {
@@ -747,9 +810,7 @@ namespace CustomItems.Items
                 Say(whole);
                 return true;
             }
-            var place = whole.Contains("NotHere") ? "NotHere" : whole.Contains("PlayerDied") || whole.Contains("DeathCause") ? "Dead"
-                : whole.Contains("/AFK") ? "AFK" : whole.Contains("/Inside") ? "Inside" : whole.Contains("/Outside") ? "Outside"
-                : whole.Contains("/Lost") ? "Lost" : whole.Contains("/Ship") ? "Ship" : null;
+            var place = PlaceOf(whole);
             if (place == null || FindSet(Glue + "Place/" + place) == null)
             {
                 Say(whole);

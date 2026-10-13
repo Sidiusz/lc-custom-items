@@ -1163,6 +1163,19 @@ namespace CustomItems.Items
                       ?? (topic.StartsWith("Weather/") ? FindSet("Weather/Other") : null)
                       ?? FindSet(topic == TopicError ? TopicError : TopicUnknown)
                       ?? FindSet(TopicRandom);
+            // «Не поняла» — честно «не поняла»: без «В моей программе нет возможности…» и «Это вы мне?»
+            if (set != null && set.name == TopicUnknown)
+            {
+                TakeLeadIn(); // «Паша, слушай… не поняла» — без обращения
+                var plain = PickIndex(set, IsPlainUnknown);
+                if (plain >= 0)
+                {
+                    askedLocally = true;
+                    Speak(set.name, plain);
+                    SendSpeak(set.name, plain);
+                    return;
+                }
+            }
             SayFrom(set);
         }
 
@@ -1186,6 +1199,12 @@ namespace CustomItems.Items
         // и новый круг не начинается с той, что была последней
         private static readonly Dictionary<string, List<int>> Bags = new Dictionary<string, List<int>>();
         private static readonly Dictionary<string, int> LastFromBag = new Dictionary<string, int>();
+
+        private static bool IsPlainUnknown(string clip)
+        {
+            var lower = clip.ToLowerInvariant();
+            return !lower.Contains("программе") && !lower.Contains("это вы мне");
+        }
 
         // Темы, на которые колонка не капризничает: поздороваться, поблагодарить, попрощаться
         private static readonly HashSet<string> NoWhim = new HashSet<string> { "Greeting", "Thanks", "Goodbye" };

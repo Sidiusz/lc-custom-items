@@ -40,7 +40,7 @@ namespace CustomItems.Items
             TopicTimeLeft = "#timeleft", TopicHealth = "#health", TopicWhoInside = "#whoinside", TopicWhoOnShip = "#whoonship",
             TopicNews = "#news", TopicDangers = "#dangers", TopicAboutFriend = "#aboutfriend", TopicEarnedBy = "#earnedby",
             TopicCoin = "#coin", TopicDice = "#dice", TopicChoose = "#choose", TopicBall = "#ball", TopicComing = "#coming",
-            TopicSelfWhere = "#selfwhere";
+            TopicSelfWhere = "#selfwhere", TopicAliveMe = "#aliveme";
         private const string AskRoute = "route", NotAll = "notall";
         private const string Glue = "Glue/";
 
@@ -54,7 +54,7 @@ namespace CustomItems.Items
         // Вопросы о том, что можно проверить по игре: на «точно?» колонка перепроверяет
         private static readonly HashSet<string> Checkable = new HashSet<string>
         {
-            TopicWhereIs, TopicIsAlive, TopicHowDied, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot, TopicItemCount,
+            TopicWhereIs, TopicIsAlive, TopicAliveMe, TopicHowDied, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot, TopicItemCount,
             TopicScanMoon, TopicQuotaLeft, TopicCredits, TopicHealth,
         };
 
@@ -276,6 +276,9 @@ namespace CustomItems.Items
                     return SayIsAlive(speaker, known);
                 case TopicHowDied:
                     return SayHowDied(speaker, known);
+                case TopicAliveMe:
+                    SayAliveMe(speaker, known);
+                    return true;
                 case TopicQuotaLeft:
                     SayQuotaLeft(null);
                     return true;
@@ -982,6 +985,33 @@ namespace CustomItems.Items
             var hp = speaker != null ? speaker.health : 100;
             var topic = speaker != null && speaker.criticallyInjured || hp < 30 ? "Health/Critical" : hp < 90 ? "Health/Hurt" : "Health/Full";
             SayFirst(topic, "Health/Hurt", TopicUnknown);
+        }
+
+        /// <summary>
+        /// «Алиса, я живой?» — говорит же, значит жив: «Да, вы живы!» (IsAlive/Me), «я умер?» — «Нет, живой» (IsAlive/No),
+        /// без записей — IsAlive/Yes или «да» из Ball. Ранен — следом «Есть царапины, но жить будете» (Health/…).
+        /// </summary>
+        private void SayAliveMe(PlayerControllerB speaker, string known)
+        {
+            var dead = AsksDead(known) && !AsksAlive(known);
+            var topics = Existing(dead ? "IsAlive/No" : "IsAlive/Me", "IsAlive/Yes").Take(1).ToList();
+            if (topics.Count == 0)
+            {
+                var set = FindSet(dead ? "Ball/No" : "Ball/Yes");
+                var index = set != null ? PickIndex(set, IsPlainYesNo) : -1;
+                if (index >= 0)
+                    topics.Add(set.name + "\t" + index);
+            }
+            var hp = speaker != null ? speaker.health : 100;
+            var health = speaker != null && speaker.criticallyInjured || hp < 30 ? "Health/Critical" : hp < 90 ? "Health/Hurt" : null;
+            if (health != null && FindSet(health) != null)
+                topics.Add(health);
+            if (topics.Count == 0)
+                SayHealth(speaker);
+            else if (topics.Count == 1 && !topics[0].Contains("\t"))
+                Say(topics[0]);
+            else
+                SaySequence(topics);
         }
 
         // «Кто в комплексе?» / «кто на корабле?»: имена через «и» + «…в комплексе.» (или «В комплексе:» + имена)

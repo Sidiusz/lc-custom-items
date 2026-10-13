@@ -591,7 +591,8 @@ namespace CustomItems.Items
         private bool SayQuota()
         {
             var tod = TimeOfDay.Instance;
-            if (tod == null || FindSet("Quota/Need") == null || Random.value < 0.3f)
+            // С числами всегда: одно «Не забудьте про квоту» на «какая квота?» — не ответ
+            if (tod == null || FindSet("Quota/Need") == null)
                 return false;
             var topics = new List<string>();
             if (FindSet("Quota/Current") != null)

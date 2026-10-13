@@ -197,7 +197,7 @@ namespace CustomItems.Items
         /// <summary>Тот же вопрос в течение стольких секунд — колонка отвечает фразой из Repeat.</summary>
         public static float RepeatSeconds = 60f;
         /// <summary>Шанс «Я уже отвечала» на тот же вопрос (иначе отвечает снова, например новый анекдот).</summary>
-        public static float RepeatChance = 0.5f;
+        public static float RepeatChance = 0.25f;
         /// <summary>Время числами из кусков («На часах пятнадцать часов тридцать минут»), если все куски записаны.</summary>
         public static bool TimeInNumbers = true;
         /// <summary>Шанс на «Алиса» ответить голосом «Слушаю!» (папка Listen), а не сигналом.</summary>

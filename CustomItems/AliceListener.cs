@@ -342,7 +342,7 @@ namespace CustomItems
                     YandexStationItem.OnVoice(player);
                     return;
                 case HeardKind.Wake:
-                    Plugin.Log.LogDebug($"Алиса: {player.playerUsername} позвал(а) «{YandexStationItem.WakeWord}»");
+                    Plugin.Log.LogInfo($"Алиса: {player.playerUsername} позвал(а) «{YandexStationItem.WakeWord}»");
                     YandexStationItem.OnPartial(player, YandexStationItem.WakeWord);
                     return;
             }
@@ -386,6 +386,8 @@ namespace CustomItems
             if (UseWhisper && AliceWhisper.Ready && heard.Audio != null && !onlyWake
                 && (wake || YandexStationItem.IsHearing(player)))
                 job = AliceWhisper.Start(heard.Audio, heard.AudioCount, heard.Rate);
+            else if (UseWhisper && !AliceWhisper.Ready && !onlyWake && (wake || YandexStationItem.IsHearing(player)))
+                Plugin.Log.LogInfo($"Алиса: Whisper {(AliceWhisper.Started ? "ещё грузится" : "не запущен")}, отвечаю по Vosk «{heard.Text}»");
             if (job == null && !pending.Any(p => p.Player == heard.Player))
             {
                 Speak(player, heard.Text);
@@ -417,7 +419,7 @@ namespace CustomItems
                     heard.Text = YandexStationItem.WakeWord;
                 else if (after < MinSpeech && heard.Audio != null)
                 {
-                    Plugin.Log.LogDebug($"Алиса: после «{YandexStationItem.WakeWord}» у {player.playerUsername} только шум " +
+                    Plugin.Log.LogInfo($"Алиса: после «{YandexStationItem.WakeWord}» у {player.playerUsername} только шум " +
                                         $"({after:0.00} с речи, Vosk «{heard.Text}»), жду вопрос");
                     heard.Text = YandexStationItem.WakeWord;
                 }
@@ -426,7 +428,7 @@ namespace CustomItems
             if (rest.Length == 0 || heard.Audio != null && heard.Speech < MinSpeech)
             {
                 if (YandexStationItem.IsHearing(player))
-                    Plugin.Log.LogDebug($"Алиса: {player.playerUsername}: «{heard.Text}» — шум, а не речь ({heard.Speech:0.00} с), пропускаю");
+                    Plugin.Log.LogInfo($"Алиса: {player.playerUsername}: «{heard.Text}» — шум, а не речь ({heard.Speech:0.00} с), пропускаю");
                 return false;
             }
             return true;
@@ -459,16 +461,16 @@ namespace CustomItems
                     if (!p.Job.Done)
                     {
                         p.Job.Cancelled = true;
-                        Plugin.Log.LogDebug($"Алиса: Whisper не успел за {AliceWhisper.TimeoutSeconds:0.0} с, беру Vosk «{p.Vosk}»");
+                        Plugin.Log.LogInfo($"Алиса: Whisper не успел за {AliceWhisper.TimeoutSeconds:0.0} с, беру Vosk «{p.Vosk}»");
                     }
                     else if (p.Job.Text == null)
                     {
-                        Plugin.Log.LogDebug($"Алиса: Whisper «{p.Job.Raw}» не годится ({p.Job.Why}), беру Vosk «{p.Vosk}»");
+                        Plugin.Log.LogInfo($"Алиса: Whisper «{p.Job.Raw}» не годится ({p.Job.Why}), беру Vosk «{p.Vosk}»");
                     }
                     else
                     {
                         text = AliceWhisper.WithWake(p.Job.Text, p.Wake, YandexStationItem.WakeWord);
-                        Plugin.Log.LogDebug($"Алиса: Vosk «{p.Vosk}» → Whisper «{text}» ({p.Job.Seconds:0.00} с)");
+                        Plugin.Log.LogInfo($"Алиса: Vosk «{p.Vosk}» → Whisper «{text}» ({p.Job.Seconds:0.00} с)");
                     }
                 }
                 if (player != null)
@@ -478,7 +480,7 @@ namespace CustomItems
 
         private static void Speak(GameNetcodeStuff.PlayerControllerB player, string text)
         {
-            Plugin.Log.LogDebug($"Алиса услышала {player.playerUsername}: {text}");
+            Plugin.Log.LogInfo($"Алиса услышала {player.playerUsername}: {text}");
             YandexStationItem.OnSpeech(player, text);
         }
 

@@ -82,7 +82,7 @@ namespace CustomItems.Items
         public static bool LaunchConfirmOn = true;
         /// <summary>Сохранить LaunchConfirmOn в конфиг (ставит плагин).</summary>
         public static Action<bool> SaveLaunchConfirm;
-        public static float ListenSilence = 3f, ListenMax = 12f;
+        public static float ListenSilence = 3f, ListenMax = 8f;
         /// <summary>Сколько секунд после её вопроса («Вы уверены?») ждёт ответ без «Алиса».</summary>
         public static float AnswerSeconds = 8f;
         /// <summary>Сколько длится пробуждение (сигнал и глаза), прежде чем она начнёт «думать».</summary>
@@ -531,6 +531,15 @@ namespace CustomItems.Items
 
             // [unk] — распознавание не разобрало слово: вопрос есть, но непонятный
             var known = command.Replace("[unk]", " ").Trim();
+            var words = AliceIntents.Tokens(known);
+            // Посреди речи «замолчи», «стоп», «не тебе» — не ей: перестаёт слушать (одно «стоп» — команда, ниже)
+            if (words.Length >= 2 && HasCancel(words) && !station.IsTalking && station.pendingAnswer == null)
+            {
+                Debug.Log($"[Алиса] {speaker.playerUsername}: «{text}» — отмена в фразе, больше не слушает");
+                ResetHearing?.Invoke(speaker);
+                station.StopListening();
+                return;
+            }
             string topic, why;
             if (command.Length == 0)
             {
@@ -547,6 +556,26 @@ namespace CustomItems.Items
                 topic = Topic(known, out why);
             }
             Debug.Log($"[Алиса] {speaker.playerUsername}: «{text}» → вопрос «{known}» → {topic ?? "слушаю"} ({why})");
+            // Длинная речь без понятного вопроса, обращение к другу по имени или просто слишком длинно —
+            // говорят не с ней: молча перестаёт слушать, а не «Не поняла»
+            if (topic != TopicStop && topic != TopicShush && !station.IsTalking && station.pendingAnswer == null
+                && (words.Length > MaxCommandWords
+                    || (topic == TopicUnknown || topic == TopicMumble)
+                    && (words.Length >= LongTalkWords || words.Length >= 3 && AliceIntents.NameIn(known) != null)))
+            {
+                Debug.Log($"[Алиса] {speaker.playerUsername}: «{known}» — похоже, не ей ({words.Length} слов), больше не слушает");
+                try
+                {
+                    UnknownLog?.Invoke($"{known}\tне ей\t{why}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning("[Алиса] alice-unknown.txt: " + e.Message);
+                }
+                ResetHearing?.Invoke(speaker);
+                station.StopListening();
+                return;
+            }
             // Не поняла или поняла только по смыслу/с натяжкой — в alice-unknown.txt, чтобы пополнять примеры
             if (topic == TopicUnknown || topic == TopicMumble || topic != null && lastWordScore < WeakScore)
             {

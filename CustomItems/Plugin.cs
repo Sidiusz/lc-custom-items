@@ -130,7 +130,7 @@ namespace CustomItems
             YandexStationItem.SaveLaunchConfirm = on => launchConfirm.Value = on;
             YandexStationItem.ListenSilence = Config.Bind(section, "ListenSilence", 3f,
                 "Сколько секунд тишины после «Алиса» (или вопроса колонки) она ждёт, потом выключается сигналом. Пока говорят — ждёт").Value;
-            YandexStationItem.ListenMax = Config.Bind(section, "ListenMax", 12f,
+            YandexStationItem.ListenMax = Config.Bind(section, "ListenLimit", 8f,
                 "Дольше этого (секунды) колонка не слушает, даже если говорят без остановки").Value;
             YandexStationItem.ThinkMin = Config.Bind(section, "ThinkMin", 0.7f,
                 "Пауза «думает» перед ответом, от (секунды)").Value;

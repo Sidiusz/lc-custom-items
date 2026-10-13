@@ -91,6 +91,8 @@ namespace CustomItems.Items
             ("News/Monster", "EnemiesNear"),
             ("Before/NoDead", "WhereIs/AllAlive"), ("Before/SomeDead", "News/Died/Someone"), ("Before/NoLoot", "Loot/Low"),
             ("Earned/Nobody", "Loot/Low"),
+            // «Арсений кота ворует» — «Арсений! Он сейчас все ваши вещи стащит»
+            ("Snitch", "Events/Enemy/Hoarding bug/Он сейчас все ваши вещи стащит"),
             ("HowAreYou/Sad", "HowAreYou/Ask/Грустно, а у вас как"), ("HowAreYou/Happy", "HowAreYou/Ask/Всё отлично, а у вас как"),
             ("HowAreYou/Scared", "Events/Panic/Мы погибнем мы все умрём"),
             ("Advice/Danger", "EnemiesNear"), ("Advice/Late", "Events/LateDay"), ("Advice/Quota", "QuotaNotDone"),

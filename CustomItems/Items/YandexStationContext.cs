@@ -54,9 +54,13 @@ namespace CustomItems.Items
         // Вопросы о том, что можно проверить по игре: на «точно?» колонка перепроверяет
         private static readonly HashSet<string> Checkable = new HashSet<string>
         {
-            TopicWhereIs, TopicIsAlive, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot,
+            TopicWhereIs, TopicIsAlive, TopicWhoDied, TopicEnemies, TopicCount, TopicWhoInside, TopicWhoOnShip, TopicDangers, TopicLoot, TopicItemCount,
             TopicScanMoon, TopicQuotaLeft, TopicCredits, TopicHealth,
         };
+
+        // Вопрос о деле (сколько денег, кто умер, время, квота): на него не капризничает
+        private static bool IsFactual(string topic) =>
+            Checkable.Contains(topic) || topic == TopicTime || topic == TopicTimeLeft || topic == "Quota" || topic == "Deadline";
 
         // ---- Что помнит ----
 
@@ -173,7 +177,10 @@ namespace CustomItems.Items
             }
             if (station.leadIn == null) // «Сейчас проверю…» от «точно?» уже стоит
                 station.PrepareLeadIn(speaker, topic);
+            station.saidUnknown = false;
             AnswerCore(station, speaker, topic, known);
+            if (station.saidUnknown && station.askedLocally)
+                station.listenAgainFor = speaker;
             station.leadIn = null;
             station.Remember(speaker, topic, known);
         }

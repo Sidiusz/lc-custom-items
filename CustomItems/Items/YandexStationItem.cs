@@ -202,7 +202,7 @@ namespace CustomItems.Items
         public static bool TimeInNumbers = true;
         /// <summary>Шанс на «Алиса» ответить голосом «Слушаю!» (папка Listen), а не сигналом.</summary>
         public static float ListenVoiceChance = 0.3f;
-        public const string TopicLoot = "#loot", TopicLootIntro = "Loot/Intro", TopicWait = "Wait", TopicListenVoice = "Listen",
+        public const string TopicLoot = "#loot", TopicItemCount = "#itemcount", TopicLootIntro = "Loot/Intro", TopicWait = "Wait", TopicListenVoice = "Listen",
             TopicCall = "Call/", TopicMyNameIntro = "MyName/Intro", TopicLightsOn = "#lightson", TopicLightsOff = "#lightsoff",
             TopicJoke = "Joke", TopicJokeNext = "Joke/Next", TopicWhoDied = "#whodied";
 
@@ -264,6 +264,10 @@ namespace CustomItems.Items
         private float talkUntil;
         private bool clockWhileTalking;
         private float listenUntil, listenStartedAt;
+        // Сказала «Не поняла, повторите»: после этой фразы снова слушает того, кто спрашивал (без «Алиса»)
+        private bool saidUnknown;
+        private GameNetcodeStuff.PlayerControllerB listenAgainFor;
+        private float listenAgainUntil; // это окно — переспрос: в тишине без «Вы меня звали?»
         // Кто разбудил колонку: пока она слушает, вопрос без «Алиса» принимается только от него
         private GameNetcodeStuff.PlayerControllerB wokeBy;
         private string lastTopic;
@@ -625,7 +629,7 @@ namespace CustomItems.Items
             // Каприз: «Нет связи с сервером» или «Не хочу». Не «Я попробовала, не получилось» (это про дверь или
             // маршрут, на вопрос звучит бессмыслицей) и не «Не поняла» на понятый вопрос; на «привет» и «спасибо» — никогда
             if (topic != TopicStop && topic != TopicShush && topic != TopicError && topic != TopicTimeError
-                && !NoWhim.Contains(topic) && Random.value < WhimChance)
+                && !NoWhim.Contains(topic) && !IsFactual(topic) && !IsAction(topic) && Random.value < WhimChance)
             {
                 var error = station.FindSet(TopicError);
                 var errorIndex = error != null ? station.PickIndex(error, IsServerError) : -1;
@@ -706,8 +710,8 @@ namespace CustomItems.Items
                 station.Say(EnemyNear(station.transform.position, EventRadius) ? TopicEnemiesNear : TopicAllClear);
             else if (topic == TopicCount)
                 station.SayCount(PlayersNear(station, 15f));
-            else if (topic == TopicLoot)
-                station.SayLoot();
+            else if (topic == TopicLoot || topic == TopicItemCount)
+                station.SayLoot(topic == TopicItemCount);
             else if (topic == TopicWhoDied)
                 station.SayWhoDied(speaker, known);
             else if (topic == TopicLightsOn || topic == TopicLightsOff)
@@ -1163,6 +1167,8 @@ namespace CustomItems.Items
                       ?? (topic.StartsWith("Weather/") ? FindSet("Weather/Other") : null)
                       ?? FindSet(topic == TopicError ? TopicError : TopicUnknown)
                       ?? FindSet(TopicRandom);
+            if (set != null && (set.name == TopicUnknown || set.name == TopicMumble))
+                saidUnknown = true;
             // «Не поняла» — честно «не поняла»: без «В моей программе нет возможности…» и «Это вы мне?»
             if (set != null && set.name == TopicUnknown)
             {
@@ -1528,7 +1534,7 @@ namespace CustomItems.Items
         }
 
         /// <summary>«Сколько на корабле»: «Смотрю…» (Wait), «Всего на корабле» (Loot/Intro) и сумма лута числом.</summary>
-        private void SayLoot()
+        private void SayLoot(bool items = false)
         {
             var total = 0;
             var count = 0;
@@ -1540,7 +1546,7 @@ namespace CustomItems.Items
                     count++;
                 }
             }
-            if (count > 0 && SayLootMore(count, total))
+            if ((count > 0 || items) && SayLootMore(count, total, items))
                 return;
             var topics = new List<string>();
             if (FindSet(TopicWait) != null && Random.value < 0.5f)
@@ -2344,12 +2350,24 @@ namespace CustomItems.Items
             if (segments == null)
                 return;
 
+            // «Не поняла, повторите» договорила — слушает переспрос, как после «Алиса» (и закрывается сигналом)
+            if (listenAgainFor != null && Time.time >= talkUntil && !IsTalking && pendingAnswer == null)
+            {
+                if (IsOn && !IsJammed && !listenAgainFor.isPlayerDead)
+                {
+                    listenUntil = listenAgainUntil = Time.time + ListenSilence;
+                    listenStartedAt = Time.time;
+                    wokeBy = listenAgainFor;
+                }
+                listenAgainFor = null;
+            }
             // Позвали «Алиса» и замолчали: сигнал конца прослушивания (решает тот, кто звал)
             if (listenUntil > 0f && Time.time > listenUntil)
             {
+                var again = listenUntil == listenAgainUntil;
                 listenUntil = 0f;
                 wokeBy = null;
-                if (askedLocally && IsOn && !IsJammed && !AskIfMe())
+                if (askedLocally && IsOn && !IsJammed && (again || !AskIfMe()))
                     Say(SoundTimeout);
             }
 

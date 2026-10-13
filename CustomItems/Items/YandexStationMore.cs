@@ -535,11 +535,12 @@ namespace CustomItems.Items
             SaySequence(topics);
         }
 
-        // «предмета» (2–4, 22–24…) или «предметов»; одного предмета нет — тоже «предметов»
+        // «предмет» (1, 21…), «предмета» (2–4, 22–24…) или «предметов»; без Items/One — тоже «предметов»
         private bool AddItemsWord(List<string> topics, int n)
         {
             var few = n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14);
-            var word = few && FindSet("Items/Few") != null ? "Items/Few" : FindSet("Items/Many") != null ? "Items/Many" : FindSet("Scan/Items") != null ? "Scan/Items" : null;
+            var one = n % 10 == 1 && n % 100 != 11;
+            var word = one && FindSet("Items/One") != null ? "Items/One" : few && FindSet("Items/Few") != null ? "Items/Few" : FindSet("Items/Many") != null ? "Items/Many" : FindSet("Scan/Items") != null ? "Scan/Items" : null;
             if (word == null)
                 return false;
             topics.Add(word);
@@ -567,9 +568,10 @@ namespace CustomItems.Items
         }
 
         /// <summary>«Сколько на корабле»: «На корабле» + N «предметов» + «на сумму» + сумма, и «Ого, да вы богаты!» или «маловато».</summary>
-        private bool SayLootMore(int count, int total)
+        // «На корабле 12 предметов на сумму…»; items — спросили, сколько предметов: так всегда, сумма — не всегда
+        private bool SayLootMore(int count, int total, bool items = false)
         {
-            if (FindSet("Loot/OnShip") == null || Random.value < 0.4f)
+            if (FindSet("Loot/OnShip") == null || !items && Random.value < 0.4f)
                 return false;
             var topics = new List<string>();
             if (FindSet(TopicWait) != null && Random.value < 0.4f)
@@ -577,7 +579,7 @@ namespace CustomItems.Items
             topics.Add("Loot/OnShip");
             if (!AddNumber(topics, count) || !AddItemsWord(topics, count))
                 return false;
-            if (FindSet("Sum") != null)
+            if (FindSet("Sum") != null && total > 0 && (!items || Random.value < 0.5f))
             {
                 topics.Add("Sum");
                 if (!AddSum(topics, total))

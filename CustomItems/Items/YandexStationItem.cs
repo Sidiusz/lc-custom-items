@@ -96,7 +96,7 @@ namespace CustomItems.Items
             TopicGameAsk = "Game/Ask", TopicGameUnknown = "Game/Unknown", TopicBored = "Game/Bored",
             TopicEnemies = "#enemies", TopicEnemiesNear = "EnemiesNear", TopicAllClear = "AllClear",
             TopicWhoAreYou = "WhoAreYou", TopicShush = "Shush", TopicSorry = "Sorry", TopicInsult = "Insult",
-            TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel",
+            TopicMumble = "Mumble", TopicWhereIs = "#whereis", TopicIsAlive = "#isalive", TopicRend = "Game/Rend", TopicCancel = "Game/Cancel",
             TopicFavoriteColor = "FavoriteColor", TopicRoute = "#route";
 
         /// <summary>
@@ -646,7 +646,7 @@ namespace CustomItems.Items
 
             // Тот же вопрос второй раз за минуту: «Я уже отвечала». «Где Паша» после «где Андрей» — другой вопрос:
             // у вопросов про человека сравниваем весь текст, а не только тему
-            var asked = topic == TopicWhereIs ? topic + "|" + known : topic;
+            var asked = topic == TopicWhereIs || topic == TopicIsAlive ? topic + "|" + known : topic;
             if (RepeatTopics.Contains(topic) && asked == station.lastAsked && Time.time - station.lastAskedAt < RepeatSeconds
                 && station.FindSet(TopicRepeat) != null && Random.value < RepeatChance)
             {

@@ -177,10 +177,15 @@ namespace CustomItems.Items
                     SayRepeat();
                     return true;
                 case TopicMeow:
-                    if (FindSet("Meow/Cant") != null && Random.value < 0.2f)
+                    // Просят помяукать — мяукает; «Я не умею» только изредка, в шутку
+                    if (FindSet("Meow/Cant") != null && Random.value < 0.05f)
                         Say("Meow/Cant");
                     else
                         SayTopic(TopicMeow);
+                    return true;
+                case TopicKitty when FindSet(TopicMeow) != null && Random.value < 0.75f:
+                    // «Мяу» — мяукает в ответ, иногда «Кис-кис»
+                    Say(TopicMeow);
                     return true;
                 case TopicCallMe:
                     SayFirst(Random.value < 0.5f ? new[] { "CallMe/Forgot", "CallMe/Refuse", "Ok" } : new[] { "CallMe/Refuse", "CallMe/Forgot", "Ok" });

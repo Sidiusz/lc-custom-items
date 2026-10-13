@@ -1219,8 +1219,8 @@ namespace CustomItems.Items
             SayFirst(topics);
         }
 
-        // Темы, на которые колонка не капризничает: поздороваться, поблагодарить, попрощаться
-        private static readonly HashSet<string> NoWhim = new HashSet<string> { "Greeting", "Thanks", "Goodbye" };
+        // Темы, на которые колонка не капризничает: поздороваться, поблагодарить, попрощаться, помяукать
+        private static readonly HashSet<string> NoWhim = new HashSet<string> { "Greeting", "Thanks", "Goodbye", "Meow", "Kitty" };
 
         // Ошибка связи («Нет связи с сервером», «Попробуйте позже»), а не «не получилось» про действие
         private static bool IsServerError(string clip) =>

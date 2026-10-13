@@ -76,6 +76,12 @@ namespace CustomItems.Items
         // ---- Настройки из конфига (Plugin) ----
         public static string WakeWord = "алиса";
         public static float HearingRadius = 8f;
+        /// <summary>Колонка на корабле слышит всех на корабле и снаружи не дальше стольких метров от него.</summary>
+        public static float ShipHearingRadius = 20f;
+        /// <summary>«Вы уверены?» перед взлётом; голосом «убери/включи подтверждение взлёта».</summary>
+        public static bool LaunchConfirmOn = true;
+        /// <summary>Сохранить LaunchConfirmOn в конфиг (ставит плагин).</summary>
+        public static Action<bool> SaveLaunchConfirm;
         public static float ListenSilence = 3f, ListenMax = 12f;
         /// <summary>Сколько секунд после её вопроса («Вы уверены?») ждёт ответ без «Алиса».</summary>
         public static float AnswerSeconds = 8f;
@@ -440,7 +446,7 @@ namespace CustomItems.Items
             text = (text ?? "").Trim().ToLowerInvariant().Replace('ё', 'е');
             if (text.Length == 0 || speaker == null || speaker.isPlayerDead)
                 return;
-            var station = NearestTo(speaker.transform.position, HearingRadius);
+            var station = HearingStation(speaker);
             if (station == null)
                 return;
 
@@ -603,7 +609,7 @@ namespace CustomItems.Items
             text = (text ?? "").ToLowerInvariant().Replace('ё', 'е');
             if (speaker == null || speaker.isPlayerDead || text.IndexOf(WakeWord, StringComparison.Ordinal) < 0)
                 return;
-            var station = NearestTo(speaker.transform.position, HearingRadius);
+            var station = HearingStation(speaker);
             if (station == null || station.IsJammed)
                 return;
             // Ждёт ответ на свой вопрос, уже слушает, говорит или думает — будить не надо
@@ -755,7 +761,27 @@ namespace CustomItems.Items
                     station.SayFirst(done.Length > 0 && done[0] == "Launch/Takeoff" ? new[] { "Launch/Hurry" }.Concat(done).ToArray() : done);
                 }
                 else if (!station.AskLaunchNotAll())
-                    station.Ask(AskLaunch, null, LaunchConfirm);
+                {
+                    if (LaunchConfirmOn || Launch == null)
+                        station.Ask(AskLaunch, null, LaunchConfirm);
+                    else
+                        station.SayFirst(Launch()); // подтверждение убрали голосом: сразу
+                }
+            }
+            else if (topic == TopicConfirmOff || topic == TopicConfirmOn)
+            {
+                LaunchConfirmOn = topic == TopicConfirmOn;
+                SaveLaunchConfirm?.Invoke(LaunchConfirmOn);
+                // «Убрала подтверждение» / «Включила подтверждение», без записей — «Запомнила», «Договорились»
+                var own = LaunchConfirmOn ? "Launch/ConfirmOn" : "Launch/ConfirmOff";
+                var ok = station.FindSet("Ok");
+                var index = ok != null ? station.PickIndex(ok, c => c.Contains("Запомнила") || c.Contains("Договорились") || c.Contains("Принято")) : -1;
+                if (station.FindSet(own) != null)
+                    station.Say(own);
+                else if (index >= 0)
+                    station.SaySequence(new List<string> { ok.name + "\t" + index });
+                else
+                    station.Say("Ok");
             }
             else if (topic == TopicDoorsOpen || topic == TopicDoorsClose)
                 station.SayDone(Doors != null ? Doors(topic == TopicDoorsClose) : new[] { TopicRefuse });
@@ -798,7 +824,7 @@ namespace CustomItems.Items
         public static float LaunchAnywayChance = 0.1f;
 
         private const string TopicLaunch = "#launch", TopicDoorsOpen = "#doorsopen", TopicDoorsClose = "#doorsclose",
-            TopicBuy = "#buy", TopicYes = "#yes", TopicNo = "#no";
+            TopicBuy = "#buy", TopicYes = "#yes", TopicNo = "#no", TopicConfirmOff = "#confirmoff", TopicConfirmOn = "#confirmon";
         public const string LaunchConfirm = "Launch/Confirm", LaunchCancel = "Launch/Cancel", LaunchNoAnswer = "Launch/NoAnswer",
             LaunchAnyway = "Launch/Anyway", BuyHowMany = "Buy/HowMany", BuyCancel = "Buy/Cancel", BuyUnknown = "Buy/Unknown";
         private const string AskLaunch = "launch", AskBuy = "buy", AskFollow = "follow", AskSuffix = "/Ask";
@@ -828,7 +854,8 @@ namespace CustomItems.Items
         private static bool IsAction(string topic) =>
             topic == TopicLaunch || topic == TopicDoorsOpen || topic == TopicDoorsClose || topic == TopicBuy || topic == TopicRoute
             || topic == TopicCode || topic == TopicNavExit || topic == TopicNavShip || topic == TopicRepeatLast || topic == TopicMusicOn
-            || topic == TopicMusicOff || topic == TopicInHand || topic == TopicScanMoon || topic == TopicLightsOn || topic == TopicLightsOff;
+            || topic == TopicMusicOff || topic == TopicInHand || topic == TopicScanMoon || topic == TopicLightsOn || topic == TopicLightsOff
+            || topic == TopicConfirmOff || topic == TopicConfirmOn;
 
         // Чего она ждёт ответа (только на хосте, где слушают)
         private string asking, askingItem;
@@ -918,7 +945,7 @@ namespace CustomItems.Items
         {
             if (speaker == null || speaker.isPlayerDead)
                 return;
-            var station = NearestTo(speaker.transform.position, HearingRadius);
+            var station = HearingStation(speaker);
             if (station == null)
                 return;
             if (station.listenUntil > 0f && Time.time < station.listenUntil && station.ListensTo(speaker))
@@ -986,7 +1013,7 @@ namespace CustomItems.Items
 
         /// <summary>Есть ли рядом с живым игроком включённая колонка (тогда плагин слушает его голос).</summary>
         public static bool NearPlayer(GameNetcodeStuff.PlayerControllerB player) =>
-            player != null && player.isPlayerControlled && !player.isPlayerDead && NearestTo(player.transform.position, HearingRadius) != null;
+            player != null && player.isPlayerControlled && !player.isPlayerDead && HearingStation(player) != null;
 
         /// <summary>
         /// Стоит ли ответить на кусок фразы, не дожидаясь паузы: позвали «Алиса» и уже понятно о чём.
@@ -1007,6 +1034,36 @@ namespace CustomItems.Items
                 return false; // луну дослушиваем до конца
             return intent == TopicStop || intent == "#shush" || intent == TopicLouder || intent == TopicQuieter
                    || AliceIntents.Tokens(command).Length >= 2;
+        }
+
+        /// <summary>
+        /// Колонка, которая слышит игрока: ближайшая в HearingRadius, а колонка на корабле — ещё и любого на корабле
+        /// и снаружи рядом с ним (ShipHearingRadius от корабля), но не из комплекса.
+        /// </summary>
+        private static YandexStationItem HearingStation(GameNetcodeStuff.PlayerControllerB speaker)
+        {
+            var pos = speaker.transform.position;
+            var near = NearestTo(pos, HearingRadius);
+            if (near != null || speaker.isInsideFactory)
+                return near;
+            var round = StartOfRound.Instance;
+            var ship = round != null && round.elevatorTransform != null ? round.elevatorTransform.position : (Vector3?)null;
+            if (!speaker.isInHangarShipRoom && (ship == null || Vector3.Distance(pos, ship.Value) > ShipHearingRadius))
+                return null;
+            YandexStationItem best = null;
+            var bestDist = float.MaxValue;
+            foreach (var s in All)
+            {
+                if (s == null || !s.IsOn || !(s.isInShipRoom || s.isInElevator) || s.isHeld && s.playerHeldBy != null && s.playerHeldBy.isInsideFactory)
+                    continue;
+                var d = (s.transform.position - pos).sqrMagnitude;
+                if (d < bestDist)
+                {
+                    best = s;
+                    bestDist = d;
+                }
+            }
+            return best;
         }
 
         private static YandexStationItem NearestTo(Vector3 pos, float radius)

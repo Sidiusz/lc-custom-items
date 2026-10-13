@@ -61,7 +61,7 @@ namespace CustomItems
         /// </summary>
         public static readonly HashSet<string> NoSemanticIntents = new HashSet<string>
         {
-            "#route", "#buy", "#code", "#callme", "#yes", "#no",
+            "#route", "#buy", "#code", "#callme", "#yes", "#no", "#confirmoff", "#confirmon",
         };
 
         /// <summary>

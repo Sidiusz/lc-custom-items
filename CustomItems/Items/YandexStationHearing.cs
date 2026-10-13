@@ -14,7 +14,7 @@ namespace CustomItems.Items
         {
             if (speaker == null)
                 return false;
-            var station = NearestTo(speaker.transform.position, HearingRadius);
+            var station = HearingStation(speaker);
             return station != null && (Time.time < station.listenUntil && station.ListensTo(speaker)
                                        || station.asking != null && Time.time < station.askUntil
                                        || Time.time < station.gameAnswerUntil

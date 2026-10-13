@@ -40,3 +40,15 @@
 жив ли паша	#isalive
 даня погиб?	#isalive
 андрюха вообще живой	#isalive
+алиса купи про фонарики 3 штуки	#buy	Pro-flashlight×3
+купи про фонарики в количестве трёх	#buy	Pro-flashlight×3
+купи про-фонарики в количестве трёх штук	#buy	Pro-flashlight×3
+купи два про фонарика	#buy	Pro-flashlight×2
+купи три лопаты	#buy	Shovel×3
+купи пару раций	#buy	Walkie-talkie×2
+закажи фонарик	#buy	Flashlight×
+купи 4 фонаря пожалуйста	#buy	Flashlight×4
+купи гранат штук пять	#buy	Stun grenade×5
+купи 2шт лестницы	#buy	Extension ladder×2
+купи лопату одну штуку	#buy	Shovel×1
+алиса закажи нам парочку профонариков	#buy	Pro-flashlight×2

@@ -8,7 +8,7 @@ using CustomItems.Items;
 
 // Проверка понимания Алисы: по словам (AliceIntents), по смыслу (AliceSemantic) и вместе, как в игре.
 // args: model.gguf intents.txt phrasesDir tests.tsv off.txt [cache.bin] [dump.tsv]
-// tests.tsv: «вопрос<TAB>тема|другая допустимая тема»; off.txt: фразы, на которые темы быть не должно.
+// tests.tsv: «вопрос<TAB>тема|другая допустимая тема[<TAB>Предмет×число]»; off.txt: фразы, на которые темы быть не должно.
 // SEM_<поле>=значение в окружении меняет поле AliceSemantic (пороги, Threads, приставки).
 var model = args[0];
 var intentsText = File.ReadAllText(args[1]);
@@ -80,6 +80,13 @@ foreach (var t in tests.Concat(off.Select(o => new[] { o, "-" })))
         S += Good(sem, exp) ? 1 : 0;
         C += Good(comb, exp) ? 1 : 0;
         ok = Good(comb, exp);
+        // Третий столбец у покупок: «Pro-flashlight×3» — какой предмет и сколько разобрано
+        if (t.Length > 2 && t[2].Length > 0)
+        {
+            var bought = $"{AliceIntents.ItemIn(cmd)}×{AliceIntents.NumberIn(cmd)}";
+            ok &= bought == t[2];
+            swhy = $"покупка {bought}; " + swhy;
+        }
     }
     if (!ok || Environment.GetEnvironmentVariable("VERBOSE") != null)
         Console.WriteLine($"{(ok ? "ok " : "BAD")} «{q}» хотим {exp}: слова {fuzzy ?? "-"} {fscore:0.00}, смысл {sem ?? "-"} {sscore:0.000}, вместе {comb ?? "-"} | {swhy}");

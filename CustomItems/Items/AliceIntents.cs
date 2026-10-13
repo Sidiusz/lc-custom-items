@@ -31,10 +31,29 @@ namespace CustomItems.Items
 
         private static readonly Dictionary<string, int> NumberWords = new Dictionary<string, int>
         {
-            ["один"] = 1, ["одну"] = 1, ["одна"] = 1, ["одного"] = 1, ["штуку"] = 1, ["два"] = 2, ["две"] = 2,
+            ["один"] = 1, ["одну"] = 1, ["одна"] = 1, ["одного"] = 1, ["два"] = 2, ["две"] = 2,
             ["пару"] = 2, ["пара"] = 2, ["три"] = 3, ["четыре"] = 4, ["пять"] = 5, ["шесть"] = 6, ["семь"] = 7,
             ["восемь"] = 8, ["девять"] = 9, ["десять"] = 10, ["одиннадцать"] = 11, ["двенадцать"] = 12,
+            // «в количестве трёх», «трёх штук», «парочку», «десяток»
+            ["одной"] = 1, ["двух"] = 2, ["двое"] = 2, ["пары"] = 2, ["парочку"] = 2, ["парочка"] = 2, ["трех"] = 3,
+            ["трое"] = 3, ["тройку"] = 3, ["четырех"] = 4, ["четверо"] = 4, ["пяти"] = 5, ["пяток"] = 5,
+            ["шести"] = 6, ["полдюжины"] = 6, ["семи"] = 7, ["восьми"] = 8, ["девяти"] = 9, ["десяти"] = 10,
+            ["десяток"] = 10, ["одиннадцати"] = 11, ["двенадцати"] = 12, ["дюжину"] = 12, ["дюжина"] = 12,
         };
+
+        // «про-фонарики» и «3-х» — два слова
+        private static IEnumerable<string> Pieces(string text) =>
+            Tokens(text).SelectMany(t => t.Split(new[] { '-' }, StringSplitOptions.RemoveEmptyEntries));
+
+        // «3», «3шт», «3х» → 3
+        private static int? Digits(string token)
+        {
+            var n = 0;
+            var i = 0;
+            for (; i < token.Length && char.IsDigit(token[i]) && n < 1000; i++)
+                n = n * 10 + (token[i] - '0');
+            return i > 0 && n > 0 && (i == token.Length || token.Substring(i) is "шт" or "х" or "штук" or "штуки") ? n : (int?)null;
+        }
 
         private static HashSet<string> buyVerbs;
         private static HashSet<string> BuyVerbs => buyVerbs ?? (buyVerbs = new HashSet<string>(
@@ -43,14 +62,18 @@ namespace CustomItems.Items
         /// <summary>Сколько штук назвали («два», «пару», «3»), или null.</summary>
         public static int? NumberIn(string text)
         {
-            foreach (var t in Tokens(text))
+            // «штуку» — одна, только если другого числа нет: «три штуки» — три
+            int? piece = null;
+            foreach (var t in Pieces(text))
             {
-                if (NumberWords.TryGetValue(t, out var n))
+                if (t == "штуку" || t == "штучку")
+                    piece = 1;
+                else if (NumberWords.TryGetValue(t, out var n))
                     return n;
-                if (int.TryParse(t, out n) && n > 0)
-                    return n;
+                else if (Digits(t) is { } d)
+                    return d;
             }
-            return null;
+            return piece;
         }
 
         /// <summary>
@@ -59,7 +82,7 @@ namespace CustomItems.Items
         /// </summary>
         public static string ItemIn(string text)
         {
-            var stems = Tokens(text).Select(Stem).ToArray();
+            var stems = Pieces(text).Select(Stem).ToArray();
             string best = null;
             var bestLength = 0;
             foreach (var pair in ItemNames)
@@ -379,10 +402,18 @@ namespace CustomItems.Items
             // «Купи два про-фонарика»: предмет и число — слоты, имя предмета из нескольких слов — один слот
             if (words.Any(t => BuyVerbs.Contains(Stem(t))))
             {
+                // «Купи про-фонарики в количестве трёх штук»: глагол и предмет есть — это покупка,
+                // сколько и чего, разберёт ItemIn/NumberIn, лишние слова похожесть не роняют
+                if (ItemIn(command) != null)
+                {
+                    score = 1f;
+                    example = "купи {number} {item}";
+                    return "#buy";
+                }
                 var slots = new List<string>();
                 foreach (var t in tokens)
                 {
-                    var slot = NumberWords.ContainsKey(t) || int.TryParse(t, out _) ? NumberSlot
+                    var slot = NumberWords.ContainsKey(t) || Digits(t) != null ? NumberSlot
                         : ItemStems.Contains(Stem(t)) ? ItemSlot : t;
                     if (slot == ItemSlot && slots.Count > 0 && slots[slots.Count - 1] == ItemSlot)
                         continue;

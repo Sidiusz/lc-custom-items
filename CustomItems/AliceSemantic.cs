@@ -80,7 +80,7 @@ namespace CustomItems
             "QuotaNotDone", "Repeat", "Route", "Time", "TimeError", "TimeIntro", "Weather", "Scan", "Sum", "Wait",
             "TurnOn", "Off", "Stopping", "Shout", "And", "Agree", "AllClear", "Almost", "Ok", "OutOf", "Moon",
             "Random", "Refuse", "Shush", "WhoDied", "WhereIs", "EnemiesNear", "Idle", "Think", "Game/Cancel",
-            "Game/Rend", "Game/Unknown",
+            "Game/Rend", "Game/Unknown", "HowDied", "IsAlive",
         };
 
         // Тема «болтовня»: не вопрос колонке

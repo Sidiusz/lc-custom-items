@@ -210,7 +210,7 @@ namespace CustomItems.Items
         public static float ListenVoiceChance = 0.3f;
         public const string TopicLoot = "#loot", TopicItemCount = "#itemcount", TopicLootIntro = "Loot/Intro", TopicWait = "Wait", TopicListenVoice = "Listen",
             TopicCall = "Call/", TopicMyNameIntro = "MyName/Intro", TopicLightsOn = "#lightson", TopicLightsOff = "#lightsoff",
-            TopicJoke = "Joke", TopicJokeNext = "Joke/Next", TopicWhoDied = "#whodied";
+            TopicJoke = "Joke", TopicJokeNext = "Joke/Next", TopicWhoDied = "#whodied", TopicHowDied = "#howdied";
 
         public const string TopicRandom = "Random", TopicUnknown = "Unknown", TopicError = "Error",
             TopicTime = "Time", TopicStop = "#stop", SoundListen = "#listen", SoundTimeout = "#timeout";
@@ -1943,6 +1943,9 @@ namespace CustomItems.Items
         private readonly List<string> pendingDeaths = new List<string>();
         /// <summary>Кто от чего погиб в этот день (для «чё с Пашей?»).</summary>
         private static readonly Dictionary<ulong, string> DeathCauses = new Dictionary<ulong, string>();
+        // Как погиб (CauseOfDeath игры или Teamkill) и когда — для «как умер Андрей?»
+        private static readonly Dictionary<ulong, string> DeathKinds = new Dictionary<ulong, string>();
+        private static readonly Dictionary<ulong, float> DeathTimes = new Dictionary<ulong, float>();
         private readonly HashSet<ulong> joined = new HashSet<ulong>(), lowHealth = new HashSet<ulong>(), bodiesSeen = new HashSet<ulong>();
         // Кто ушёл в комплекс (ждём на корабле), кто уже вернулся первым за посадку, на ком висит монстр
         private readonly HashSet<ulong> wentInside = new HashSet<ulong>(), onHeadSeen = new HashSet<ulong>();
@@ -2106,8 +2109,11 @@ namespace CustomItems.Items
                 if (deadIds.Add(p.playerClientId) && !round.inShipPhase)
                 {
                     // Убили свои — «Зачем вы убили своего друга?» раньше обычного «Ой, нет!»
-                    if (IsTeamkill(p))
+                    var teamkill = IsTeamkill(p);
+                    if (teamkill)
                         Reason("Teamkill");
+                    DeathKinds[p.playerClientId] = teamkill ? "Teamkill" : p.causeOfDeath.ToString();
+                    DeathTimes[p.playerClientId] = Time.time;
                     var folder = NameFolder(p.playerUsername);
                     if (folder != null)
                         Reason("PlayerDied/" + folder);

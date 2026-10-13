@@ -35,6 +35,9 @@ namespace CustomItems
         public static float LooseThreshold = 0.84f;
         /// <summary>…и с таким отрывом от второй темы.</summary>
         public static float LooseMargin = 0.1f;
+        /// <summary>Очень похожий пример (вопрос отличается словом-двумя) годится и при близкой второй теме.</summary>
+        public static float SureThreshold = 0.91f;
+        public static float SureMargin = 0.01f;
         /// <summary>Текст записи засчитывается от этой похожести: ответ на вопрос похож хуже, поэтому строже.</summary>
         public static float PhraseThreshold = 0.88f;
         /// <summary>Совпадение по словам от этой похожести не перепроверяется смыслом.</summary>
@@ -269,6 +272,17 @@ namespace CustomItems
             return topic;
         }
 
+        /// <summary>Для опытов: k ближайших по смыслу тем примеров, лучшие первыми.</summary>
+        public static List<string> TopTopics(string command, int k)
+        {
+            if (!ready)
+                return new List<string>();
+            float[] v;
+            lock (Gate)
+                v = embedder.Embed(QueryPrefix + Question(command));
+            return Best(intents, v).Select(t => t.Item1.Topic).Take(k).ToList();
+        }
+
         /// <summary>Для подбора порогов: лучшая и вторая тема примеров, лучшая запись (без порогов).</summary>
         public static string Explain(string command, out float best, out string secondTopic, out float second,
             out string phraseTopic, out float phrase)
@@ -322,7 +336,8 @@ namespace CustomItems
                     why = $"смысл: похоже на разговор не со мной «{Strip(first.Item1.Text)}» {first.Item2:0.000}";
                     return Chatter;
                 }
-                if (first.Item2 >= IntentThreshold && gap >= IntentMargin || first.Item2 >= LooseThreshold && gap >= LooseMargin)
+                if (first.Item2 >= IntentThreshold && gap >= IntentMargin || first.Item2 >= LooseThreshold && gap >= LooseMargin
+                    || first.Item2 >= SureThreshold && gap >= SureMargin)
                     return first.Item1.Topic;
             }
             else

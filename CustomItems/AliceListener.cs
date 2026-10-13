@@ -349,6 +349,14 @@ namespace CustomItems
 
             if (heard.Partial)
             {
+                // Посреди речи «замолчи», «стоп», «не тебе» — колонка сразу перестаёт слушать, фразу не разбираем
+                if (!answered.Contains(heard.Player) && YandexStationItem.CancelsListening(player, heard.Text))
+                {
+                    answered.Add(heard.Player);
+                    lock (gate)
+                        resetRequests.Add(heard.Player);
+                    return;
+                }
                 // «Алиса» уже прозвучала — колонка просыпается, не дожидаясь конца фразы
                 if (!answered.Contains(heard.Player))
                     YandexStationItem.OnPartial(player, heard.Text);

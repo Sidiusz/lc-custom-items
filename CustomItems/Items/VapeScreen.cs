@@ -41,7 +41,7 @@ namespace CustomItems.Items
         {
             this.style = style;
             this.glow = glow;
-            (w, h) = style switch { Style.Box => (52, 16), Style.Pod => (24, 64), _ => (32, 24) };
+            (w, h) = style switch { Style.Box => (48, 24), Style.Pod => (24, 64), _ => (32, 24) };
             px = new Color32[w * h];
             tex = new Texture2D(w, h, TextureFormat.RGBA32, false)
             {
@@ -94,16 +94,11 @@ namespace CustomItems.Items
                 }
                 case Style.Box:
                 {
-                    Rect(2, 3, 15, 10, c);
-                    Rect(3, 4, 13, 8, Black);
-                    Rect(17, 6, 2, 4, c);
-                    var bars = Mathf.Clamp((pct + 24) / 25, 0, 4);
-                    for (var i = 0; i < bars; i++)
-                        Rect(4 + i * 3, 5, 2, 6, c);
+                    // Крупные проценты по центру, под ними полоса нагрева
                     var txt = pct + "%";
-                    Text(w - 2 - (txt.Length * 8 - 2), 3, txt, c, 2);
-                    Rect(0, 14, w, 2, Dim);
-                    Rect(0, 14, Mathf.RoundToInt(w * heat), 2, HeatColor(heat));
+                    Text((w - (txt.Length * 12 - 3)) / 2, 2, txt, c, 3);
+                    Rect(3, 20, w - 6, 2, Dim);
+                    Rect(3, 20, Mathf.RoundToInt((w - 6) * heat), 2, HeatColor(heat));
                     break;
                 }
                 default:
@@ -180,7 +175,7 @@ namespace CustomItems.Items
         {
             var on = Segments[digit];
             var mid = y + (sh - t) / 2;
-            void Seg(char name, int sx, int sy, int rw, int rh) => Rect(sx, sy, rw, rh, on.IndexOf(name) >= 0 ? c : Dim);
+            void Seg(char name, int sx, int sy, int rw, int rh) => Rect(sx, sy, rw, rh, on.IndexOf(name) >= 0 ? c : Black);
             Seg('a', x + t, y, sw - 2 * t, t);
             Seg('d', x + t, y + sh - t, sw - 2 * t, t);
             Seg('g', x + t, mid, sw - 2 * t, t);

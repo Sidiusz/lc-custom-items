@@ -6,7 +6,7 @@
 
 Экраны (пиксели, начало координат сверху слева):
     Pixl 32x24   две большие семисегментные цифры заряда (максимум 99), батарейка, полоса нагрева
-    Box  52x16   батарейка с делениями и «87%», полоса нагрева снизу
+    Box  48x24   крупные «87%», полоса нагрева снизу
     Pod  24x64   «100» и молния, мощность «30W» (растёт с нагревом), огонь (поднимается с нагревом),
                  счётчик затяжек «00042»
 """
@@ -17,7 +17,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TEX_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Textures", "Vape")
 
-SIZES = {"Pixl": (32, 24), "Box": (52, 16), "Pod": (24, 64)}
+SIZES = {"Pixl": (32, 24), "Box": (48, 24), "Pod": (24, 64)}
 
 # Шрифт 3x5: строки сверху вниз, 1 = пиксель
 FONT = {
@@ -77,7 +77,7 @@ class Canvas:
             x += 4 * scale
 
     def seven(self, x, y, digit, c, w=10, h=16, t=2):
-        """Большая цифра w x h, толщина сегмента t; неактивные сегменты чуть видны."""
+        """Большая цифра w x h, толщина сегмента t; неактивные сегменты не горят (так читается в игре)."""
         on = SEGMENTS[digit]
         mid = y + (h - t) // 2
         segs = {
@@ -90,7 +90,7 @@ class Canvas:
             "c": (x + w - t, mid + t, t, y + h - t - mid - t),
         }
         for name, (sx, sy, sw, sh) in segs.items():
-            self.rect(sx, sy, sw, sh, c if name in on else DIM)
+            self.rect(sx, sy, sw, sh, c if name in on else BLACK)
 
     def image(self):
         img = Image.new("RGB", (self.w, self.h))
@@ -124,17 +124,11 @@ def draw(style, charge=0.87, heat=0.0, puffs=42, inhaling=False):
         cv.rect(3, 21, 26, 2, DIM)
         cv.rect(3, 21, round(26 * heat), 2, heat_color(heat))
     elif style == "Box":
-        # батарейка лёжа 15x10: корпус, контакт справа, 4 деления
-        cv.rect(2, 3, 15, 10, low)
-        cv.rect(3, 4, 13, 8, BLACK)
-        cv.rect(17, 6, 2, 4, low)
-        bars = max(0, min(4, -(-pct // 25)))
-        for i in range(bars):
-            cv.rect(4 + i * 3, 5, 2, 6, low)
+        # крупные проценты по центру, под ними полоса нагрева
         txt = f"{pct}%"
-        cv.text(w - 2 - (len(txt) * 8 - 2), 3, txt, low, 2)
-        cv.rect(0, 14, w, 2, DIM)
-        cv.rect(0, 14, round(w * heat), 2, heat_color(heat))
+        cv.text((w - (len(txt) * 12 - 3)) // 2, 2, txt, low, 3)
+        cv.rect(3, 20, w - 6, 2, DIM)
+        cv.rect(3, 20, round((w - 6) * heat), 2, heat_color(heat))
     else:  # Pod
         txt = str(pct)
         cv.text(2, 3, txt, low)

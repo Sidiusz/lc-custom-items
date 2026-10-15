@@ -70,7 +70,8 @@ namespace CustomItems.Items
         private static bool IsOwnApology(string clip)
         {
             var lower = clip.ToLowerInvariant();
-            return lower.Contains("прост") || lower.Contains("извин") || lower.Contains("не хотела");
+            return lower.Contains("прост") || lower.Contains("извин") || lower.Contains("не хотела")
+                   || lower.Contains("не повторится") || lower.Contains("перепутала");
         }
 
         /// <summary>Темы разговора. false — тема не отсюда.</summary>

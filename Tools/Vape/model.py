@@ -315,18 +315,22 @@ def build_pixl(screens):
         v.co.x -= 10
     b.empty("Mouth", -10, 0, H + 19)
 
-    # Экран: чёрное стекло и сам экран
+    # Экран: чёрное стекло и сам экран, крупный: в игре мелкие пиксели не читаются
     bezel_mat = b.material("Bezel", srgb(8, 8, 10), 0.1)
-    bez = bm_box(19, 1.0, 15, r_side=2.5, r_edge=0.3, z0=8)
+    bez = bm_box(36, 1.0, 28, r_side=4, r_edge=0.4, z0=6)
     for v in bez.verts:
+        v.co.x -= 3
         v.co.y -= D / 2 + 1.6
     b.add("Bezel", bez, bezel_mat)
-    b.add("Screen", bm_quad(15.5, 11.6, -D / 2 - 2.65, 15.5),
-          b.material("Screen", srgb(255, 255, 255), 0.2, image=screens["Pixl"], emission=3.0), smooth=False)
+    scr = bm_quad(32, 24, -D / 2 - 2.65, 20)
+    for v in scr.verts:
+        v.co.x -= 3
+    b.add("Screen", scr, b.material("Screen", srgb(255, 255, 255), 0.2, image=screens["Pixl"], emission=3.0),
+          smooth=False)
 
     logo = b.material("Logo", srgb(255, 255, 255), 0.4)
-    b.text("Logo", "PYXL", 13, -1, -D / 2 - 1.75, 46, logo, rotate=math.radians(-90))
-    b.text("Logo8000", "8000", 9, 10, -D / 2 - 1.75, 46, logo, rotate=math.radians(-90))
+    b.text("Logo", "PYXL", 13, -4, -D / 2 - 1.75, 62, logo, rotate=math.radians(-90))
+    b.text("Logo8000", "8000", 9, 7, -D / 2 - 1.75, 62, logo, rotate=math.radians(-90))
     return b
 
 
@@ -348,15 +352,15 @@ def build_box(screens):
     b.add("Hole", bm_cylinder(2.6, 2.0, 0.5, z0=H + 17.75), b.material("Trim", srgb(4, 4, 4), 0.8), smooth=False)
     b.empty("Mouth", 0, 0, H + 18)
 
-    bez = bm_box(18, 1.0, 11, r_side=3, r_edge=0.3, z0=30)
+    bez = bm_box(40, 1.0, 22, r_side=4, r_edge=0.4, z0=22)
     for v in bez.verts:
         v.co.y -= D / 2 - 0.6
     b.add("Bezel", bez, b.material("Bezel", srgb(8, 8, 10), 0.1))
-    b.add("Screen", bm_quad(15.2, 4.7, -D / 2 - 0.45, 35.5),
+    b.add("Screen", bm_quad(36, 18, -D / 2 - 0.45, 33),
           b.material("Screen", srgb(255, 255, 255), 0.2, image=screens["Box"], emission=3.0), smooth=False)
 
     logo = b.material("Logo", srgb(255, 255, 255), 0.4)
-    b.text("Logo", "VAPEFIT", 6.5, 0, -D / 2 + 0.05, 16, logo)
+    b.text("Logo", "VAPEFIT", 6.5, 0, -D / 2 + 0.05, 12, logo)
     return b
 
 

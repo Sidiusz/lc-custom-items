@@ -289,6 +289,7 @@ namespace CustomItems
                 "На сколько секунд затяжек хватает полного заряда (заряжается на зарядке корабля)").Value);
             VapeItem.VaporSeconds = Config.Bind(section, "VaporSeconds", 35f,
                 "Сколько секунд висит облако пара после самой долгой затяжки").Value;
+            new Harmony(PluginGuid + ".vape").PatchAll(typeof(VapeCharger));
         }
 
         private void SetupToyGun()

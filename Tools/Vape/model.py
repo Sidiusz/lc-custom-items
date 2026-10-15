@@ -6,13 +6,13 @@
     python Tools/Vape/model.py --preview out.png     # плюс превью всех трёх рядом
 
 Пишет в Assets/Sources/Art/:
-    Models/Vape/Vape<Модель>.fbx         модель из объектов по материалам (один объект — один материал)
-    Textures/Vape/Vape<Модель>Body.png   градиент корпуса (развёртка корпуса — проекция спереди)
-    Textures/Vape/Vape<Модель>Screen.png экран по умолчанию (в игре его перерисовывает VapeScreen.cs)
+    Models/Vape<Модель>/Vape<Модель>.fbx           модель из объектов по материалам (один объект — один материал)
+    Textures/Vape<Модель>/Vape<Модель>Body.png     градиент корпуса (развёртка корпуса — проекция спереди)
+    Textures/Vape<Модель>/Vape<Модель>Screen.png   экран по умолчанию (в игре его перерисовывает VapeScreen.cs)
 
 Модели (по картинкам из треда, не копии):
     Pixl  коробочка с градиентом розовый -> синий, мундштук слева, ступенька-рельс справа,
-          семисегментный экран внизу (PYXL 8000)
+          крупный семисегментный экран вверху (PYXL 8000)
     Box   округлая «мыльница» голубая -> синяя, чёрный верх и мундштук, маленький экран (VAPEFIT)
     Pod   тонкая чёрная ручка с высоким экраном, прозрачный картридж сверху, золотые полосы сзади (OXYA)
 
@@ -32,8 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import screen  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Models", "Vape")
-TEX_DIR = screen.TEX_DIR
+MODELS = os.path.join(ROOT, "Assets", "Sources", "Art", "Models")
 SCALE = 1.5
 FONT_BOLD = ["/usr/share/fonts/opentype/inter/Inter-Black.otf", "/usr/share/fonts/opentype/inter/Inter-Bold.otf",
              "C:/Windows/Fonts/arialbd.ttf"]
@@ -271,7 +270,9 @@ class Builder:
         bpy.ops.object.select_all(action="DESELECT")
         for o in self.objects:
             o.select_set(True)
-        path = os.path.join(MODEL_DIR, f"Vape{self.name}.fbx")
+        folder = os.path.join(MODELS, f"Vape{self.name}")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, f"Vape{self.name}.fbx")
         bpy.ops.export_scene.fbx(
             filepath=path, use_selection=True, object_types={"MESH", "EMPTY"},
             apply_unit_scale=True, apply_scale_options="FBX_SCALE_UNITS",
@@ -286,7 +287,7 @@ class Builder:
 def build_pixl(screens):
     b = Builder("Pixl")
     W, H, D = 50.0, 92.0, 25.0
-    tex = gradient(os.path.join(TEX_DIR, "VapePixlBody.png"),
+    tex = gradient(os.path.join(screen.tex_dir("Pixl"), "VapePixlBody.png"),
                    [(0.0, (40, 70, 235)), (0.32, (120, 50, 220)), (0.62, (250, 50, 185)), (1.0, (255, 70, 200))])
     body_mat = b.material("Body", srgb(255, 255, 255), 0.25, image=tex)
     bounds = (-W / 2, W / 2, 0.0, H)
@@ -317,20 +318,20 @@ def build_pixl(screens):
 
     # Экран: чёрное стекло и сам экран, крупный: в игре мелкие пиксели не читаются
     bezel_mat = b.material("Bezel", srgb(8, 8, 10), 0.1)
-    bez = bm_box(36, 1.0, 28, r_side=4, r_edge=0.4, z0=6)
+    bez = bm_box(36, 1.0, 28, r_side=4, r_edge=0.4, z0=48)
     for v in bez.verts:
         v.co.x -= 3
         v.co.y -= D / 2 + 1.6
     b.add("Bezel", bez, bezel_mat)
-    scr = bm_quad(32, 24, -D / 2 - 2.65, 20)
+    scr = bm_quad(32, 24, -D / 2 - 2.65, 62)
     for v in scr.verts:
         v.co.x -= 3
     b.add("Screen", scr, b.material("Screen", srgb(255, 255, 255), 0.2, image=screens["Pixl"], emission=3.0),
           smooth=False)
 
     logo = b.material("Logo", srgb(255, 255, 255), 0.4)
-    b.text("Logo", "PYXL", 13, -4, -D / 2 - 1.75, 62, logo, rotate=math.radians(-90))
-    b.text("Logo8000", "8000", 9, 7, -D / 2 - 1.75, 62, logo, rotate=math.radians(-90))
+    b.text("Logo", "PYXL", 13, -4, -D / 2 - 1.75, 24, logo, rotate=math.radians(-90))
+    b.text("Logo8000", "8000", 9, 7, -D / 2 - 1.75, 24, logo, rotate=math.radians(-90))
     return b
 
 
@@ -338,7 +339,7 @@ def build_box(screens):
     b = Builder("Box")
     W, H, D = 50.0, 64.0, 25.0
     CAP = 50.0  # выше этого z корпус чёрный
-    tex = gradient(os.path.join(TEX_DIR, "VapeBoxBody.png"),
+    tex = gradient(os.path.join(screen.tex_dir("Box"), "VapeBoxBody.png"),
                    [(0.0, (30, 80, 210)), (0.55, (95, 150, 240)), (1.0, (175, 205, 250))])
     body = bm_box(W, D, H, r_side=7, r_edge=5)
     low, top = split_z(body, CAP)
@@ -453,8 +454,6 @@ def main():
     import bpy
     argv = sys.argv[1:]
     preview = argv[argv.index("--preview") + 1] if "--preview" in argv else None
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    os.makedirs(TEX_DIR, exist_ok=True)
     screens = screen.save_defaults()
 
     bpy.ops.wm.read_factory_settings(use_empty=True)

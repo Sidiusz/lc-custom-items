@@ -17,8 +17,8 @@ namespace CustomItems.Items
     /// В этот момент с шансом ExplodeChance % он взрывается: урон ExplodeDamage (при полном
     /// здоровье не убивает), вейп пропадает, а у погибшего на теле «затянулся мама не горюй».
     ///
-    /// На экране заряд батареи (заряжается на зарядке корабля, как фонарик), нагрев и у OXYA счётчик
-    /// затяжек (сохраняется с кораблём). Экран горит, пока вейп в руке, и пару секунд после.
+    /// На экране заряд батареи (заряжается на зарядке корабля, как фонарик; одноразовый OXYA —
+    /// нет, см. rechargeable и VapeCharger в плагине), нагрев и у OXYA счётчик затяжек (сохраняется с кораблём). Экран горит, пока вейп в руке, и пару секунд после.
     ///
     /// Затяжку решает тот, кто держит вейп: события (начал, выдохнул, перегрел, взорвал) уходят
     /// хосту и от него всем именованными сообщениями Netcode, и каждый клиент сам играет звук,
@@ -43,6 +43,9 @@ namespace CustomItems.Items
 
         [Tooltip("Какой экран рисовать на объекте Screen модели")]
         public VapeScreen.Style screenStyle = VapeScreen.Style.Pixl;
+
+        [Tooltip("Заряжается на зарядке корабля. Выключено — одноразовый: сел, и всё (OXYA)")]
+        public bool rechargeable = true;
 
         [Tooltip("Яркость экрана (HDRP emissive)")]
         public float screenGlow = 6f;
@@ -74,6 +77,7 @@ namespace CustomItems.Items
             itemProperties.syncUseFunction = false;
             itemProperties.requiresBattery = true;
             itemProperties.batteryUsage = PuffSecondsPerCharge;
+            itemProperties.automaticallySetUsingPower = false; // ЛКМ держат, а не включают
             itemProperties.saveItemVariable = true;
             base.Start();
             // Отпускание ЛКМ проходит через ту же паузу, что и нажатие: она должна быть короткой
@@ -119,7 +123,8 @@ namespace CustomItems.Items
                     return;
                 if (insertedBattery != null && (insertedBattery.empty || insertedBattery.charge <= 0f))
                 {
-                    HUDManager.Instance.DisplayTip(itemProperties.itemName, "The vape is dead.");
+                    HUDManager.Instance.DisplayTip(itemProperties.itemName,
+                        rechargeable ? "The vape is dead." : "The disposable vape is empty.");
                     isBeingUsed = false;
                     return;
                 }

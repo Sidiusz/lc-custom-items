@@ -47,6 +47,8 @@ namespace CustomItems.Items
                 if (folder == null || folder.Length <= Dir.TrimEnd('/', '\\').Length)
                     continue; // файл прямо в alice-phrases — без темы
                 var topic = folder.Substring(Dir.TrimEnd('/', '\\').Length + 1).Replace('\\', '/');
+                if (topic.StartsWith("_"))
+                    continue; // _unsorted и т.п. — записи без темы, лежат до разбора
                 var name = Path.GetFileNameWithoutExtension(file);
                 AudioClip clip;
                 try

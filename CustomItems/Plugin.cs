@@ -32,6 +32,7 @@ namespace CustomItems
             Log = Logger;
 
             var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            CustomItems.Items.LoosePhrases.Dir = Path.Combine(dir, "alice-phrases");
             var bundle = AssetBundle.LoadFromFile(Path.Combine(dir, BundleName));
             if (bundle == null)
             {

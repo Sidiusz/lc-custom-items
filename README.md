@@ -220,7 +220,9 @@ dotnet build -c Release -p:PluginDir="C:\Users\<вы>\AppData\Roaming\r2modmanPl
 
 ## 6. Публикация (когда будет готово)
 
-Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `translations/`, `vosk/`, `alice-semantic/` и `whisper/` (около 515 МБ: модель Vosk около 32 МБ, модель смысла и llama.cpp около 72 МБ, модель Whisper 264 МБ, Vulkan-библиотека Whisper 58 МБ; модели zip почти не сжимает). Проверьте лимит размера пакета и актуальные версии зависимостей в `manifest.json` на Thunderstore.
+Новые записи Алисы подключаются без Unity: папка `CustomItems/AlicePhrases/<Тема>/<текст>.wav` (ещё .ogg, .mp3) при сборке копируется в `alice-phrases/` рядом с DLL, и мод добавляет эти фразы к темам бандла (новая тема — новый набор). Можно и сразу положить папку темы в `BepInEx/plugins/SidiuszCustomItems/alice-phrases/` у всех игроков: индексы фраз совпадают, если папка одинаковая. В zip она входит вместе с DLL.
+
+Zip из `manifest.json`, `icon.png` 256×256, `README.md` и папки `BepInEx/plugins/SidiuszCustomItems/` с DLL мода и `Vosk.dll`, бандлом, `alice-phrases/`, `translations/`, `vosk/`, `alice-semantic/` и `whisper/` (около 515 МБ: модель Vosk около 32 МБ, модель смысла и llama.cpp около 72 МБ, модель Whisper 264 МБ, Vulkan-библиотека Whisper 58 МБ; модели zip почти не сжимает). Проверьте лимит размера пакета и актуальные версии зависимостей в `manifest.json` на Thunderstore.
 
 ## Благодарности
 

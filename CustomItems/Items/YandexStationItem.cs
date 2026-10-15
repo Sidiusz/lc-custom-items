@@ -290,6 +290,7 @@ namespace CustomItems.Items
         {
             base.Start();
             useCooldown = 0.4f;
+            ApplyLoosePhrases();
             ApplyReuse();
             RegisterMessages();
             FindSegments();

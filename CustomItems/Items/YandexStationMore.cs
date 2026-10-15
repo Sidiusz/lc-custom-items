@@ -106,6 +106,27 @@ namespace CustomItems.Items
             ("Events/Back/Rich", "Loot/High"), ("Events/Back/Rich", "Events/ManyItems/Ого, сколько всего"),
         };
 
+        /// <summary>
+        /// Фразы из папки alice-phrases (новые паки без Unity) — в конец тем бандла; новая тема — новый набор.
+        /// Фраза с тем же текстом, что уже в бандле, не дублируется.
+        /// </summary>
+        private void ApplyLoosePhrases()
+        {
+            var loose = LoosePhrases.All;
+            if (loose.Count == 0)
+                return;
+            var sets = (phraseSets ?? new PhraseSet[0]).Where(s => s != null).ToList();
+            foreach (var pair in loose)
+            {
+                var set = sets.FirstOrDefault(s => string.Equals(s.name, pair.Key, StringComparison.OrdinalIgnoreCase));
+                if (set == null)
+                    sets.Add(set = new PhraseSet { name = pair.Key, clips = new AudioClip[0] });
+                var names = new HashSet<string>(set.clips.Where(c => c != null).Select(c => c.name));
+                set.clips = set.clips.Concat(pair.Value.Where(c => !names.Contains(c.name))).ToArray();
+            }
+            phraseSets = sets.ToArray();
+        }
+
         private void ApplyReuse()
         {
             if (phraseSets == null)

@@ -46,6 +46,13 @@
     <EmbeddedResource Include="intents.txt" LogicalName="SidiuszCustomItems.intents.txt" />
   </ItemGroup>
 
+  <!-- Новые фразы Алисы без Unity: AlicePhrases/<Тема>/<текст>.wav → alice-phrases/ рядом с DLL (LoosePhrases.cs) -->
+  <ItemGroup>
+    <None Remove="AlicePhrases/**" />
+    <AlicePhraseFiles Include="AlicePhrases/**/*.wav;AlicePhrases/**/*.ogg;AlicePhrases/**/*.mp3" />
+    <None Include="@(AlicePhraseFiles)" Link="alice-phrases/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- AssetBundle из Unity кладётся в Bundles/ в корне репозитория -->
   <ItemGroup>
     <None Include="..\Bundles\sidiuszcustomitems" Condition="Exists('..\Bundles\sidiuszcustomitems')" CopyToOutputDirectory="PreserveNewest" Link="sidiuszcustomitems" />
@@ -166,6 +173,7 @@
     <Copy SourceFiles="@(AliceSemanticFiles)" DestinationFolder="$(PluginDir)\$(AssemblyName)\alice-semantic\%(RecursiveDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(None->WithMetadataValue('Extension', '.txt'))" DestinationFolder="$(PluginDir)\$(AssemblyName)\translations" />
     <Copy SourceFiles="..\Bundles\sidiuszcustomitems" DestinationFolder="$(PluginDir)\$(AssemblyName)" Condition="Exists('..\Bundles\sidiuszcustomitems')" />
+    <Copy SourceFiles="@(AlicePhraseFiles)" DestinationFolder="$(PluginDir)\$(AssemblyName)\alice-phrases\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

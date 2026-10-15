@@ -26,3 +26,5 @@ Heart attack=Сердечный приступ
 Too much Adrenaline.=Слишком много Adrenaline.
 The vape is dead.=Вейп разряжен.
 The vape overheated!=Вейп перегрелся!
+The disposable vape is empty.=Одноразовый вейп закончился.
+Disposable vapes can't be charged.=Одноразовый вейп не заряжается.

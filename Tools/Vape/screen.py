@@ -2,7 +2,7 @@
 Картинка экрана вейпа, та же, что рисует VapeScreen.cs в игре (держите их одинаковыми).
 Здесь она нужна для текстуры экрана по умолчанию (префаб, иконка) и для превью.
 
-    python Tools/Vape/screen.py      # пишет Assets/Sources/Art/Textures/Vape/Vape<Модель>Screen.png
+    python Tools/Vape/screen.py      # пишет Assets/Sources/Art/Textures/Vape<Модель>/Vape<Модель>Screen.png
 
 Экраны (пиксели, начало координат сверху слева):
     Pixl 32x24   две большие семисегментные цифры заряда (максимум 99), батарейка, полоса нагрева
@@ -15,7 +15,12 @@ import os
 from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TEX_DIR = os.path.join(ROOT, "Assets", "Sources", "Art", "Textures", "Vape")
+TEXTURES = os.path.join(ROOT, "Assets", "Sources", "Art", "Textures")
+
+
+def tex_dir(style):
+    """У каждого вейпа своя папка (ItemAssets ищет ассеты по имени предмета Vape<Модель>)."""
+    return os.path.join(TEXTURES, f"Vape{style}")
 
 SIZES = {"Pixl": (32, 24), "Box": (48, 24), "Pod": (24, 64)}
 
@@ -130,15 +135,13 @@ def draw(style, charge=0.87, heat=0.0, puffs=42, inhaling=False):
         cv.rect(3, 20, w - 6, 2, DIM)
         cv.rect(3, 20, round((w - 6) * heat), 2, heat_color(heat))
     else:  # Pod
+        # заряд крупно (главное на экране), под ним молния и мощность мелко
         txt = str(pct)
-        cv.text(2, 3, txt, low)
-        x = 2 + len(txt) * 4
-        # молния
+        cv.text(1 if len(txt) == 3 else 2, 2, txt, low, 2)
         for dx, dy in ((2, 0), (1, 1), (0, 2), (1, 2), (2, 2), (1, 3), (0, 4)):
-            cv.set(x + dx, 3 + dy, (255, 210, 60))
+            cv.set(2 + dx, 15 + dy, (255, 210, 60))
         watts = 20 + round(20 * heat)
-        cv.text(2, 12, str(watts), WHITE, 2)
-        cv.text(2 + len(str(watts)) * 8, 17, "W", WHITE)
+        cv.text(7, 15, f"{watts}W", (150, 155, 170))
         # огонь: снизу жёлто-красный, высота растёт с нагревом
         top, bottom = 26, 57
         level = 0.25 + 0.75 * heat
@@ -157,10 +160,10 @@ def draw(style, charge=0.87, heat=0.0, puffs=42, inhaling=False):
 
 
 def save_defaults():
-    os.makedirs(TEX_DIR, exist_ok=True)
     paths = {}
     for style in SIZES:
-        path = os.path.join(TEX_DIR, f"Vape{style}Screen.png")
+        os.makedirs(tex_dir(style), exist_ok=True)
+        path = os.path.join(tex_dir(style), f"Vape{style}Screen.png")
         draw(style).save(path)
         paths[style] = path
     return paths

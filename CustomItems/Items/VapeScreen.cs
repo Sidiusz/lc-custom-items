@@ -103,15 +103,13 @@ namespace CustomItems.Items
                 }
                 default:
                 {
+                    // Заряд крупно (главное на экране), под ним молния и мощность мелко
                     var txt = pct.ToString();
-                    Text(2, 3, txt, c, 1);
-                    var x = 2 + txt.Length * 4;
+                    Text(txt.Length == 3 ? 1 : 2, 2, txt, c, 2);
                     var bolt = new Color32(255, 210, 60, 255);
                     foreach (var (dx, dy) in new[] { (2, 0), (1, 1), (0, 2), (1, 2), (2, 2), (1, 3), (0, 4) })
-                        Set(x + dx, 3 + dy, bolt);
-                    var watts = (20 + Mathf.RoundToInt(20 * heat)).ToString();
-                    Text(2, 12, watts, White, 2);
-                    Text(2 + watts.Length * 8, 17, "W", White, 1);
+                        Set(2 + dx, 15 + dy, bolt);
+                    Text(7, 15, (20 + Mathf.RoundToInt(20 * heat)) + "W", new Color32(150, 155, 170, 255), 1);
                     // Огонь снизу вверх, высота растёт с нагревом
                     const int top = 26, bottom = 57;
                     var level = 0.25f + 0.75f * heat;

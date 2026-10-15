@@ -59,6 +59,7 @@ public static class ItemAssets
         public float BatterySeconds;                                 // > 0: работает от батареи столько секунд, ЛКМ вкл/выкл
         public bool Phrases;                                         // фразы по темам из подпапок YandexPhrases (phraseSets)
         public string[] HiddenChildren = new string[0];              // объекты модели, выключенные в префабе
+        public Action<Component> SetupBehaviour;                     // доп. поля скрипта предмета
     }
 
     private static readonly Spec[] Specs =
@@ -153,6 +154,10 @@ public static class ItemAssets
             },
             Customize = SetupYandexStation,
         },
+        // Вейпы (Tools/Vape): скрап с небольшой редкостью, одноразовый OXYA попадается вдвое чаще
+        Vape("Pixl", "PYXL vape", 10, 0.083f, true),
+        Vape("Box", "VAPEFIT vape", 10, 0.062f, true),
+        Vape("Pod", "OXYA pod", 20, 0.1f, false),
     };
 
     // Колонка недолго была мебелью (Prefabs/YandexStation<Цвет>): если эти префабы успели создаться, убираем
@@ -373,6 +378,7 @@ public static class ItemAssets
             }
             if (spec.Phrases)
                 Set(behaviour, "phraseSets", PhraseSets(behaviour));
+            spec.SetupBehaviour?.Invoke(behaviour);
 
             root.transform.localScale = scale;
             EnsureFolder(PrefabsDir);
@@ -602,6 +608,81 @@ public static class ItemAssets
                 r.gameObject.SetActive(shown.Contains(r.name));
         }
         // Корпус первым: его берёт mainObjectRenderer
+        model.Find("Body")?.SetAsFirstSibling();
+    }
+
+    // ---------------- Вейпы: материалы по объектам модели, стиль экрана
+
+    private static Spec Vape(string style, string itemName, int rarity, float halfHeight, bool rechargeable) => new Spec
+    {
+        Name = "Vape" + style, ItemName = itemName, Behaviour = "CustomItems.Items.VapeItem",
+        Template = "TZP-Inhalant", // поза «у рта» и звуки подбора
+        MinValue = 30, MaxValue = 80, Rarity = rarity, Weight = 1.01f,
+        VerticalOffset = halfHeight, // центр модели на середине высоты
+        ToolTips = new[] { "Vape : [LMB]" },
+        SaveItemVariable = true,     // счётчик затяжек; заряд, держание ЛКМ и батарею код включает сам
+        Customize = root => SetupVape(root, style),
+        SetupBehaviour = b =>
+        {
+            Set(b, "screenStyle", Enum.Parse(T("CustomItems.Items.VapeScreen+Style"), style));
+            Set(b, "rechargeable", rechargeable);
+        },
+    };
+
+    // Модель (Tools/Vape/model.py): один объект — один материал. Body/Panel с градиентом из
+    // Textures/Vape<Модель>/Vape<Модель>Body.png, Screen светится (картинку рисует VapeScreen),
+    // Glass и Liquid прозрачные. Mouth — пустышка.
+    private static void SetupVape(GameObject root, string style)
+    {
+        var dir = $"{Art}/Materials/Vape{style}/";
+        var tex = $"{Art}/Textures/Vape{style}/Vape{style}";
+        Material Mat(string name, Color color, float smoothness, string texture = null, bool glow = false, bool clear = false)
+        {
+            var path = dir + $"Vape{style}{name}.mat";
+            var m = AssetDatabase.LoadAssetAtPath<Material>(path) ?? NewLitMaterial(path, color, smoothness);
+            var map = texture != null ? AssetDatabase.LoadAssetAtPath<Texture2D>(texture) : null;
+            if (map != null)
+                m.SetTexture("_BaseColorMap", map);
+            if (glow && map != null)
+            {
+                m.SetTexture("_EmissiveColorMap", map);
+                m.EnableKeyword("_EMISSIVE_COLOR_MAP");
+                m.SetColor("_EmissiveColor", Color.white * 6f);
+            }
+            if (clear)
+                MakeTransparent(m);
+            EditorUtility.SetDirty(m);
+            return m;
+        }
+
+        Color C(int r, int g, int b, float a = 1f) => new Color(r / 255f, g / 255f, b / 255f, a);
+        var body = style == "Pod" ? Mat("Body", C(16, 16, 18), 0.6f) : Mat("Body", Color.white, 0.7f, tex + "Body.png");
+        var logo = Mat("Logo", C(240, 240, 245), 0.4f);
+        var mats = new Dictionary<string, Material>
+        {
+            { "Body", body },
+            { "Panel", body },
+            { "Cap", Mat("Cap", C(14, 14, 16), 0.6f) },
+            { "Mouthpiece", style == "Pixl" ? Mat("Mouthpiece", C(255, 90, 205), 0.6f) : Mat("Cap", C(14, 14, 16), 0.6f) },
+            { "Hole", Mat("Trim", C(20, 12, 20), 0.2f) },
+            { "Bezel", Mat("Bezel", C(8, 8, 10), 0.9f) },
+            { "Screen", Mat("Screen", Color.white, 0.8f, tex + "Screen.png", glow: true) },
+            { "Logo", logo },
+            { "Logo8000", logo },
+            { "Glass", Mat("Glass", C(200, 215, 225, 0.25f), 0.8f, clear: true) },
+            { "Liquid", Mat("Liquid", C(255, 160, 40, 0.6f), 0.8f, clear: true) },
+            { "Chimney", Mat("Chimney", C(140, 140, 150), 0.7f) },
+            { "Button", Mat("Gold", C(220, 175, 80), 0.75f) },
+            { "Stripe", Mat("Gold", C(220, 175, 80), 0.75f) },
+            { "Stripe2", Mat("Gold", C(220, 175, 80), 0.75f) },
+        };
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            if (mats.TryGetValue(r.name, out var mat))
+                r.sharedMaterial = mat;
+        // Корпус первым: его берёт mainObjectRenderer
+        var model = root.transform.Find("Model");
+        if (PrefabUtility.IsPartOfPrefabInstance(model.gameObject))
+            PrefabUtility.UnpackPrefabInstance(model.gameObject, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
         model.Find("Body")?.SetAsFirstSibling();
     }
 

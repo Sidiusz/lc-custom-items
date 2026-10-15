@@ -1,4 +1,4 @@
-// CustomItems (Sidiusz): Егермейстер, энергетик, монитор, игрушечный пистолет и пульки к нему, плюшевый Уинстон, Яндекс Колонка
+// CustomItems (Sidiusz): Егермейстер, энергетик, монитор, игрушечный пистолет и пульки к нему, плюшевый Уинстон, Яндекс Колонка, вейпы
 @item Jagermeister=Егермейстер|егермейстер|m
 @item Adrenaline Game Fuel=Энергетик Adrenaline|энергетик Adrenaline|m
 @item Computer monitor=Монитор|монитор|m
@@ -6,6 +6,9 @@
 @item Toy gun pellets=Пачка пулек|пачку пулек|f
 @item Winston plush=Плюшевый Уинстон|плюшевого Уинстона|m
 @item Yandex Station=Яндекс Колонка|Яндекс Колонку|f
+@item PYXL vape=Вейп PYXL|вейп PYXL|m
+@item VAPEFIT vape=Вейп VAPEFIT|вейп VAPEFIT|m
+@item OXYA pod=Под OXYA|под OXYA|m
 
 // Подсказки управления
 Drink : [LMB]=Выпить : [LMB]
@@ -14,9 +17,12 @@ Reload : [R]=Перезарядить : [R]
 Talk : [LMB]=Говорить : [LMB]
 Turn on/off : [LMB]=Вкл/выкл : [LMB]
 Talk : [E]=Поболтать : [E]
+Vape : [LMB]=Парить : [LMB]
 
 // Сообщения
 The bottle is empty.=Бутылка пуста.
 The can is empty.=Банка пуста.
 Heart attack=Сердечный приступ
 Too much Adrenaline.=Слишком много Adrenaline.
+The vape is dead.=Вейп разряжен.
+The vape overheated!=Вейп перегрелся!

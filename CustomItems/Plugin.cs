@@ -68,6 +68,7 @@ namespace CustomItems
                 "Шанс сердечного приступа в процентах за каждый глоток за день: 1-й глоток 1%, 2-й 2%, 3-й 3%...").Value;
             SetupToyGun();
             SetupJagermeister();
+            SetupVape();
             SetupYandexStation(dir);
 
             LoadRussianTranslation(Path.Combine(dir, "translations"));
@@ -270,6 +271,23 @@ namespace CustomItems
                 "Ники через запятую (регистр и значки не важны, хватает начала ника): этих тошнит с первого глотка и они рыгают").Value.Split(',');
             VomitEffects.VomitAfterSips = Mathf.Max(1, Config.Bind(section, "VomitAfterSips", 2,
                 "Со скольких одновременно действующих глотков игрока начинает тошнить").Value);
+        }
+
+        private void SetupVape()
+        {
+            const string section = "Vape";
+            VapeItem.OverheatSeconds = Mathf.Max(1f, Config.Bind(section, "OverheatSeconds", 6f,
+                "Сколько секунд можно тянуть (держать ЛКМ), потом вейп перегревается").Value);
+            VapeItem.OverheatDamage = Config.Bind(section, "OverheatDamage", 10,
+                "Урон от перегрева").Value;
+            VapeItem.ExplodeChance = Config.Bind(section, "ExplodeChance", 1f,
+                "Шанс в процентах, что при перегреве вейп взорвётся").Value;
+            VapeItem.ExplodeDamage = Config.Bind(section, "ExplodeDamage", 50,
+                "Урон от взрыва (у кого здоровья столько или меньше, тот погибает)").Value;
+            VapeItem.PuffSecondsPerCharge = Mathf.Max(10f, Config.Bind(section, "PuffSecondsPerCharge", 240f,
+                "На сколько секунд затяжек хватает полного заряда (заряжается на зарядке корабля)").Value);
+            VapeItem.VaporSeconds = Config.Bind(section, "VaporSeconds", 35f,
+                "Сколько секунд висит облако пара после самой долгой затяжки").Value;
         }
 
         private void SetupToyGun()

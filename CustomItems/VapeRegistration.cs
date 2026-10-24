@@ -38,11 +38,19 @@ namespace CustomItems
                 {
                     var item = Create(spec);
                     ItemTuningStore.Register(item);
-                    var rarity = config.Bind(spec.Name, "Rarity", spec.Rarity,
-                        "Шанс появления как скрап (вес относительно других предметов, 0 = не спавнится)").Value;
-                    if (rarity > 0)
-                        LethalLib.Modules.Items.RegisterScrap(item, rarity, Levels.LevelTypes.All);
-                    else
+                    // Как у предметов из бандла: Rarity 10 = 1% скрапа луны, ScrapSpawn пересчитывает вес
+                    var chance = config.Bind(spec.Name, "ScrapChance", spec.Rarity / 10f,
+                        "Шанс в процентах, что случайный предмет скрапа на луне окажется этим (0 = не спавнится)").Value;
+                    var inShop = config.Bind(spec.Name, "InShop", false, "Продавать в магазине терминала").Value;
+                    var price = config.Bind(spec.Name, "Price", 40, "Цена в магазине").Value;
+                    if (chance > 0f)
+                    {
+                        LethalLib.Modules.Items.RegisterScrap(item, spec.Rarity, Levels.LevelTypes.All);
+                        ScrapSpawn.Chances[item] = chance / 100f;
+                    }
+                    if (inShop)
+                        LethalLib.Modules.Items.RegisterShopItem(item, price);
+                    if (chance <= 0f && !inShop)
                         LethalLib.Modules.Items.RegisterItem(item);
                 }
                 catch (System.Exception e)

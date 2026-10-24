@@ -54,6 +54,7 @@ namespace CustomItems
                 Register(entry);
             // Вейпы собираются в коде (без бандла), если их нет в бандле
             VapeRegistration.Register(Config, registry.items.Where(e => e.item != null).Select(e => e.item.itemName));
+            new Harmony(PluginGuid + ".scrap").PatchAll(typeof(ScrapSpawn));
 
             SetupItemTuner();
 
@@ -97,14 +98,20 @@ namespace CustomItems
             ItemTuningStore.Register(item);
 
             // Значения из Unity служат умолчаниями, конфиг BepInEx их переопределяет
-            var rarity = Config.Bind(section, "Rarity", entry.rarity,
-                "Шанс появления как скрап (вес относительно других предметов, 0 = не спавнится)").Value;
+            // Rarity из Unity — это вес, 10 веса = 1% (ScrapSpawn пересчитывает его в долю от скрапа луны)
+            var chance = Config.Bind(section, "ScrapChance", entry.rarity / 10f,
+                "Шанс в процентах, что случайный предмет скрапа на луне окажется этим (0 = не спавнится). " +
+                "Луна даёт 10–30 предметов скрапа за день, так что 3% — примерно раз в 1–3 дня").Value;
             var inShop = Config.Bind(section, "InShop", entry.inShop, "Продавать в магазине терминала").Value;
             var price = Config.Bind(section, "Price", entry.price, "Цена в магазине").Value;
 
-            var asScrap = item.isScrap && rarity > 0;
+            var asScrap = item.isScrap && chance > 0f;
             if (asScrap)
-                LethalLib.Modules.Items.RegisterScrap(item, rarity, Levels.LevelTypes.All);
+            {
+                // Вес тут любой: перед спавном ScrapSpawn выставит его из ScrapChance
+                LethalLib.Modules.Items.RegisterScrap(item, Mathf.Max(1, entry.rarity), Levels.LevelTypes.All);
+                ScrapSpawn.Chances[item] = chance / 100f;
+            }
             if (inShop)
                 LethalLib.Modules.Items.RegisterShopItem(item, price);
             if (!asScrap && !inShop)

@@ -80,6 +80,17 @@ namespace CustomItems.Items
             itemProperties.automaticallySetUsingPower = false; // ЛКМ держат, а не включают
             itemProperties.saveItemVariable = true;
             base.Start();
+            // Предмет из кода (VapeRegistration) приходит без оффсетов руки: берём их у TZP,
+            // дальше их можно подогнать окном настройки (F8)
+            if (itemProperties.positionOffset == Vector3.zero && itemProperties.rotationOffset == Vector3.zero)
+            {
+                var template = FindTemplate();
+                if (template != null)
+                {
+                    itemProperties.positionOffset = template.positionOffset;
+                    itemProperties.rotationOffset = template.rotationOffset;
+                }
+            }
             // Отпускание ЛКМ проходит через ту же паузу, что и нажатие: она должна быть короткой
             useCooldown = 0.05f;
             if (insertedBattery == null)

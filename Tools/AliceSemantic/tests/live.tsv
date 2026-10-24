@@ -1,0 +1,140 @@
+слушай а сколько сейчас времени	#time
+скажи пожалуйста который час	#time
+а время сколько	#time
+ну и сколько там натикало	#time
+короче сколько у нас бабок	#credits
+скажи сколько денег на счету	#credits
+а сколько кредитов осталось	#credits
+сколько стоит всё что мы натаскали	#loot
+на сколько у нас лута на корабле	#loot
+сколько хабара мы собрали	#loot
+сколько штук всего на корабле	#itemcount
+а сколько вещей лежит на корабле	#itemcount
+какая у нас квота	Quota
+сколько нам ещё до квоты	#quotaleft
+а сколько осталось добрать до квоты	#quotaleft
+мы квоту уже набрали	#quotaleft
+сколько дней осталось до сдачи	Deadline
+когда там сдавать	Deadline
+какой сегодня день до дедлайна	Deadline
+сколько осталось до конца дня	#timeleft
+скоро стемнеет	#timeleft
+какая погода на луне	Weather
+что там с погодой	Weather
+там дождь или что	Weather
+где паша	#whereis
+а где андрей сейчас	#whereis
+куда делся арсений	#whereis
+а даня где бегает	#whereis
+слушай где все	#whereis
+паша живой вообще	#isalive
+андрей не умер случайно	#isalive
+кто-нибудь умер	#whodied
+кто погиб сегодня	#whodied
+мы кого-то потеряли	#whodied
+как умер паша	#howdied
+что убило андрея	#howdied
+я где вообще	#whereami
+кто в комплексе	#whoinside
+кто сейчас внутри	#whoinside
+кто на корабле	#whoonship
+кто остался на корабле	#whoonship
+сколько нас тут	#count
+есть монстры рядом	#enemies
+тут кто-то есть опасный	#enemies|#dangers
+какие тут опасности	#dangers|#enemies
+что за монстры на этой луне	#dangers
+просканируй луну	#scanmoon
+сколько лута на луне	#scanmoon
+сколько у тебя заряда	#battery
+ты не разряжена	#battery
+какой у тебя заряд	#battery
+включи свет	#lightson
+вруби свет пожалуйста	#lightson
+выключи свет	#lightsoff
+погаси свет	#lightsoff
+закрой двери	#doorsclose
+закрой двери быстро	#doorsclose
+открой двери	#doorsopen
+открой дверь пожалуйста	#doorsopen
+взлетаем	#launch
+полетели отсюда	#launch
+давай улетать	#launch
+поехали домой	#launch
+полетели на титан	#route
+поставь маршрут на рен	#route
+летим на ванадий	#route
+купи фонарик	#buy
+закажи две лопаты	#buy
+купи нам рацию	#buy
+расскажи анекдот	Joke
+пошути	Joke
+давай шутку	Joke
+расскажи что-нибудь смешное	Joke
+как дела	HowAreYou
+как ты	HowAreYou
+как поживаешь	HowAreYou
+ты кто	WhoAreYou
+кто ты такая	WhoAreYou
+что ты умеешь	Skills
+что ты можешь	Skills
+привет	Greeting
+здарова	Greeting
+приветик алиса	Greeting
+пока	Goodbye
+до встречи	Goodbye
+спасибо	Thanks
+спасибо большое	Thanks
+благодарю	Thanks
+замолчи	#shush
+заткнись	#shush
+помолчи немного	#shush
+стоп	#stop
+хватит	#stop|#shush
+громче	#louder
+сделай погромче	#louder
+тише	#quieter
+сделай потише	#quieter
+ты дура	Insult
+ты тупая	Insult
+ты глупая колонка	Insult
+извини	Sorry|#apology
+прости меня	#apology|Sorry
+как меня зовут	#myname
+кто я	#myname|#myrole
+сколько я заработал	#earned
+сколько я принёс	#earned
+кто больше всех принёс	#bestearner
+расскажи про эту луну	#moonabout
+что за луна	#moonabout
+мяукни	Meow
+подбрось монетку	#coin
+брось кубик	#dice
+расскажи факт	Fact
+расскажи интересный факт	Fact
+расскажи историю	Story
+ты меня слышишь	#here
+ты тут	#here
+алло	#here
+включи музыку	#musicon
+выключи музыку	#musicoff
+какого цвета ты	#color
+какой твой любимый цвет	FavoriteColor
+ты меня любишь	Love
+сколько тебе лет	Age
+что нового	#news
+что случилось пока нас не было	#news
+мне скучно	Game/Bored
+давай поиграем	Game/Ask
+сколько у меня здоровья	#health
+я ранен	#health
+что у меня в руке	#inhand
+что я держу	#inhand
+как выйти отсюда	#navexit
+где выход	#navexit
+как дойти до корабля	#navship
+веди к кораблю	#navship
+повтори	#repeat
+что ты сказала	#repeat
+да	#yes
+нет	#no

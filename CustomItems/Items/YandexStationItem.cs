@@ -1161,6 +1161,8 @@ namespace CustomItems.Items
             }
             // «Взлетай взлетай взлетай» — то же, что «взлетай»: повторы слов не сбивают похожесть
             command = string.Join(" ", command.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct());
+            // «Слушай, а скажи пожалуйста, где Паша» — сравниваем «где паша»
+            command = AliceIntents.Clean(command);
             // Темы и примеры вопросов — в intents.txt, здесь только темы, которые считаются по игре
             var intent = AliceIntents.Match(command, out var score, out var example);
             lastWordScore = score;
@@ -1168,6 +1170,7 @@ namespace CustomItems.Items
                 ? $"пример «{example}», похожесть {score:0.00}, порог {AliceIntents.Threshold:0.00}"
                 : "нет примеров";
             intent = SemanticTopic(command, intent, score, ref why);
+            intent = AliceIntents.FixDeathTopic(command, intent);
             // «Куда полетим, на Титан?» — назвали луну: ставим маршрут
             if ((intent == "Moon" || intent == "#navexit" || intent == "#navship") && AliceIntents.NamesMoon(command))
                 intent = TopicRoute;

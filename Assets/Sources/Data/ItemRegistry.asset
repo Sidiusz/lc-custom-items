@@ -41,3 +41,15 @@ MonoBehaviour:
     rarity: 0
     inShop: 1
     price: 100
+  - item: {fileID: 11400000, guid: ec9d4390eda3a884e9c5f052cd3a381c, type: 2}
+    rarity: 10
+    inShop: 0
+    price: 25
+  - item: {fileID: 11400000, guid: f16cb6935643940429ab0cceb2ecdb9b, type: 2}
+    rarity: 10
+    inShop: 0
+    price: 25
+  - item: {fileID: 11400000, guid: da9ce2d449b7be745a7381b432a045e2, type: 2}
+    rarity: 20
+    inShop: 0
+    price: 25

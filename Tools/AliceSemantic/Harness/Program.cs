@@ -54,7 +54,7 @@ foreach (var t in tests.Concat(off.Select(o => new[] { o, "-" })))
 {
     var q = t[0];
     var exp = t[1];
-    var cmd = q.ToLowerInvariant();
+    var cmd = AliceIntents.Clean(q.ToLowerInvariant());
     var fuzzy = AliceIntents.Match(cmd, out var fscore, out _);
     var s0 = Stopwatch.StartNew();
     var sem = AliceSemantic.Match(cmd, out var sscore, out var swhy);

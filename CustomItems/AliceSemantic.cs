@@ -373,7 +373,10 @@ namespace CustomItems
         /// перебить (если уверен сам), не найденное по словам — ищется по смыслу.
         /// </summary>
         /// <returns>Тема (как в intents.txt) или null.</returns>
-        public static string Combine(string command, string fuzzyTopic, float fuzzyScore, ref string why)
+        public static string Combine(string command, string fuzzyTopic, float fuzzyScore, ref string why) =>
+            CustomItems.Items.AliceIntents.FixDeathTopic(command, CombineRaw(command, fuzzyTopic, fuzzyScore, ref why));
+
+        private static string CombineRaw(string command, string fuzzyTopic, float fuzzyScore, ref string why)
         {
             if (fuzzyTopic != null && fuzzyScore >= FuzzySure)
                 return fuzzyTopic;

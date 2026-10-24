@@ -455,6 +455,63 @@ namespace CustomItems.Items
         private static readonly string[] HowWords = { "как", "отчего", "почему", "причина", "кто", "чего", "чем" };
 
         // Спрашивают, как погиб: «как», «отчего», «кто убил», «что его убило» — но не «жив?» и не «что, умер?»
+        // ---- Слова-паразиты ----
+
+        // «Слушай, а скажи пожалуйста, где Паша?» — то же, что «где Паша»: эти слова смысла не несут
+        private static readonly HashSet<string> Fillers = new HashSet<string>
+        {
+            "слушай", "слышь", "пожалуйста", "плиз", "короче", "блин", "бля", "эй", "ну", "ну-ка", "нука", "подскажи",
+            "вообще", "типа", "кстати", "алиса",
+        };
+        // Только первым словом: «скажи, сколько время» (но «скажи привет Паше», «скажи мяу» — команды)
+        private static readonly HashSet<string> LeadFillers = new HashSet<string> { "скажи", "ладно", "так", "а", "о" };
+        // Только последним: «где Сеня ходит, а?», «как дела щас»
+        private static readonly HashSet<string> TailFillers = new HashSet<string> { "а", "щас", "ну", "да", "ага", "плиз" };
+
+        /// <summary>Вопрос без слов-паразитов («слушай», «пожалуйста», «короче», «а скажи…»); пусто не бывает.</summary>
+        public static string StripFillers(string command)
+        {
+            var words = Tokens(command, keepYo: true).ToList();
+            var all = words.Count;
+            words.RemoveAll(w => Fillers.Contains(w.Replace('ё', 'е')));
+            while (words.Count > 1 && LeadFillers.Contains(words[0]))
+                words.RemoveAt(0);
+            while (words.Count > 1 && TailFillers.Contains(words[words.Count - 1]))
+                words.RemoveAt(words.Count - 1);
+            return words.Count == 0 || words.Count == all ? command : string.Join(" ", words);
+        }
+
+        /// <summary>
+        /// Что сравнивать с примерами: вопрос без слов-паразитов, если по словам он похож не хуже
+        /// («скажи мяу» остаётся «скажи мяу», «слушай где паша» становится «где паша»).
+        /// </summary>
+        public static string Clean(string command)
+        {
+            var stripped = StripFillers(command);
+            if (stripped == command)
+                return command;
+            Match(command, out var before);
+            Match(stripped, out var after);
+            // Уже уверенно понятный вопрос («скажи мяу») не трогаем
+            return after > before + 1e-4f || before < Threshold && after + 1e-4f >= before ? stripped : command;
+        }
+
+        /// <summary>
+        /// «Как умер / жив ли» по смыслу легко путаются: «как», «отчего», «кто убил» — как погиб, иначе жив ли
+        /// (с именем) или кто погиб (без имени).
+        /// </summary>
+        public static string FixDeathTopic(string command, string topic)
+        {
+            if (topic != "#howdied" && topic != "#isalive")
+                return topic;
+            var words = Tokens(command);
+            if (topic == "#isalive")
+                return AsksHow(words) ? "#howdied" : topic;
+            if (AsksHow(words) || words.Contains("он") || words.Contains("она") || words.Contains("его") || words.Contains("ее"))
+                return topic;
+            return words.Any(t => NameOf(t) != null) ? "#isalive" : "#whodied";
+        }
+
         private static bool AsksHow(string[] words) =>
             words.Any(t => DeadStems.Any(t.StartsWith)) && !words.Any(t => t.StartsWith("жив"))
             && (words.Any(t => HowWords.Contains(t)) || words.Contains("что") && words.Any(t => t.StartsWith("убил")));

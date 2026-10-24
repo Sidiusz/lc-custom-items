@@ -52,8 +52,6 @@ namespace CustomItems
 
             foreach (var entry in registry.items)
                 Register(entry);
-            // Вейпы собираются в коде (без бандла), если их нет в бандле
-            VapeRegistration.Register(Config, registry.items.Where(e => e.item != null).Select(e => e.item.itemName));
             new Harmony(PluginGuid + ".scrap").PatchAll(typeof(ScrapSpawn));
 
             SetupItemTuner();
@@ -385,7 +383,7 @@ namespace CustomItems
         // Тег и слои игры есть не в каждом Unity-проекте, поэтому ставим их здесь по именам.
         // Хеш NetworkObject в редакторе без пакета Netcode не считается, задаём свой
         // постоянный: у всех игроков он одинаковый, пока не переименован префаб.
-        internal static void PreparePrefab(GameObject prefab)
+        private static void PreparePrefab(GameObject prefab)
         {
             prefab.tag = "PhysicsProp";
             var props = LayerMask.NameToLayer("Props");

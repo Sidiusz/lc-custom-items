@@ -49,7 +49,7 @@ namespace CustomItems.Items
             base.Start();
         }
 
-        private Item FindTemplate()
+        protected Item FindTemplate()
         {
             var items = StartOfRound.Instance?.allItemsList?.itemsList;
             if (items == null)

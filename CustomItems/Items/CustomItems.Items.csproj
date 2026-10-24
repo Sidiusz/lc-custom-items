@@ -35,4 +35,10 @@
     <EmbeddedResource Include="..\..\Assets\Sources\Art\Audio\Vape\*.wav" LogicalName="SidiuszCustomItems.Sounds.%(Filename).wav" />
   </ItemGroup>
 
+  <!-- Модели и текстуры вейпов (Tools/Vape/model.py): VapeModels собирает из них меши в игре, Unity не нужен -->
+  <ItemGroup>
+    <EmbeddedResource Include="Models\*.mdl.gz" LogicalName="SidiuszCustomItems.Models.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\Assets\Sources\Art\Textures\Vape*\Vape*Body.png" LogicalName="SidiuszCustomItems.Textures.%(Filename).png" />
+  </ItemGroup>
+
 </Project>

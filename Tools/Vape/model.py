@@ -16,8 +16,6 @@
     Box   округлая «мыльница» голубая -> синяя, чёрный верх и мундштук, маленький экран (VAPEFIT)
     Pod   тонкая чёрная ручка с высоким экраном, прозрачный картридж сверху, золотые полосы сзади (OXYA)
 
-И модель для мода без Unity: CustomItems/Items/Models/Vape<Модель>.mdl.gz (см. export_runtime).
-
 Объект Screen — прямоугольник с развёрткой 0..1 (u вправо, v вверх), на нём рисуется экран.
 Объект Mouth — пустышка у мундштука: из этой точки идёт пар у предмета на полу.
 Размеры в мм, итог в метрах с множителем SCALE (в руке игрока 1:1 слишком мелко).
@@ -35,8 +33,6 @@ import screen  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODELS = os.path.join(ROOT, "Assets", "Sources", "Art", "Models")
-# Модель для мода без Unity: VapeModels.cs строит из неё меши прямо в игре (встраивается в DLL)
-RUNTIME_DIR = os.path.join(ROOT, "CustomItems", "Items", "Models")
 SCALE = 1.5
 FONT_BOLD = ["/usr/share/fonts/opentype/inter/Inter-Black.otf", "/usr/share/fonts/opentype/inter/Inter-Bold.otf",
              "C:/Windows/Fonts/arialbd.ttf"]
@@ -269,55 +265,7 @@ class Builder:
         self.height = (max(zs) - min(zs)) * 0.001 * SCALE
         bpy.context.view_layer.update()
 
-    def export_runtime(self):
-        """Модель для сборки в коде (VapeModels.cs): gzip-текст в осях Unity, по объекту на материал.
-            o <Имя>                    объект (имя = ключ материала)
-            v x y z nx ny nz u v       вершина
-            t a b c                    треугольник (индексы вершин объекта, обход как ждёт Unity)
-            p x y z                    пустышка (Mouth)
-        Unity = (x, z, y) из Blender: перестановка осей сама переводит правую систему в левую,
-        поэтому модель не зеркалится и обход треугольников остаётся прежним. Низ модели на y = 0."""
-        import gzip
-        import bpy
-        deps = bpy.context.evaluated_depsgraph_get()
-        meshes = [o for o in self.objects if o.type == "MESH"]
-        bottom = min((o.matrix_world @ v.co).z for o in meshes for v in o.data.vertices)
-
-        def u3(x, y, z):
-            return f"{x:.5f} {z - bottom:.5f} {y:.5f}"
-
-        lines = []
-        for o in self.objects:
-            lines.append(f"o {o.name}")
-            if o.type != "MESH":
-                lines.append("p " + u3(*o.matrix_world.translation))
-                continue
-            ev = o.evaluated_get(deps)
-            mesh = ev.to_mesh()
-            mesh.calc_loop_triangles()
-            uv = mesh.uv_layers.active.data if mesh.uv_layers.active else None
-            normals = mesh.corner_normals
-            index = {}
-            tris = []
-            for tri in mesh.loop_triangles:
-                corners = []
-                for loop in tri.loops:
-                    co = o.matrix_world @ mesh.vertices[mesh.loops[loop].vertex_index].co
-                    n = (o.matrix_world.to_3x3() @ normals[loop].vector).normalized()
-                    t = uv[loop].uv if uv else (0.0, 0.0)
-                    key = (u3(*co), f"{n.x:.4f} {n.z:.4f} {n.y:.4f}", f"{t[0]:.5f} {t[1]:.5f}")
-                    if key not in index:
-                        index[key] = len(index)
-                        lines.append("v " + " ".join(key))
-                    corners.append(index[key])
-                tris.append(corners)
-            lines.extend(f"t {a} {b} {c}" for a, b, c in tris)
-            ev.to_mesh_clear()
-        os.makedirs(RUNTIME_DIR, exist_ok=True)
-        path = os.path.join(RUNTIME_DIR, f"Vape{self.name}.mdl.gz")
-        with gzip.GzipFile(path, "wb", mtime=0) as f:
-            f.write(("\n".join(lines) + "\n").encode())
-        print(f"{path}: {os.path.getsize(path) // 1024} КБ")
+    def release_names(self):
         # Имена объектов в сцене общие на все модели: освобождаем их для следующей (иначе Body.001)
         for o in self.objects:
             o.name = f"{self.name}_{o.name}"
@@ -519,7 +467,7 @@ def main():
         b = build(screens)
         b.finish()
         b.export()
-        b.export_runtime()
+        b.release_names()
         builders.append(b)
     if preview:
         render_preview(builders, os.path.abspath(preview))
